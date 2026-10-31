@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Sound Effects</title>
+<!--
+  SOUND EFFECTS — an invisible OBS browser source that plays the Show Runner's
+  sound board, so the sounds go into your stream and recording.
+  Add it to Main Show (any size, e.g. 100 x 100; it shows nothing) with a typed
+  file:/// URL, and tick "Control audio via OBS" so it gets its own volume
+  slider in the Audio Mixer.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, audio only (transparent, draws nothing).
+  Uses:      shared.js (messaging), sfx.js (the built-in sounds: your files in sounds/, the
+             kit's recordings in sounds/kit/, or the synthesized ones).
+  Messages:  listens  to:"sfx" play {id, volume} | load {id, data} | stop | ping
+                      to:"all" clear → stops every sound
+             sends    from:"sfx" {cmd:"hello"} on load · {cmd:"here"} to ping ·
+                      {cmd:"missing", id} when asked to play a custom sound it doesn't have
+             Custom sounds arrive once as data: addresses (load) and are kept decoded here.
+  Test it:   open the address in a normal browser with ?test=1 for buttons.
+-->
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  .test { font: 15px system-ui, sans-serif; color: #fff; background: #222; padding: 10px; display: none; flex-wrap: wrap; gap: 6px; }
+  .test.on { display: flex; }
+  .test button { font: inherit; padding: 6px 10px; }
+</style>
+</head>
+<body>
+<div class="test" id="test"></div>
+<script src="shared.js"></script>
+<script src="sfx.js"></script>
+<script>
+(function () {
+  const SFX = window.AWYM_SFX;
+  const custom = new Map();   // id → AudioBuffer (decoded custom sounds)
+
+  AWYM.listen(async (m) => {
+    if (m.to !== "sfx") return;
+    if (m.cmd === "ping") AWYM.send({ from: "sfx", cmd: "here" });
+    else if (m.cmd === "stop") SFX.stop();
+    else if (m.cmd === "load" && m.id && typeof m.data === "string") {
+      try { custom.set(m.id, await SFX.decode(m.data)); } catch (e) { /* not a sound we can play */ }
+      if (m.play) play(m.id, m.volume);
+    }
+    else if (m.cmd === "play") play(m.id, m.volume);
+  });
+  /** Play a built-in sound or a loaded custom one (asks the dock for a missing one). */
+  function play(id, volume) {
+    const v = Number(volume); const vol = isFinite(v) ? v : 0.8;
+    if (SFX.has(id)) SFX.play(id, vol);
+    else if (custom.has(id)) SFX.playBuffer(custom.get(id), vol);
+    else AWYM.send({ from: "sfx", cmd: "missing", id });
+  }
+  AWYM.onClear(() => SFX.stop());
+  AWYM.send({ from: "sfx", cmd: "hello" });
+
+  // ?test=1: buttons for trying the sounds in a normal browser
+  if (AWYM.param("test") === "1") {
+    const box = document.getElementById("test"); box.classList.add("on");
+    const paint = () => { box.innerHTML = SFX.list.map((s) => `<button data-id="${s.id}">${s.icon} ${s.name} <small>(${SFX.source(s.id)})</small></button>`).join("") + `<button data-stop>Stop</button>`; };
+    paint(); SFX.ready.then(paint);
+    box.onclick = (e) => { const b = e.target.closest("button"); if (!b) return; b.dataset.stop != null ? SFX.stop() : SFX.play(b.dataset.id); };
+  }
+})();
+</script>
+</body>
+</html>

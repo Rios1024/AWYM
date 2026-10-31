@@ -1,0 +1,13 @@
+REAL RECORDED SOUNDS IN THE KIT
+===============================
+From SFX Kit by Wyzowl (https://github.com/wyzowl/sfx-kit), CC0 1.0 (public
+domain): free for any use, including streams and YouTube; no credit required.
+Converted to Ogg Vorbis and levelled to match the rest of the sound board.
+
+  applause.ogg   celebration-applause-big         A crowd applauding in a hall.
+  chaching.ogg   money-register                   A cash register: a key, the bell's ching and the drawer sliding open.
+  ding.ogg       notification-success-ding-ding   Two quick bell dings: correct!
+  wrong.ogg      digital-denied                   Access denied: two short, low buzzes.
+  swoosh.ogg     whoosh-medium-hard               A strong rush of air with a bright crack at its peak and weight behind it.
+  boing.ogg      move-spring                      A coiled spring flicked: a wobbling boing.
+  micdrop.ogg    impact-deep-hard                 A deep, hard hit: a crisp crack over a heavy, rumbling low end.

@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Background Picker</title>
+<!--
+  BACKGROUND PICKER — open in your normal web browser (double-click it).
+  Choose a scene, mix in extra effects, preview live, then copy the address
+  and paste it into an OBS Browser source.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      tool page, opened in a normal web browser.
+  Uses:      theme.css, shared.js, backgrounds.js, packs.js.
+  Builds an address for background.html from the choices (scene, anim, speed,
+  intensity, title, tagline, court) and previews it live, plus a live thumbnail of
+  every scene. "Scene's show pack" previews pass that pack's look in ?theme=.
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Background Picker styles: neutral UI colors (--ui-*), live preview + thumbnail grid. */
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 24px 16px 48px; display: grid; grid-template-columns: 320px 1fr; gap: 24px; }
+  @media (max-width: 920px) { .wrap { grid-template-columns: 1fr; } }
+  h1 { grid-column: 1 / -1; margin: 0; font-family: var(--font-display, Impact, sans-serif); font-weight: 400; font-size: 28px; color: var(--primary); }
+  h1 small { display: block; font-family: system-ui, sans-serif; font-size: 16px; color: var(--ui-dim); margin-top: 4px; }
+  h2 { margin: 0 0 12px; font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ui-dim); font-weight: 700; }
+  h3 { margin: 26px 0 10px; font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ui-dim); }
+  .card { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 14px; padding: 14px; margin-bottom: 16px; }
+  .seg { display: grid; gap: 6px; grid-template-columns: repeat(2, 1fr); }
+  .seg.three { grid-template-columns: repeat(3, 1fr); } .seg.four { grid-template-columns: repeat(4, 1fr); } .seg.five { grid-template-columns: repeat(5, 1fr); }
+  .seg button, .btn { font: inherit; font-weight: 700; font-size: 14px; padding: 8px 4px; border-radius: 8px; border: 1px solid var(--ui-line); background: var(--ui-bg); color: var(--ui-text); cursor: pointer; }
+  .seg button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .fxlist { display: grid; gap: 6px; }
+  .fx { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; padding: 7px 8px; border-radius: 8px; background: var(--ui-bg); border: 1px solid var(--ui-line); cursor: pointer; }
+  .fx.off { opacity: .4; cursor: default; }
+  .fx input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--primary); }
+  .fx b { display: block; font-size: 15px; }
+  .fx span { font-size: 13px; color: var(--ui-dim); }
+  label.lbl { display: flex; justify-content: space-between; font-size: 13px; color: var(--ui-dim); text-transform: uppercase; letter-spacing: 1px; margin: 12px 0 6px; }
+  label.lbl b { color: var(--ui-text); }
+  input[type=range] { width: 100%; accent-color: var(--primary); }
+  input[type=text] { width: 100%; font: inherit; color: var(--ui-text); background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 7px; padding: 7px 9px; }
+  .check { display: flex; gap: 8px; align-items: center; margin-top: 12px; font-size: 15px; }
+  .check input { width: 18px; height: 18px; accent-color: var(--primary); }
+  .note { color: var(--ui-dim); font-size: 14px; margin: 8px 0 0; line-height: 1.4; }
+  .note a { color: var(--primary); }
+
+  .preview { min-width: 0; }
+  .stick { padding-bottom: 8px; }
+  .screen { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; border: 1px solid var(--ui-line); background: #000; max-height: 56vh; margin: 0 auto; }
+  .screen iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .nowname { margin: 10px 0 0; font-size: 18px; font-weight: 700; }
+  .nowname span { font-weight: 400; color: var(--ui-dim); font-size: 15px; }
+  .addr { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
+  .addr input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .go { background: var(--primary) !important; color: var(--dark) !important; border-color: transparent !important; text-transform: uppercase; padding: 8px 16px !important; }
+  .toast { color: #3DDC84; font-weight: 600; }
+
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; }
+  .thumb { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 12px; overflow: hidden; cursor: pointer; text-align: left; padding: 0; color: var(--ui-text); font: inherit; }
+  .thumb:hover { border-color: var(--ui-dim); }
+  .thumb.on { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary); }
+  .thumb .mini { position: relative; aspect-ratio: 16 / 9; pointer-events: none; background: #000; }
+  .thumb iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .thumb .cap { padding: 8px 10px 10px; }
+  .thumb .cap b { display: block; font-size: 15px; }
+  .thumb .cap span { font-size: 12px; color: var(--ui-dim); line-height: 1.3; display: block; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Background Picker<small>Pick a scene, mix in extra effects, preview live, then copy the address into OBS</small></h1>
+
+  <div>
+    <div class="card">
+      <h2>Preview colors</h2>
+      <div class="seg" id="colorMode"><button data-v="theme" class="on">My theme</button><button data-v="pack">Scene's show pack</button></div>
+      <p class="note" id="colorNote"></p>
+    </div>
+    <div class="card">
+      <h2>Extra effects</h2>
+      <div class="seg five" id="presets" style="margin-bottom:8px">
+        <button data-p="arena">Arena</button><button data-p="chill">Chill</button><button data-p="hoops">Hoops</button><button data-p="hype">Hype</button><button data-p="none">None</button>
+      </div>
+      <div class="fxlist" id="fxlist"></div>
+      <p class="note" id="fxNote"></p>
+    </div>
+    <div class="card">
+      <h2>Feel</h2>
+      <label class="lbl">Speed <b id="vSpeed">1×</b></label>
+      <input type="range" id="speed" min="0.25" max="2" step="0.25" value="1">
+      <label class="lbl">Intensity</label>
+      <div class="seg three" id="intensity"><button data-v="low">Low</button><button data-v="medium" class="on">Medium</button><button data-v="high">High</button></div>
+    </div>
+    <div class="card">
+      <h2>Title</h2>
+      <div class="seg four" id="titlepos"><button data-v="top" class="on">Top</button><button data-v="center">Center</button><button data-v="bottom">Bottom</button><button data-v="none">None</button></div>
+      <label class="lbl" for="tagline">Tagline (optional)</label>
+      <input type="text" id="tagline" placeholder="e.g. Hoops debates, settled by Momma">
+      <label class="check" id="courtRow"><input type="checkbox" id="court" checked> Show court lines</label>
+    </div>
+  </div>
+
+  <div class="preview">
+    <div class="stick">
+      <div class="screen"><iframe id="big" title="Background preview"></iframe></div>
+      <p class="nowname" id="nowname"></p>
+      <div class="addr"><input type="text" id="addr" readonly><button class="btn go" id="copy">Copy OBS address</button></div>
+      <p class="note">In OBS: Sources → + → Browser → untick "Local file" → paste this into URL. Size 1920 × 1080. <span class="toast" id="toast"></span></p>
+    </div>
+    <div id="groups"></div>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script src="backgrounds.js"></script>
+<script src="packs.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const SCENES = window.AWYM_SCENES, PACKS = window.AWYM_PACKS || [];
+  const EFFECTS = [
+    ["spotlights", "Spotlights", "Arena spotlights slowly sweeping", false],
+    ["sheen", "Floor sheen", "A glint of light gliding across", false],
+    ["drift", "Drift", "Soft glowing particles floating upward", false],
+    ["flashes", "Camera flashes", "Scattered photo flashes", false],
+    ["pulse", "Center pulse", "Court only: center circle breathing", true],
+    ["lines", "Court lines", "Court only: light running along the lines", true],
+    ["bounce", "Bounce", "Court only: faint basketballs bouncing", true]
+  ];
+  const PRESETS = { arena: ["spotlights", "sheen", "flashes"], chill: ["drift", "pulse"], hoops: ["bounce", "lines"], hype: ["spotlights", "flashes", "pulse", "lines"], none: [] };
+  const themeScene = getComputedStyle(document.documentElement).getPropertyValue("--scene").trim().replace(/^["']|["']$/g, "");
+  const state = { scene: SCENES[themeScene] ? themeScene : "court", fx: new Set(), speed: 1, intensity: "medium", title: "top", tagline: "", court: true, colors: "theme" };
+  if (state.scene === "court") state.fx = new Set(PRESETS.arena);
+
+  /** The show pack that uses a scene (if any). */
+  const packFor = (scene) => PACKS.find((p) => p.scene === scene);
+  /** A pack's look as an encoded ?theme= value for previews. */
+  const packTheme = (p) => encodeURIComponent(JSON.stringify(Object.assign({ scene: p.scene, "font-display": p.fonts.display, "font-heading": p.fonts.heading, "font-body": p.fonts.body }, p.colors)));
+
+  $("fxlist").innerHTML = EFFECTS.map(([k, n, d]) => `<label class="fx" data-k="${k}"><input type="checkbox" data-k="${k}"><div><b>${n}</b><span>${d}</span></div></label>`).join("");
+  $("fxlist").addEventListener("change", (e) => { const k = e.target.dataset.k; if (!k) return; e.target.checked ? state.fx.add(k) : state.fx.delete(k); update(); });
+  $("presets").addEventListener("click", (e) => { const p = e.target.dataset.p; if (!p) return; state.fx = new Set(PRESETS[p]); update(); });
+  const seg = (id, key) => $(id).addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; state[key] = b.dataset.v; update(true); });
+  seg("intensity", "intensity"); seg("titlepos", "title"); seg("colorMode", "colors");
+  $("speed").addEventListener("input", () => { state.speed = Number($("speed").value); update(); });
+  $("tagline").addEventListener("input", () => { state.tagline = $("tagline").value; update(); });
+  $("court").addEventListener("change", () => { state.court = $("court").checked; update(); });
+
+  const courtOnly = new Set(EFFECTS.filter((e) => e[3]).map((e) => e[0]));
+  /** Chosen effects that work on the current scene (court-only ones are dropped elsewhere). */
+  function activeFx() { return [...state.fx].filter((k) => state.scene === "court" || !courtOnly.has(k)); }
+
+  /** The background.html address settings for the current choices (presets used when they match). */
+  function query() {
+    const q = new URLSearchParams();
+    q.set("scene", state.scene);
+    const list = activeFx();
+    const preset = Object.entries(PRESETS).find(([, v]) => v.length === list.length && v.every((x) => list.includes(x)));
+    if (list.length || state.scene === "court") q.set("anim", preset ? preset[0] : list.join(","));
+    if (state.speed !== 1) q.set("speed", state.speed);
+    if (state.intensity !== "medium") q.set("intensity", state.intensity);
+    if (state.title !== "top") q.set("title", state.title);
+    if (state.tagline) q.set("tagline", state.tagline);
+    if (!state.court && state.scene === "court") q.set("court", "0");
+    return q.toString().replace(/\+/g, "%20");
+  }
+
+  let t = null, lastColors = null;
+  /** Sync the controls, the copyable address, and (debounced) the big preview. */
+  function update(force) {
+    document.querySelectorAll("#fxlist .fx").forEach((row) => {
+      const k = row.dataset.k, off = state.scene !== "court" && courtOnly.has(k);
+      row.classList.toggle("off", off);
+      const i = row.querySelector("input"); i.disabled = off; i.checked = state.fx.has(k) && !off;
+    });
+    $("fxNote").textContent = state.scene === "court" ? "" : "This scene has its own motion built in. Extras are optional.";
+    ["intensity", "titlepos", "colorMode"].forEach((id) => $(id).querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === state[{ intensity: "intensity", titlepos: "title", colorMode: "colors" }[id]])));
+    $("vSpeed").textContent = state.speed + "×";
+    $("courtRow").style.display = state.scene === "court" ? "" : "none";
+    const sc = SCENES[state.scene], pack = packFor(state.scene);
+    $("nowname").innerHTML = `${sc.name} <span>— ${sc.desc}</span>`;
+    $("colorNote").innerHTML = state.colors === "pack"
+      ? (pack ? `Showing the <b>${pack.name}</b> pack's colors and fonts. To use them in OBS, apply that pack in the <a href="theme-editor.html" target="_blank">Theme Editor</a>.` : "This scene has no show pack, so it uses your theme.")
+      : "Showing your current theme.css colors and fonts.";
+    const q = query();
+    $("addr").value = new URL("background.html?" + q, location.href).href;
+    document.querySelectorAll(".thumb").forEach((th) => th.classList.toggle("on", th.dataset.s === state.scene));
+    if (lastColors !== state.colors) { lastColors = state.colors; buildThumbs(); }
+    clearTimeout(t);
+    const themeQ = state.colors === "pack" && pack ? "&theme=" + packTheme(pack) : "";
+    t = setTimeout(() => { $("big").src = "background.html?" + q + themeQ; }, force ? 0 : 250);
+  }
+
+  /** Draw a live thumbnail for every scene, grouped (Show themes / Styles / Abstract art). */
+  function buildThumbs() {
+    const groups = {};
+    Object.entries(SCENES).forEach(([k, sc]) => (groups[sc.group] = groups[sc.group] || []).push([k, sc]));
+    $("groups").innerHTML = Object.entries(groups).map(([g, list]) => `<h3>${g === "Shows" ? "Show themes" : g === "Style" ? "Styles" : "Abstract art"}</h3>
+      <div class="thumbs">${list.map(([k, sc]) => {
+        const pack = packFor(k), themeQ = state.colors === "pack" && pack ? "&theme=" + packTheme(pack) : "";
+        const extra = k === "court" ? "&anim=arena" : "";
+        return `<button class="thumb ${k === state.scene ? "on" : ""}" data-s="${k}">
+          <div class="mini"><iframe loading="lazy" tabindex="-1" src="background.html?scene=${k}&title=none${extra}${themeQ}"></iframe></div>
+          <div class="cap"><b>${sc.name}</b><span>${sc.desc}</span></div></button>`;
+      }).join("")}</div>`).join("");
+  }
+  $("groups").addEventListener("click", (e) => {
+    const b = e.target.closest(".thumb"); if (!b) return;
+    if (b.dataset.s !== state.scene) state.fx = new Set(b.dataset.s === "court" ? PRESETS.arena : []);   // other scenes bring their own motion
+    state.scene = b.dataset.s;
+    update(true);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  $("copy").onclick = async () => {
+    const text = $("addr").value;
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) { $("addr").select(); try { document.execCommand("copy"); } catch (e2) {} }
+    $("toast").textContent = "Copied!"; setTimeout(() => $("toast").textContent = "", 1800);
+  };
+
+  update(true);
+})();
+</script>
+</body>
+</html>

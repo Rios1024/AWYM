@@ -1,0 +1,65 @@
+/* ==========================================================================
+   rich-text.css — how formatted text from the Content Panel looks
+   ==========================================================================
+   Used by content.html (the on-screen text overlay) and content-panel.html
+   (its editor), so what you type looks the same as what appears on screen.
+   Everything sits inside an element with class "rt". Sizes are in em, so
+   they follow the text size set on .rt.
+
+   ── For developers ─────────────────────────────────────────────
+   Allowed markup (anything else is removed by AWYM.cleanHTML in shared.js):
+     b · i · u · h2 (big text) · ul/ol/li · div/p/br · img[data-size=s|m|l|full]
+     span.c-primary / span.c-accent / span.c-normal (theme colors)
+     span.z1 … span.z7 (text size steps, 3 = normal)
+     text-align: left | center | right on div, p, h2, li
+   ========================================================================== */
+.rt { line-height: 1.32; overflow-wrap: anywhere; }
+.rt > :first-child { margin-top: 0; }
+.rt > :last-child { margin-bottom: 0; }
+.rt div, .rt p { margin: 0; min-height: 1em; }
+.rt p + p { margin-top: .35em; }
+.rt b, .rt strong { font-weight: 700; }
+.rt u { text-decoration-thickness: .08em; text-underline-offset: .14em; text-decoration-color: var(--primary); }
+
+/* "Big" text */
+.rt h2 {
+  font-family: var(--font-heading); font-weight: 400; font-size: 1.5em; line-height: 1.05;
+  letter-spacing: .02em; text-transform: uppercase; margin: .15em 0 .25em;
+}
+
+/* lists: bullets and numbers in the theme color */
+.rt ul, .rt ol { margin: .2em 0 .3em; padding-left: 1.35em; }
+.rt li { margin: .12em 0; padding-left: .15em; }
+.rt li::marker { color: var(--primary); }
+.rt ul > li { list-style: square; }
+.rt ul ul > li { list-style: circle; }
+.rt ol > li::marker { font-family: var(--font-heading); font-weight: 400; }
+
+/* text size steps (A− / A+ in the Content Panel). span.z1–z7 on screen; the
+   editor uses <font size="1–7"> while you type. 3 = normal size. */
+.rt .z1, .rt font[size="1"] { font-size: .6em; }
+.rt .z2, .rt font[size="2"] { font-size: .8em; }
+.rt .z3, .rt font[size="3"] { font-size: 1em; }
+.rt .z4, .rt font[size="4"] { font-size: 1.2em; }
+.rt .z5, .rt font[size="5"] { font-size: 1.45em; }
+.rt .z6, .rt font[size="6"] { font-size: 1.8em; }
+.rt .z7, .rt font[size="7"] { font-size: 2.2em; }
+
+/* theme colors (the color buttons in the Content Panel) */
+.rt .c-primary { color: var(--primary); }
+.rt .c-accent  { color: var(--accent); }
+.rt .c-normal  { color: var(--light); }
+
+/* photos: S / M / L / Full = share of the text width. A tall photo gets narrower
+   instead, so it's never taller than --img-max. --ar (width ÷ height) is set on each
+   photo by AWYM.sizeImages() in shared.js once it has loaded. */
+.rt img {
+  display: inline-block; vertical-align: middle; max-width: 100%; height: auto;
+  max-height: var(--img-max, 520px);
+  border-radius: .35em; margin: .15em 0;
+}
+.rt img[data-size="s"]    { width: min(25%,  calc(var(--img-max, 520px) * var(--ar, 1.5))); }
+.rt img[data-size="m"],
+.rt img:not([data-size])  { width: min(50%,  calc(var(--img-max, 520px) * var(--ar, 1.5))); }
+.rt img[data-size="l"]    { width: min(75%,  calc(var(--img-max, 520px) * var(--ar, 1.5))); }
+.rt img[data-size="full"] { width: min(100%, calc(var(--img-max, 520px) * var(--ar, 1.5))); }

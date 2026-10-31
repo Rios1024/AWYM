@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Lower Third</title>
+<!--
+  LOWER THIRD — OBS browser source
+  Source size: 1920 x 1080 (same as your canvas). Lay it over the whole scene.
+
+  Make one browser source per person and set their details in the URL:
+    lower-third.html?id=1&name=Big%20Mike&role=Host&handle=@bigmike&number=23
+
+    id        slot 1–4, so the control panel can show/hide each person
+    name      their name                  (%20 = space)
+    role      e.g. Host, Guest, Moderator
+    handle    social handle (optional)
+    number    jersey number or any 1–2 characters (optional)
+    icon      badge shown when there's no number: ball, star, controller,
+              note, dice, card, d20, sword, mic, bolt, crystal, vinyl, or none
+              (leave it out to use the icon set in theme.css)
+    side      left (default) or right
+    autohide  hide again after this many seconds, e.g. &autohide=8
+    hidden=1  start hidden and wait for the control panel
+
+  Tip: tick "Refresh browser when scene becomes active" in the source
+  properties, and the lower third will animate in every time you switch
+  to that scene.
+
+  Keyboard (OBS: right-click → Interact): Space or Click = show/hide
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080 canvas (only the bottom corner is used).
+  Uses:      theme.css, shared.js.
+  Messages:  listens  to:"lower" (matching id or "*")  show | hide | toggle | update {data} | ping
+             sends    from:"lower" {id, visible} · {id, cmd:"hello"} on load
+             (the Control Panel answers "hello" with any saved name/role/handle/number)
+  Layout:    .lt > .row > .num (jersey number or badge icon) + .panel (name, role, handle).
+             Animations: .in / .out classes on .lt; .right on <body> mirrors it.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Lower third styles. Design size 1920×1080 (.stage); the graphic sits bottom-left (or bottom-right with .right). */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: var(--font-body); user-select: none; }
+
+  .stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+
+  .lt {
+    position: absolute; left: 96px; bottom: 110px;
+    display: flex; flex-direction: column; align-items: flex-start;
+  }
+  .right .lt { left: auto; right: 96px; align-items: flex-end; }
+
+  .tag {
+    font-family: var(--font-display);
+    font-size: 22px; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--dark); background: var(--accent);
+    padding: 6px 16px 5px; margin: 0 0 0 150px;
+    border-radius: 10px 10px 0 0;
+  }
+  .right .tag { margin: 0 150px 0 0; }
+
+  .row { display: flex; align-items: stretch; }
+  .right .row { flex-direction: row-reverse; }
+
+  .num {
+    width: 150px; height: 150px; flex: none;
+    background: var(--primary); color: var(--dark);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-heading); font-size: 104px; line-height: 1;
+    border-radius: 18px 0 0 18px;
+    position: relative; z-index: 2;
+    box-shadow: inset 0 -8px 0 rgba(0,0,0,.18);
+  }
+  .right .num { border-radius: 0 18px 18px 0; }
+  .num svg { width: 104px; height: 104px; }
+  .num svg .ball { fill: var(--dark); }
+  .num svg .seam { fill: none; stroke: var(--primary); stroke-width: 5; }
+  .num svg .f { fill: var(--dark); }
+  .num svg .s { fill: none; stroke: var(--dark); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+  .num svg .h { fill: var(--primary); }
+  .nobadge .num { display: none; }
+  .nobadge .panel { border-radius: 18px; }
+
+  .panel {
+    position: relative; min-width: 560px; max-width: 1180px;
+    background: var(--secondary); color: var(--light);
+    padding: 16px 46px 18px 30px;
+    display: flex; flex-direction: column; justify-content: center;
+    border-radius: 0 18px 18px 0;
+    box-shadow: 0 12px 30px rgba(0,0,0,.35);
+    overflow: hidden;
+  }
+  .right .panel { border-radius: 18px 0 0 18px; padding: 16px 30px 18px 46px; align-items: flex-end; }
+  /* court free-throw arc decoration */
+  .panel::after {
+    content: ""; position: absolute; right: -70px; top: 50%; width: 200px; height: 200px;
+    border: 4px solid var(--light); border-radius: 50%; opacity: .07; transform: translateY(-50%);
+  }
+  .right .panel::after { right: auto; left: -70px; }
+  .panel::before {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 8px; background: var(--primary);
+  }
+
+  .name {
+    font-family: var(--font-heading); font-size: 66px; line-height: 1.02;
+    text-transform: uppercase; letter-spacing: 1px; white-space: nowrap;
+  }
+  .meta { display: flex; align-items: center; gap: 18px; margin-top: 4px; white-space: nowrap; }
+  .role { font-size: 32px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; }
+  .handle {
+    font-size: 28px; font-weight: 600; color: var(--light);
+    border: 2px solid var(--light); border-radius: 999px; padding: 0 14px 1px; opacity: .9;
+  }
+  .handle:empty, .role:empty { display: none; }
+
+  /* ---------- animation ---------- */
+  .lt .tag, .lt .num, .lt .panel, .lt .name, .lt .meta { transition: none; }
+  .lt.hidden { visibility: hidden; }
+
+  .lt.in .num   { animation: popIn .5s cubic-bezier(.2,1.5,.4,1) both; }
+  .lt.in .panel { animation: wipeIn .55s cubic-bezier(.2,.8,.2,1) .15s both; }
+  .lt.in .tag   { animation: rise .4s cubic-bezier(.2,.8,.2,1) .5s both; }
+  .lt.in .name  { animation: slide .45s cubic-bezier(.2,.8,.2,1) .35s both; }
+  .lt.in .meta  { animation: slide .45s cubic-bezier(.2,.8,.2,1) .48s both; }
+
+  .lt.out .tag   { animation: rise .25s ease-in reverse both; }
+  .lt.out .panel { animation: wipeIn .35s ease-in .08s reverse both; }
+  .lt.out .num   { animation: popIn .3s ease-in .3s reverse both; }
+
+  @keyframes popIn  { from { transform: scale(0) rotate(-120deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes wipeIn { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+  @keyframes rise   { from { transform: translateY(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes slide  { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .right .lt.in .panel, .right .lt.out .panel { animation-name: wipeInR; }
+  @keyframes wipeInR { from { clip-path: inset(0 0 0 100%); } to { clip-path: inset(0 0 0 0); } }
+  .right .lt.in .name, .right .lt.in .meta { animation-name: slideR; }
+  @keyframes slideR { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="lt hidden" id="lt">
+      <div class="row">
+        <div class="num" id="num"></div>
+        <div class="panel">
+          <div class="name" id="name"></div>
+          <div class="meta"><span class="role" id="role"></span><span class="handle" id="handle"></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById("stage");
+  const lt = document.getElementById("lt");
+  const els = { name: document.getElementById("name"), role: document.getElementById("role"),
+                handle: document.getElementById("handle"), num: document.getElementById("num") };
+
+  /** Scale the 1920×1080 design to the OBS source size. */
+  function fit() {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  addEventListener("resize", fit); fit();
+
+  const id = AWYM.param("id", "1");
+  if (AWYM.param("side") === "right") document.body.classList.add("right");
+
+  /* badge icons (simple, generic shapes) */
+  /* Badge icons shown when there's no jersey number (chosen in theme.css, the Theme Panel, or ?icon=). */
+  const svg = (inner) => '<svg viewBox="0 0 100 100" aria-hidden="true">' + inner + '</svg>';
+  const ICONS = {
+    ball: svg('<circle class="ball" cx="50" cy="50" r="46"/><path class="seam" d="M50 4v92M4 50h92M18 18c18 16 18 48 0 64M82 18c-18 16-18 48 0 64"/>'),
+    star: svg('<path class="f" d="M50 6l13 28 30 3-23 20 7 30-27-16-27 16 7-30L7 37l30-3z"/>'),
+    controller: svg('<path class="f" d="M24 30h52c12 0 18 10 20 24l3 18c1 9-9 14-15 7l-9-10H25l-9 10c-6 7-16 2-15-7l3-18c2-14 8-24 20-24z"/><path class="h" d="M27 42h8v8h8v8h-8v8h-8v-8h-8v-8h8z"/><circle class="h" cx="68" cy="48" r="5"/><circle class="h" cx="78" cy="58" r="5"/>'),
+    note: svg('<path class="f" d="M38 14l46-8v58a14 11 0 1 1-8-10V26l-30 5v41a14 11 0 1 1-8-10z"/>'),
+    dice: svg('<rect class="f" x="10" y="10" width="80" height="80" rx="16"/><g class="h"><circle cx="30" cy="30" r="8"/><circle cx="50" cy="50" r="8"/><circle cx="70" cy="70" r="8"/><circle cx="70" cy="30" r="8"/><circle cx="30" cy="70" r="8"/></g>'),
+    card: svg('<path class="f" d="M50 8C38 26 14 38 14 58c0 12 10 20 21 20 6 0 10-3 12-6-1 8-5 14-11 18h28c-6-4-10-10-11-18 2 3 6 6 12 6 11 0 21-8 21-20C86 38 62 26 50 8z"/>'),
+    d20: svg('<path class="f" d="M50 4l40 23v46L50 96 10 73V27z"/><path class="s" style="stroke:var(--primary)" d="M50 24L74 66H26zM50 4v20M90 27L74 66M10 27l16 39M50 96l-24-30M50 96l24-30"/>'),
+    sword: svg('<path class="f" d="M70 8h22v22L44 78l-22-22z"/><path class="f" d="M14 60l26 26-6 6-8-8-10 10-6-6 10-10-8-8z"/>'),
+    mic: svg('<rect class="f" x="34" y="6" width="32" height="52" rx="16"/><path class="s" d="M22 44c0 18 12 28 28 28s28-10 28-28M50 72v18M34 92h32"/>'),
+    bolt: svg('<path class="f" d="M58 4L18 56h26l-8 40 46-56H56z"/>'),
+    crystal: svg('<path class="f" d="M50 4l26 30-26 62-26-62z"/><path class="s" style="stroke:var(--primary);stroke-width:4" d="M24 34h52M50 4v92"/>'),
+    vinyl: svg('<circle class="f" cx="50" cy="50" r="46"/><circle class="h" cx="50" cy="50" r="16"/><circle class="f" cx="50" cy="50" r="4"/><path class="s" style="stroke:var(--primary);stroke-width:2;opacity:.5" d="M50 14a36 36 0 0 1 36 36M50 22a28 28 0 0 1 28 28"/>')
+  };
+  let iconName = "ball";
+  /** Work out which badge icon to use: ?icon= first, then the theme's --badge-icon. */
+  function readIcon() {
+    const themeIcon = getComputedStyle(document.documentElement).getPropertyValue("--badge-icon").trim().replace(/^["']|["']$/g, "");
+    iconName = AWYM.param("icon", themeIcon || "ball").toLowerCase();
+  }
+  readIcon();
+
+  let data = {
+    name: AWYM.param("name", "Your Name"),
+    role: AWYM.param("role", "Host"),
+    handle: AWYM.param("handle", ""),
+    number: AWYM.param("number", "")
+  };
+
+  /** Put the current name/role/handle/number (or badge) on screen. */
+  function apply() {
+    els.name.textContent = data.name || "";
+    els.role.textContent = data.role || "";
+    let h = (data.handle || "").trim();
+    if (h && !h.startsWith("@") && !h.includes("/") && !h.includes(".")) h = "@" + h;
+    els.handle.textContent = h;
+    const n = String(data.number || "").trim().slice(0, 2);
+    document.body.classList.toggle("nobadge", !n && iconName === "none");
+    if (n) { els.num.textContent = n; els.num.style.fontSize = n.length > 1 ? "96px" : "108px"; }
+    else els.num.innerHTML = ICONS[iconName] || ICONS.ball;
+  }
+
+  let visible = false, hideTimer = null;
+  const autohide = Number(AWYM.param("autohide", "0"));
+
+  /** Slide in (restarts the entrance animation); hides again after ?autohide= seconds if set. */
+  function show() {
+    clearTimeout(hideTimer);
+    lt.classList.remove("hidden", "out");
+    void lt.offsetWidth;            // restart the animation
+    lt.classList.add("in");
+    visible = true; report();
+    if (autohide > 0) hideTimer = setTimeout(hide, autohide * 1000);
+  }
+  /** Slide out. */
+  function hide() {
+    if (!visible) return;
+    clearTimeout(hideTimer);
+    lt.classList.remove("in");
+    void lt.offsetWidth;
+    lt.classList.add("out");
+    visible = false; report();
+    setTimeout(() => { if (!visible) lt.classList.add("hidden"); }, 750);
+  }
+  function toggle() { visible ? hide() : show(); }
+  function report() { AWYM.send({ from: "lower", id, visible }); }
+
+  AWYM.listen((m) => {
+    if (m.to !== "lower" || (m.id !== id && m.id !== "*")) return;
+    if (m.data) { data = Object.assign({}, data, m.data); apply(); }
+    if (m.cmd === "show") show();
+    else if (m.cmd === "hide") hide();
+    else if (m.cmd === "toggle") toggle();
+    else if (m.cmd === "ping") report();
+  });
+
+  AWYM.onClear(hide);   // 🚨 Clear button in any dock
+  document.addEventListener("click", toggle);
+  document.addEventListener("keydown", (e) => { if (e.code === "Space") { e.preventDefault(); toggle(); } });
+
+  apply();
+  AWYM.onTheme(() => { readIcon(); apply(); });   // Theme Panel changed the badge icon
+  AWYM.send({ from: "lower", id, cmd: "hello" });   // lets the control panel send saved details
+  if (AWYM.param("hidden") !== "1") setTimeout(show, 200); else report();
+})();
+</script>
+</body>
+</html>

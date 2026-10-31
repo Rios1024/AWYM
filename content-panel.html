@@ -1,0 +1,919 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Content Panel</title>
+<!--
+  CONTENT PANEL — add as an OBS Custom Browser Dock (Docks → Custom Browser Docks…).
+  Type into the box and click Show: your text appears on screen through the
+  On-Screen Text overlay (content.html). Bold, italics, underline, bullet and
+  numbered lists, big text, theme colors, emojis and photos. Save pieces you
+  use often (talking points, rules, polls…) and bring them back with one click.
+  Import a script: writers prep the show in Google Docs or Word (Heading 1 =
+  segment, Heading 2 = an on-screen card), then paste it in or open the file,
+  and every card lands in Saved, grouped by segment (the segments can also go
+  into the Show Runner's rundown). Template: templates/AWYM-Show-Script-Template.docx
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS Custom Browser Dock.
+  Uses:      theme.css, rich-text.css (same look as the overlay), shared.js
+             (AWYM.cleanHTML, AWYM.collapsible, messaging), script-import.js (Import a script).
+  Rundown:   sends to:"runner" {cmd:"rundown", segments, mode, nonce} (Show Runner answers
+             {from:"runner", ack}); hears from:"runner" {cmd:"segment", name} to follow along.
+  Sends:     to:"content" show {data:{header, html}, options} | update | hide | ping
+  Hears:     from:"content" {visible} · {cmd:"hello"} → re-sends what was showing.
+  Editor:    a contenteditable box using the browser's built-in formatting commands
+             (document.execCommand: bold, italic, underline, lists, formatBlock h2,
+             justify). Colors are applied with a placeholder color and then turned
+             into span.c-primary / c-accent / c-normal, so they follow the theme.
+  Photos:    chosen, pasted or dropped pictures are shrunk to 1600 px at most and
+             stored inside the text as data: addresses (animated GIFs under 2.5 MB
+             are kept as they are). Web addresses and file paths also work.
+  Saved in IndexedDB "awym-content" (falls back to localStorage "awym-content-*"):
+             draft · items (saved pieces; imported ones also have seg, src) · opts (layout) · live (what's on screen).
+             IndexedDB is used because photos can be too big for localStorage.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="rich-text.css">
+<style>
+  /* Content Panel dock styles: compact, readable at dock widths from about 280px. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--dark); color: var(--light); }
+  body { font-family: var(--font-body); font-size: 16px; padding: 12px; min-width: 280px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  header h1 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 400; color: var(--primary); line-height: 1.1; }
+  header .tools { display: flex; align-items: center; gap: 8px; }
+  .foldall { padding: 2px 8px; font-size: 15px; line-height: 1.2; opacity: .8; }
+  .conn { font-size: 13px; display: flex; align-items: center; gap: 6px; opacity: .85; white-space: nowrap; }
+  .conn i { width: 9px; height: 9px; border-radius: 50%; background: #777; display: inline-block; }
+  .conn.ok i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+
+  section { background: var(--secondary); border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.08); }
+  h2 { margin: 0 0 10px; font-family: var(--font-heading); font-weight: 400; font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  h2 small { font-family: var(--font-body); font-size: 13px; letter-spacing: .5px; opacity: .7; text-transform: none; }
+
+  button {
+    font: inherit; font-weight: 700; font-size: 15px; letter-spacing: .5px;
+    background: rgba(255,255,255,.08); color: var(--light);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+    padding: 8px 6px; cursor: pointer; text-transform: uppercase;
+  }
+  button:hover { background: rgba(255,255,255,.16); }
+  /* pressed look: a color change, not a nudge (a nudge can add a scrollbar inside a
+     scrolling box, which reflows it and makes the click miss — see the emoji grid) */
+  button:active { filter: brightness(.82); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.primary { background: var(--primary); color: var(--dark); border-color: transparent; font-size: 18px; }
+  button.danger { background: var(--warning); color: #fff; border-color: transparent; }
+  .seg button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .grid { display: grid; gap: 6px; }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .seg button { font-size: 14px; padding: 8px 2px; letter-spacing: 0; }
+  label { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 10px 0 4px; }
+  label b { float: right; opacity: 1; }
+  input[type=text], select {
+    width: 100%; font: inherit; font-size: 16px; color: var(--light);
+    background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 7px 9px; }
+  input[type=range] { width: 100%; accent-color: var(--primary); }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 15px; margin-top: 10px; text-transform: none; opacity: 1; letter-spacing: 0; }
+  .check input { width: 18px; height: 18px; accent-color: var(--primary); }
+  .hint { font-size: 13px; opacity: .7; margin: 8px 0 0; line-height: 1.35; }
+  .msg { font-size: 14px; line-height: 1.35; padding: 7px 10px; border-radius: 8px; background: rgba(0,0,0,.25); margin-top: 8px; }
+  .msg.err { background: rgba(255, 60, 60, .18); }
+  .msg:empty { display: none; }
+
+  /* toolbar */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 6px; }
+  .toolbar button { min-width: 34px; height: 34px; padding: 0 7px; font-size: 16px; text-transform: none; letter-spacing: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .toolbar button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .toolbar .szval { min-width: 42px; align-self: center; text-align: center; font-size: 13px; font-weight: 700; opacity: .8; font-variant-numeric: tabular-nums; }
+  .toolbar .sep { width: 1px; background: rgba(255,255,255,.15); margin: 3px 2px; }
+  .toolbar .dot { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 2px solid rgba(255,255,255,.5); }
+  #tB { font-weight: 900; } #tI { font-style: italic; font-family: Georgia, serif; } #tU { text-decoration: underline; }
+
+  /* the writing box (looks like the on-screen text) */
+  .editor {
+    --tsize: 18px; font-size: var(--tsize); --img-max: 260px;
+    min-height: 150px; max-height: 420px; overflow: auto; resize: vertical;
+    background: var(--dark); border: 1px solid rgba(255,255,255,.2); border-radius: 9px; padding: 10px 12px;
+    outline: none; cursor: text; font-family: var(--font-body), "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  }
+  .editor:focus { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .editor:empty::before { content: attr(data-placeholder); opacity: .45; pointer-events: none; }
+  .editor.drag { border-style: dashed; border-color: var(--accent); }
+  .editor img { cursor: pointer; }
+  .editor img.sel { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+  /* little panels under the toolbar */
+  .pop { background: var(--dark); border: 1px solid rgba(255,255,255,.14); border-radius: 9px; padding: 8px; margin: 6px 0; }
+  .pop[hidden] { display: none; }
+  .pop .row { display: grid; grid-template-columns: 1fr auto; gap: 6px; margin-top: 6px; }
+  .pop .top { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .85; }
+  .pop .top button { padding: 3px 8px; font-size: 12px; }
+  .imgbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+  .imgbar span { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; margin-right: 4px; }
+  .imgbar button { padding: 5px 9px; font-size: 13px; }
+  .imgbar button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+
+  /* emoji picker */
+  .etabs { display: flex; gap: 3px; flex-wrap: wrap; margin: 6px 0; }
+  .etabs button { padding: 3px 8px; font-size: 12px; }
+  .etabs button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .emojis { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 2px; max-height: 180px;
+    overflow-x: hidden; overflow-y: auto; scrollbar-gutter: stable; }   /* room for the scrollbar is kept, so the grid never jumps */
+  .emojis button { padding: 0; height: 34px; font-size: 21px; background: transparent; border-color: transparent; text-transform: none;
+    font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+  .emojis button:hover { background: rgba(255,255,255,.12); }
+
+  /* show / hide */
+  .showrow { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+  #showBtn.showing { background: var(--warning); color: #fff; }
+  .state { font-size: 13px; opacity: .8; margin-top: 6px; display: flex; align-items: center; gap: 6px; }
+  .state i { width: 9px; height: 9px; border-radius: 50%; background: #777; display: inline-block; }
+  .state.on i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+
+  /* saved pieces */
+  .editing { font-size: 13px; opacity: .8; margin-top: 8px; }
+  .items { display: grid; gap: 6px; margin-top: 8px; max-height: 360px; overflow: auto; }
+  .item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 4px; align-items: center; background: var(--dark); border-radius: 8px; padding: 5px 5px 5px 10px; border: 1px solid transparent; }
+  .item.cur { border-color: var(--primary); }
+  .item .n { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .n small { display: block; font-weight: 500; font-size: 12px; opacity: .65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item button { padding: 5px 9px; font-size: 13px; }
+  .empty { opacity: .65; font-size: 14px; padding: 4px 2px; }
+  .seghead { font-size: 12px; text-transform: uppercase; letter-spacing: 1.2px; opacity: .75; margin: 6px 2px 0; font-weight: 700; }
+  .segbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; margin-top: 8px; }
+  .segbar select { font-size: 14px; padding: 6px 8px; }
+  .segbar button { padding: 6px 10px; }
+  .segpos { font-size: 13px; opacity: .75; margin-top: 4px; min-height: 1em; }
+
+  /* import a script */
+  .drop { min-height: 74px; border: 2px dashed rgba(255,255,255,.25); border-radius: 10px; padding: 10px; font-size: 14px; outline: none; background: rgba(0,0,0,.15); overflow: hidden; max-height: 120px; }
+  .drop:empty::before { content: attr(data-ph); opacity: .6; }
+  .drop.drag { border-color: var(--primary); background: rgba(255,255,255,.06); }
+  .imp { background: rgba(0,0,0,.2); border-radius: 10px; padding: 8px 10px; margin-top: 8px; font-size: 14px; }
+  .imp:empty { display: none; }
+  .imp .t { font-weight: 700; margin-bottom: 4px; }
+  .imp .sg { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 8px; align-items: start; margin: 6px 0 0; text-transform: none; letter-spacing: 0; font-size: 14px; opacity: 1; cursor: pointer; }
+  .imp .sg > span { display: block; min-width: 0; text-align: left; }
+  .imp .sg input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--primary); }
+  .imp .sg b { display: block; float: none; } .imp .sg small { display: block; opacity: .7; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .imp select { font-size: 14px; padding: 5px 7px; margin-top: 4px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Content Panel</h1>
+    <div class="tools"><div class="conn" id="conn"><i></i><span>Overlay not found</span></div>
+      <button class="foldall" id="foldAll" title="Fold or unfold every section">⊟</button></div>
+  </header>
+
+  <section data-fold="write">
+    <h2><span class="ttl">Write</span> <small>Ctrl+Enter = show</small></h2>
+    <label for="header">Header (optional)</label>
+    <input type="text" id="header" placeholder="e.g. Tonight's topics">
+
+    <div class="toolbar" id="toolbar">
+      <button id="tB" data-cmd="bold" title="Bold (Ctrl+B)">B</button>
+      <button id="tI" data-cmd="italic" title="Italics (Ctrl+I)">I</button>
+      <button id="tU" data-cmd="underline" title="Underline (Ctrl+U)">U</button>
+      <span class="sep"></span>
+      <button data-cmd="insertUnorderedList" title="Bullet list">•≡</button>
+      <button data-cmd="insertOrderedList" title="Numbered list">1.≡</button>
+      <button data-cmd="big" title="Big text (a heading line)">Big</button>
+      <span class="sep"></span>
+      <button data-cmd="smaller" title="Smaller text (Ctrl+Shift+&lt;)">A−</button>
+      <span class="szval" id="sizeVal" title="Size of the selected text">100%</span>
+      <button data-cmd="bigger" title="Bigger text (Ctrl+Shift+&gt;)">A+</button>
+      <span class="sep"></span>
+      <button data-cmd="justifyLeft" title="Align left">⇤</button>
+      <button data-cmd="justifyCenter" title="Center">≡</button>
+      <span class="sep"></span>
+      <button data-color="c-primary" title="Main theme color"><i class="dot" style="background:var(--primary)"></i></button>
+      <button data-color="c-accent" title="Accent theme color"><i class="dot" style="background:var(--accent)"></i></button>
+      <button data-color="c-normal" title="Normal text color"><i class="dot" style="background:var(--light)"></i></button>
+      <span class="sep"></span>
+      <button id="emojiBtn" title="Emojis">😀</button>
+      <button id="photoBtn" title="Add a photo">🖼️</button>
+      <button data-cmd="removeFormat" title="Clear formatting of the selected text">⌫</button>
+    </div>
+
+    <div class="pop" id="emojiPop" hidden>
+      <div class="top">Emojis <button id="emojiClose">Close</button></div>
+      <div class="etabs" id="etabs"></div>
+      <div class="emojis" id="emojis"></div>
+    </div>
+
+    <div class="pop" id="photoPop" hidden>
+      <div class="top">Add a photo <button id="photoClose">Close</button></div>
+      <div class="row" style="grid-template-columns:1fr"><button id="pickFile">Choose a picture…</button></div>
+      <input type="file" id="file" accept="image/*" multiple hidden>
+      <div class="row"><input type="text" id="imgUrl" placeholder="or paste a web address / file path"><button id="addUrl">Add</button></div>
+      <p class="hint">You can also paste a picture (Ctrl+V) or drag one into the box. Big photos are shrunk automatically.</p>
+    </div>
+
+    <div class="editor rt" id="editor" contenteditable="true" spellcheck="true" data-placeholder="Type here… select text, then use the buttons above to format it."></div>
+
+    <div class="pop imgbar" id="imgBar" hidden>
+      <span>Photo size</span>
+      <button data-size="s">S</button><button data-size="m">M</button><button data-size="l">L</button><button data-size="full">Full</button>
+      <button id="imgRemove" class="danger">Remove</button>
+    </div>
+
+    <div class="showrow">
+      <button class="primary" id="showBtn">Show</button>
+      <button id="updateBtn" title="Send your changes to the screen">Update</button>
+    </div>
+    <label class="check"><input type="checkbox" id="liveTyping"> Live typing (screen updates as you type)</label>
+    <div class="state" id="state"><i></i><span>Not on screen</span></div>
+    <div class="msg" id="msg"></div>
+  </section>
+
+  <section data-fold="saved">
+    <h2><span class="ttl">Saved</span> <small>reuse with one click</small></h2>
+    <div class="grid g3">
+      <button id="saveBtn" title="Save (updates the piece you loaded)">Save</button>
+      <button id="saveNew" title="Save as a new piece">Save new</button>
+      <button id="newBtn" title="Start a new, empty piece">New</button>
+    </div>
+    <div class="segbar"><select id="segSel" title="Show one segment's pieces"></select>
+      <button id="segPrev" title="Show the previous piece in this list">◀</button><button id="segNext" title="Show the next piece in this list">▶ Next</button></div>
+    <div class="segpos" id="segPos"></div>
+    <label class="check"><input type="checkbox" id="segFollow"> Follow the Show Runner's rundown (jump to the segment that's on)</label>
+    <div class="editing" id="editing"></div>
+    <div class="items" id="items"></div>
+  </section>
+
+  <section data-fold="import">
+    <h2><span class="ttl">Import a script</span> <small>Google Docs, Word…</small></h2>
+    <div class="drop" id="impDrop" contenteditable="true" data-ph="Paste your script here (in Google Docs: Ctrl+A, Ctrl+C, then click here and Ctrl+V), or drop a file on this box."></div>
+    <div class="grid g2" style="margin-top:6px"><button id="impOpen">Open a file…</button><button id="impClear" title="Start over">Clear</button></div>
+    <input type="file" id="impFile" accept=".docx,.md,.markdown,.txt,.html,.htm" hidden>
+    <div class="imp" id="impPrev"></div>
+    <div class="msg" id="impMsg"></div>
+    <p class="hint">In the doc: <b>Heading 1</b> = a segment ("Hot Takes (5 min)" sets its length; a short line under it is its intro), <b>Heading 2</b> = one on-screen card (the heading is its title), a horizontal line = a new card. Lines starting with <b>Note:</b> stay off screen. Files: Word <b>.docx</b>, <b>.md</b> (Google Docs → File → Download → Markdown), <b>.html</b> or <b>.txt</b>. Start from <b>templates/AWYM-Show-Script-Template.docx</b> (upload it to Google Drive and open it with Google Docs). Photos come through in .docx and .md files; pasted photos are links that can expire.</p>
+  </section>
+
+  <section data-fold="layout">
+    <h2><span class="ttl">Layout</span></h2>
+    <label>Position</label>
+    <div class="grid g4 seg" id="oPos"><button data-v="left">Left</button><button data-v="center">Center</button><button data-v="right">Right</button><button data-v="full" title="Full screen on a backdrop">Full</button></div>
+    <label>Width</label>
+    <div class="grid g3 seg" id="oWidth"><button data-v="narrow">Narrow</button><button data-v="medium">Medium</button><button data-v="wide">Wide</button></div>
+    <label>Height</label>
+    <div class="grid g2 seg" id="oAlign"><button data-v="top">Top</button><button data-v="middle">Middle</button></div>
+    <label>Style</label>
+    <div class="grid g2 seg" id="oStyle"><button data-v="card">Card</button><button data-v="plain" title="Just the text, with an outline so it reads over video">Text only</button></div>
+    <label for="oSize">Text size <b id="oSizeVal">100%</b></label>
+    <input type="range" id="oSize" min="60" max="200" step="5" value="100">
+    <label for="oHide">Hide by itself after</label>
+    <select id="oHide"><option value="0">Never (stays up)</option><option value="10">10 seconds</option><option value="20">20 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option></select>
+    <label class="check"><input type="checkbox" id="oClear" checked> Keep clear of lower thirds</label>
+    <p class="hint">Long text shrinks itself to fit. Layout changes show up right away if the text is on screen.</p>
+  </section>
+
+<script src="shared.js"></script>
+<script src="script-import.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const editor = $("editor");
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  /* ---------- storage: IndexedDB (room for photos), localStorage as a fallback ---------- */
+  const DB = (() => {
+    let dbp = null;
+    const open = () => dbp || (dbp = new Promise((res, rej) => {
+      const r = indexedDB.open("awym-content", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("kv");
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    }));
+    const lsKey = (k) => "awym-content-" + k;
+    return {
+      /** Read a value (undefined if missing). */
+      async get(k) {
+        try {
+          const db = await open();
+          return await new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+        } catch (e) { try { const v = localStorage.getItem(lsKey(k)); return v ? JSON.parse(v) : undefined; } catch (e2) { return undefined; } }
+      },
+      /** Write a value; resolves false if there's no room left. */
+      async set(k, v) {
+        try {
+          const db = await open();
+          await new Promise((res, rej) => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); });
+          return true;
+        } catch (e) { try { localStorage.setItem(lsKey(k), JSON.stringify(v)); return true; } catch (e2) { return false; } }
+      }
+    };
+  })();
+
+  /* ---------- messages ---------- */
+  let msgTimer = null;
+  /** Show a short note under the Show button (err = red). */
+  function note(text, err) {
+    $("msg").textContent = text || ""; $("msg").className = "msg" + (err ? " err" : "");
+    clearTimeout(msgTimer); if (text && !err) msgTimer = setTimeout(() => note(""), 4000);
+  }
+
+  /* ---------- layout options ---------- */
+  let opts = { position: "left", width: "medium", align: "top", style: "card", size: 100, autohide: 0, clearLT: true };
+  const SEGS = { oPos: "position", oWidth: "width", oAlign: "align", oStyle: "style" };
+  /** Show the layout options in the controls. */
+  function paintOpts() {
+    Object.entries(SEGS).forEach(([id, k]) => $(id).querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === opts[k])));
+    $("oSize").value = opts.size; $("oSizeVal").textContent = opts.size + "%";
+    $("oHide").value = String(opts.autohide); $("oClear").checked = opts.clearLT !== false;
+  }
+  /** A layout option changed: save it and update the screen if the text is up. */
+  function optsChanged() { paintOpts(); DB.set("opts", opts); if (visible) send("update"); }
+  Object.entries(SEGS).forEach(([id, k]) => $(id).addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; opts[k] = b.dataset.v; optsChanged(); }));
+  $("oSize").addEventListener("input", () => { opts.size = Number($("oSize").value); $("oSizeVal").textContent = opts.size + "%"; clearTimeout(sizeTimer); sizeTimer = setTimeout(optsChanged, 150); });
+  let sizeTimer = null;
+  $("oHide").onchange = () => { opts.autohide = Number($("oHide").value); optsChanged(); };
+  $("oClear").onchange = () => { opts.clearLT = $("oClear").checked; optsChanged(); };
+
+  /* ---------- the text being edited ---------- */
+  /** What's in the box right now, cleaned: {header, html}. */
+  const current = () => ({ header: $("header").value.trim(), html: AWYM.cleanHTML(editor.innerHTML) });
+  const isEmpty = (d) => !d.header && !d.html.replace(/<br>|<\/?(div|p|b|i|u|span)[^>]*>/g, "").trim();
+  let draftTimer = null;
+  /** Save the draft (shortly after typing stops) and, with Live typing on, update the screen. */
+  function edited() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => { DB.set("draft", Object.assign(current(), { id: currentId })); paintSaved(); }, 500);
+    if (visible && $("liveTyping").checked) { clearTimeout(liveTimer); liveTimer = setTimeout(() => send("update"), 250); }
+  }
+  let liveTimer = null;
+  editor.addEventListener("input", () => { AWYM.sizeImages(editor); edited(); });
+  $("header").addEventListener("input", edited);
+
+  /* ---------- show / hide ---------- */
+  let visible = false, lastHeard = 0, live = null;
+  /** Send the text to the On-Screen Text overlay ("show" animates in, "update" swaps in place). */
+  function send(cmd) {
+    const data = current();
+    if (cmd === "show" && isEmpty(data)) { note("Type something first.", true); return; }
+    AWYM.send({ to: "content", cmd, data, options: opts });
+    if (cmd === "show") { visible = true; paintState(); }
+    live = { visible: true, data, options: opts }; DB.set("live", live);
+  }
+  function hide() { AWYM.send({ to: "content", cmd: "hide" }); visible = false; paintState(); live = { visible: false }; DB.set("live", live); }
+  /** Show/Hide button and the "on screen" light. */
+  function paintState() {
+    $("showBtn").textContent = visible ? "Hide" : "Show";
+    $("showBtn").classList.toggle("showing", visible);
+    $("state").classList.toggle("on", visible);
+    $("state").querySelector("span").textContent = visible ? "On screen" : "Not on screen";
+  }
+  $("showBtn").onclick = () => (visible ? hide() : send("show"));
+  $("updateBtn").onclick = () => { if (visible) { send("update"); note("Screen updated."); } else send("show"); };
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === "Enter") { e.preventDefault(); visible ? send("update") : send("show"); }
+  });
+  DB.get("liveTyping").then((v) => { $("liveTyping").checked = !!v; });
+  $("liveTyping").onchange = () => DB.set("liveTyping", $("liveTyping").checked);
+
+  /* overlay replies: connection light, on-screen state, re-send after it reloads */
+  AWYM.listen((m) => {
+    if (m.from !== "content") return;
+    lastHeard = Date.now();
+    if (m.cmd === "hello") {
+      if (live && live.visible && live.data) AWYM.send({ to: "content", cmd: "show", data: live.data, options: live.options || opts });
+      return;
+    }
+    if ("visible" in m && m.visible !== visible) { visible = !!m.visible; paintState(); if (!visible && live) { live.visible = false; DB.set("live", live); } }
+  });
+  // 🚨 Clear (from any dock): the text is off screen
+  AWYM.onClear(() => { visible = false; paintState(); live = { visible: false }; DB.set("live", live); });
+  AWYM.dock("content");
+  setInterval(() => {
+    AWYM.send({ to: "content", cmd: "ping" });
+    const ok = Date.now() - lastHeard < 3000;
+    $("conn").classList.toggle("ok", ok);
+    $("conn").querySelector("span").textContent = ok ? "Overlay connected" : "Overlay not found";
+  }, 1500);
+
+  /* ---------- keeping the cursor position (toolbar clicks, pickers) ---------- */
+  let savedRange = null;
+  document.addEventListener("selectionchange", () => {
+    const s = getSelection();
+    if (s.rangeCount && editor.contains(s.anchorNode)) { savedRange = s.getRangeAt(0).cloneRange(); paintTools(); }
+  });
+  /** Put the cursor back where it was in the box (or at the end). */
+  function restoreSel() {
+    editor.focus();
+    const s = getSelection();
+    if (savedRange && editor.contains(savedRange.startContainer)) { s.removeAllRanges(); s.addRange(savedRange); }
+    else { const r = document.createRange(); r.selectNodeContents(editor); r.collapse(false); s.removeAllRanges(); s.addRange(r); }
+  }
+
+  /* ---------- keep every line in its own block ----------
+     The browser's formatting commands (lists, Big, centering) misbehave on bare
+     text sitting directly in the box, so each line is kept inside a <div>. */
+  const BLOCK = /^(DIV|P|H2|UL|OL)$/;
+  /** Wrap loose text at the top level of the box into <div>s (used when loading text). */
+  function blockify() {
+    let run = null;
+    [...editor.childNodes].forEach((n) => {
+      if (n.nodeType === 1 && BLOCK.test(n.tagName)) { run = null; return; }
+      if (n.nodeType === 1 && n.tagName === "BR") { if (run) run.appendChild(n); else { const d = document.createElement("div"); n.replaceWith(d); d.appendChild(n); } run = null; return; }
+      if (n.nodeType === 3 && !n.data.trim() && !run) { n.remove(); return; }
+      if (!run) { run = document.createElement("div"); n.replaceWith(run); }
+      run.appendChild(n);
+    });
+  }
+  /** When the box is empty, give it a first line to type into (on click, and before typing). */
+  function firstLine() {
+    const bare = [...editor.childNodes].every((n) => (n.nodeType === 3 && !n.data.trim()) || (n.nodeType === 1 && n.tagName === "BR"));
+    if (!bare) return;
+    editor.innerHTML = "<div><br></div>";
+    const r = document.createRange(); r.setStart(editor.firstChild, 0); r.collapse(true);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  editor.addEventListener("focus", firstLine);
+  /* Enter at the end of a Big line starts a normal line (the browser sometimes keeps
+     typing inside the big line, e.g. when bold is on). */
+  editor.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.shiftKey || e.ctrlKey || e.metaKey) return;
+    const s = getSelection(); if (!s.rangeCount || !s.isCollapsed) return;
+    let h = s.anchorNode;
+    while (h && h !== editor && !(h.nodeType === 1 && h.tagName === "H2")) h = h.parentNode;
+    if (!h || h === editor) return;
+    const rest = document.createRange(); rest.selectNodeContents(h); rest.setStart(s.anchorNode, s.anchorOffset);
+    if (rest.toString().length) return;              // not at the end: normal Enter
+    e.preventDefault();
+    const d = document.createElement("div"); d.appendChild(document.createElement("br")); h.after(d);
+    const c = document.createRange(); c.setStart(d, 0); c.collapse(true); s.removeAllRanges(); s.addRange(c);
+    edited();
+  });
+  editor.addEventListener("beforeinput", firstLine);
+
+  /* ---------- formatting buttons ---------- */
+  try { document.execCommand("defaultParagraphSeparator", false, "div"); } catch (e) {}
+  const toolbar = $("toolbar");
+  toolbar.addEventListener("mousedown", (e) => { if (e.target.closest("button")) e.preventDefault(); });  // keep the selection
+  toolbar.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.cmd) { restoreSel(); format(b.dataset.cmd); }
+    else if (b.dataset.color) { restoreSel(); color(b.dataset.color); }
+  });
+  /* ---------- text size (A− / A+) ----------
+     Seven steps, made with the browser's own font-size command (<font size="1…7">,
+     3 = normal) so it handles bigger-inside-smaller properly. rich-text.css gives
+     each step its size; AWYM.cleanHTML turns them into span.z1…z7 for the screen. */
+  const SIZES = { 1: 0.6, 2: 0.8, 3: 1, 4: 1.2, 5: 1.45, 6: 1.8, 7: 2.2 };
+  /** Size step (1–7) where the selection starts. */
+  function sizeLevel() {
+    const s = getSelection(); if (!s.rangeCount) return 3;
+    let n = s.getRangeAt(0).startContainer;
+    if (n.nodeType === 1 && n.childNodes[s.getRangeAt(0).startOffset]) n = n.childNodes[s.getRangeAt(0).startOffset];
+    for (; n && n !== editor; n = n.parentNode) if (n.nodeType === 1 && n.tagName === "FONT" && SIZES[n.getAttribute("size")]) return Number(n.getAttribute("size"));
+    return 3;
+  }
+  /** Make the selected text one step bigger (+1) or smaller (−1). */
+  function resize(step) {
+    const lvl = Math.max(1, Math.min(7, sizeLevel() + step));
+    try { document.execCommand("styleWithCSS", false, false); } catch (e) {}
+    document.execCommand("fontSize", false, String(lvl));
+    // normal size needs no tag
+    editor.querySelectorAll('font[size="3"]').forEach((f) => { if (!f.hasAttribute("color")) f.replaceWith(...f.childNodes); else f.removeAttribute("size"); });
+  }
+  /** Turn span.z1…z7 (how sizes are saved) back into the editor's <font size>. */
+  function sizesToEditor() {
+    editor.querySelectorAll("span[class^='z']").forEach((sp) => {
+      const m = /^z([1-7])$/.exec(sp.className); if (!m) return;
+      const f = document.createElement("font"); f.setAttribute("size", m[1]);
+      while (sp.firstChild) f.appendChild(sp.firstChild);
+      sp.replaceWith(f);
+    });
+  }
+  document.addEventListener("keydown", (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !e.shiftKey || document.activeElement !== editor) return;
+    if (e.key === ">" || e.key === ".") { e.preventDefault(); format("bigger"); }
+    else if (e.key === "<" || e.key === ",") { e.preventDefault(); format("smaller"); }
+  });
+
+  /** Run a formatting command on the selection. */
+  function format(cmd) {
+    if (cmd === "bigger" || cmd === "smaller") {
+      resize(cmd === "bigger" ? 1 : -1);
+    } else if (cmd === "big") {
+      const cur = String(document.queryCommandValue("formatBlock") || "").toLowerCase();
+      document.execCommand("formatBlock", false, cur === "h2" ? "div" : "h2");
+    } else if (cmd === "removeFormat") {
+      document.execCommand("removeFormat");
+      // also take theme colors off the selected text
+      const s = getSelection();
+      if (s.rangeCount) editor.querySelectorAll("span[class^='c-']").forEach((sp) => { if (s.containsNode(sp, true)) sp.replaceWith(...sp.childNodes); });
+    } else {
+      document.execCommand(cmd);
+    }
+    paintTools(); edited();
+  }
+  /* Colors: the browser paints the selection with a placeholder color, which is then
+     swapped for a theme-color span, so it follows the theme. */
+  const PLACEHOLDER = "#010203";
+  const cv = document.createElement("canvas").getContext("2d");
+  const norm = (c) => { cv.fillStyle = "#000000"; cv.fillStyle = String(c || ""); return cv.fillStyle.toLowerCase(); };
+  /** Give the selection a theme color: c-primary, c-accent or c-normal. */
+  function color(cls) {
+    const s = getSelection();
+    if (!s.rangeCount || s.isCollapsed) { note("Select some text first, then pick a color.", true); return; }
+    try { document.execCommand("styleWithCSS", false, false); } catch (e) {}
+    document.execCommand("foreColor", false, PLACEHOLDER);
+    const made = [];
+    editor.querySelectorAll("font[color], span[style]").forEach((el) => {
+      const c = el.tagName === "FONT" ? el.getAttribute("color") : el.style.color;
+      if (!c || norm(c) !== PLACEHOLDER) return;
+      const sp = document.createElement("span"); sp.className = cls;
+      while (el.firstChild) sp.appendChild(el.firstChild);
+      if (el.tagName === "FONT" && el.hasAttribute("size")) { el.removeAttribute("color"); el.appendChild(sp); }   // keep its text size
+      else el.replaceWith(sp);
+      made.push(sp);
+    });
+    if (made.length) {   // keep the newly colored text selected
+      const r = document.createRange(); r.setStartBefore(made[0]); r.setEndAfter(made[made.length - 1]);
+      s.removeAllRanges(); s.addRange(r);
+    }
+    edited();
+  }
+  /** Light up the buttons that match the formatting where the cursor is. */
+  function paintTools() {
+    const st = (c) => { try { return document.queryCommandState(c); } catch (e) { return false; } };
+    toolbar.querySelectorAll("[data-cmd]").forEach((b) => {
+      const c = b.dataset.cmd;
+      let on = false;
+      if (c === "big") on = String(document.queryCommandValue("formatBlock") || "").toLowerCase() === "h2";
+      else if (!/^(removeFormat|justifyLeft|bigger|smaller)$/.test(c)) on = st(c);
+      b.classList.toggle("on", on);
+    });
+    $("sizeVal").textContent = Math.round(SIZES[sizeLevel()] * 100) + "%";
+  }
+
+  /* ---------- emojis ---------- */
+  const EMOJI = {
+    "Show": "🏀 🔥 🐐 👑 💯 🏆 🎙️ 📊 📈 📉 ⏱️ 🎯 💥 🗣️ 📣 🧢 🛸 🤯 😤 😂 🤣 😮 👀 🤔 🙄 😬 👏 🙌 💪 🤝 ✅ ❌ ⚠️ ⭐ ❓ ❗ 🚨 🧠 💀 🥶 🍿 🧂 🗑️ 🆚 🔝",
+    "Faces": "😀 😃 😄 😁 😆 😅 🤣 😂 🙂 😉 😊 😇 😍 🤩 😘 😋 😜 🤪 🤨 🧐 😎 🥳 😏 😒 😞 😔 😟 😕 🙁 😣 😖 😫 😩 🥺 😢 😭 😤 😠 😡 🤬 🤯 😳 🥵 🥶 😱 😨 😰 🤗 🤭 🤫 🤥 😶 😐 😑 😬 🙃 😴 🤤 🤢 🤮 🤧 🤠 🤡 💩 👻 💀 👽 🤖",
+    "Hands": "👍 👎 👌 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ ✋ 🤚 🖐️ 🖖 👋 👏 🙌 👐 🤲 🤝 🙏 ✍️ 💪 👊 ✊ 🤛 🤜",
+    "Sports & fun": "🏀 ⛹️ 🏈 ⚾ 🥎 🎾 🏐 🏉 ⚽ 🏒 🏓 🏸 🥊 🥋 ⛳ 🏁 🏆 🥇 🥈 🥉 🏅 🎖️ 🎮 🕹️ 🎲 ♟️ 🃏 🎴 🀄 🎤 🎧 🎵 🎶 🎸 🥁 🎹 🎬 📺 📻 🍕 🍔 🌮 🍗 🥤 ☕ 🍺",
+    "Symbols": "❤️ 🧡 💛 💚 💙 💜 🖤 💔 ✨ 🌟 💫 ⚡ ☑️ ✔️ ❎ ➕ ➖ ‼️ ⁉️ 🚫 🔴 🔵 ⚪ ⚫ 🔺 🔻 ▶️ ⏸️ ⏹️ 🔁 ⬆️ ⬇️ ➡️ ⬅️ 🆕 🆒 💲 💰 📌 📍 🔔 ⏰ 📅 🗓️ 📝 📢"
+  };
+  let etab = "Show";
+  /** Draw the emoji tabs and grid. */
+  function paintEmoji() {
+    $("etabs").innerHTML = Object.keys(EMOJI).map((k) => `<button data-t="${esc(k)}" class="${k === etab ? "on" : ""}">${esc(k)}</button>`).join("");
+    $("emojis").innerHTML = EMOJI[etab].split(/\s+/).filter(Boolean).map((e) => `<button data-e="${esc(e)}" title="${esc(e)}">${e}</button>`).join("");
+  }
+  $("etabs").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) { etab = b.dataset.t; paintEmoji(); } });
+  /** Put an emoji in at the cursor. */
+  const addEmoji = (b) => { restoreSel(); document.execCommand("insertText", false, b.dataset.e); edited(); };
+  // inserted the moment the mouse goes down, so it can't be lost if anything moves before the button is released
+  $("emojis").addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    const b = e.target.closest("button[data-e]");
+    if (b && e.button === 0) addEmoji(b);
+  });
+  $("emojis").addEventListener("click", (e) => {   // keyboard (Tab to an emoji, Enter/Space)
+    const b = e.target.closest("button[data-e]");
+    if (b && e.detail === 0) addEmoji(b);
+  });
+  const togglePop = (id, on) => { $(id).hidden = on === undefined ? !$(id).hidden : !on; };
+  $("emojiBtn").onclick = () => { togglePop("emojiPop"); togglePop("photoPop", false); if (!$("emojiPop").hidden) paintEmoji(); };
+  $("emojiClose").onclick = () => togglePop("emojiPop", false);
+
+  /* ---------- photos ---------- */
+  $("photoBtn").onclick = () => { togglePop("photoPop"); togglePop("emojiPop", false); };
+  $("photoClose").onclick = () => togglePop("photoPop", false);
+  $("pickFile").onclick = () => $("file").click();
+  $("file").onchange = async () => { await addFiles([...$("file").files]); $("file").value = ""; };
+
+  const readURL = (file) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(file); });
+  const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("That picture couldn't be loaded.")); i.src = src; });
+  /** A picture file → data: address, shrunk to 1600 px at most (small GIFs kept as-is so they still move). */
+  async function fileToURL(file) {
+    if (!/^image\//.test(file.type)) throw new Error(`"${file.name}" isn't a picture.`);
+    const raw = await readURL(file);
+    if (file.type === "image/gif" && file.size < 2.5e6) return raw;
+    const img = await loadImg(raw);
+    const max = 1600, k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+    if (k === 1 && file.size < 700e3) return raw;
+    const c = document.createElement("canvas");
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    const alpha = /png|webp|gif/.test(file.type);
+    return c.toDataURL(alpha ? "image/webp" : "image/jpeg", 0.88);
+  }
+  /** Put a picture into the box at the cursor. */
+  function insertImage(src) {
+    restoreSel();
+    document.execCommand("insertHTML", false, `<img src="${esc(src)}" data-size="m" alt="">`);
+    AWYM.sizeImages(editor); edited();
+  }
+  /** Add picture files (from the file picker, a paste or a drop). */
+  async function addFiles(files) {
+    const imgs = files.filter((f) => /^image\//.test(f.type));
+    if (!imgs.length) { note("Those aren't pictures.", true); return; }
+    note("Adding photo…");
+    for (const f of imgs) { try { insertImage(await fileToURL(f)); } catch (e) { note(e.message, true); return; } }
+    note(imgs.length > 1 ? "Photos added. Click one to change its size." : "Photo added. Click it to change its size.");
+    togglePop("photoPop", false);
+  }
+  /** A typed web address or file path → an image address the overlay can load. */
+  function toImageURL(v) {
+    v = v.trim().replace(/^"(.*)"$/, "$1");
+    if (/^[a-z]:[\\/]/i.test(v)) return "file:///" + v.replace(/\\/g, "/").split("/").map((p, i) => i ? encodeURIComponent(p) : p).join("/");
+    if (/^\\\\/.test(v)) return "file:" + v.replace(/\\/g, "/");
+    if (/^\//.test(v)) return "file://" + v.split("/").map(encodeURIComponent).join("/");
+    if (/^(https?:\/\/|file:\/\/\/)/i.test(v)) return v;
+    return "";
+  }
+  $("addUrl").onclick = async () => {
+    const url = toImageURL($("imgUrl").value);
+    if (!url) { note("Paste a web address (https://…) or a file path (C:\\…).", true); return; }
+    try { await loadImg(url); } catch (e) { note("That picture couldn't be loaded. Check the address.", true); return; }
+    insertImage(url); $("imgUrl").value = ""; togglePop("photoPop", false); note("Photo added. Click it to change its size.");
+  };
+
+  /* paste: pictures go in as photos; text keeps only the formatting we support */
+  editor.addEventListener("paste", (e) => {
+    const cd = e.clipboardData; if (!cd) return;
+    const files = [...(cd.files || [])].filter((f) => /^image\//.test(f.type));
+    e.preventDefault();
+    if (files.length) { addFiles(files); return; }
+    const html = cd.getData("text/html");
+    if (html) document.execCommand("insertHTML", false, AWYM.cleanHTML(html));
+    else document.execCommand("insertText", false, cd.getData("text/plain"));
+    edited();
+  });
+  /* drag a picture in */
+  editor.addEventListener("dragover", (e) => { if ([...(e.dataTransfer.items || [])].some((i) => i.kind === "file")) { e.preventDefault(); editor.classList.add("drag"); } });
+  editor.addEventListener("dragleave", () => editor.classList.remove("drag"));
+  editor.addEventListener("drop", (e) => {
+    editor.classList.remove("drag");
+    const files = [...(e.dataTransfer.files || [])];
+    if (!files.length) return;
+    e.preventDefault();
+    // put the cursor where it was dropped
+    const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+    if (r) { savedRange = r; }
+    addFiles(files);
+  });
+
+  /* click a photo in the box to resize or remove it */
+  let selImg = null;
+  /** Select (or unselect, with null) a photo in the box. */
+  function pickImg(img) {
+    if (selImg) selImg.classList.remove("sel");
+    selImg = img; if (img) img.classList.add("sel");
+    $("imgBar").hidden = !img;
+    $("imgBar").querySelectorAll("[data-size]").forEach((b) => b.classList.toggle("on", !!img && b.dataset.size === (img.dataset.size || "m")));
+  }
+  editor.addEventListener("click", (e) => pickImg(e.target.tagName === "IMG" ? e.target : null));
+  editor.addEventListener("keydown", () => { if (selImg) pickImg(null); });
+  $("imgBar").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b || !selImg) return;
+    if (b.dataset.size) { selImg.dataset.size = b.dataset.size; pickImg(selImg); }
+    else if (b.id === "imgRemove") { selImg.remove(); pickImg(null); }
+    edited();
+  });
+
+  /* ---------- saved pieces ---------- */
+  let items = [], currentId = null, confirmDel = null;
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  /** A short name for a piece: its header, or the start of its text. */
+  function nameOf(d) {
+    if (d.header) return d.header;
+    const t = new DOMParser().parseFromString(d.html || "", "text/html").body.textContent.trim();
+    return t ? t.slice(0, 48) : (/<img/.test(d.html || "") ? "Photo" : "Untitled");
+  }
+  /* Segments (from an imported script): the Saved list can show one segment at a time,
+     and ◀ / ▶ step through the list putting each piece on screen. */
+  const SEGK = "awym-content-seg-v1";
+  let segUI = { filter: "", follow: true };
+  try { segUI = Object.assign(segUI, JSON.parse(localStorage.getItem(SEGK) || "{}")); } catch (e) {}
+  const saveSegUI = () => { try { localStorage.setItem(SEGK, JSON.stringify(segUI)); } catch (e) {} };
+  const OTHER = "\u0000other";
+  /** Segment names in the order they first appear in the list. */
+  const segNames = () => [...new Set(items.filter((x) => x.seg).map((x) => x.seg))];
+  /** The pieces in display order: grouped by segment (others first), filtered by the dropdown. */
+  function ordered() {
+    const segs = segNames(), others = items.filter((x) => !x.seg);
+    const groups = [{ name: OTHER, list: others }].concat(segs.map((n) => ({ name: n, list: items.filter((x) => x.seg === n) })));
+    return groups.filter((g) => !segUI.filter || g.name === segUI.filter);
+  }
+  /** Draw the saved list. */
+  function paintSaved() {
+    const segs = segNames();
+    if (segUI.filter && segUI.filter !== OTHER && !segs.includes(segUI.filter)) segUI.filter = "";
+    const nOther = items.filter((x) => !x.seg).length;
+    $("segSel").innerHTML = `<option value="">All pieces (${items.length})</option>` +
+      segs.map((n) => `<option value="${esc(n)}"${segUI.filter === n ? " selected" : ""}>${esc(n)} (${items.filter((x) => x.seg === n).length})</option>`).join("") +
+      (segs.length && nOther ? `<option value="${OTHER}"${segUI.filter === OTHER ? " selected" : ""}>Not in a segment (${nOther})</option>` : "");
+    $("segFollow").checked = !!segUI.follow;
+    const cur = items.find((x) => x.id === currentId);
+    $("editing").textContent = cur ? `Editing: ${nameOf(cur)}` + (JSON.stringify({ header: cur.header, html: cur.html }) !== JSON.stringify(current()) ? " (changed, not saved)" : "") : "Not saved yet.";
+    const groups = ordered(), flat = groups.flatMap((g) => g.list);
+    const row = (it) => {
+      const text = new DOMParser().parseFromString(it.html || "", "text/html").body.textContent.trim();
+      const photos = (it.html.match(/<img/g) || []).length;
+      const sub = [it.header ? text.slice(0, 60) : "", photos ? `📷 ${photos}` : ""].filter(Boolean).join(" · ");
+      return `<div class="item ${it.id === currentId ? "cur" : ""}" data-id="${esc(it.id)}">
+        <div class="n">${esc(nameOf(it))}${sub ? `<small>${esc(sub)}</small>` : ""}</div>
+        <button data-act="show" title="Load it and show it on screen">▶</button>
+        <button data-act="load" title="Load it into the box to edit">Edit</button>
+        <button data-act="del" class="${confirmDel === it.id ? "danger" : ""}" title="Delete">${confirmDel === it.id ? "Sure?" : "✕"}</button></div>`;
+    };
+    const showHeads = !segUI.filter && segs.length;
+    $("items").innerHTML = flat.length ? groups.map((g) => g.list.length ? (showHeads ? `<div class="seghead">${g.name === OTHER ? "Not in a segment" : esc(g.name)}</div>` : "") + g.list.map(row).join("") : "").join("")
+      : `<div class="empty">${items.length ? "Nothing in this segment." : "Nothing saved yet. Write something and click Save, or import a script below."}</div>`;
+    const i = flat.findIndex((x) => x.id === currentId);
+    $("segPos").textContent = flat.length ? (i >= 0 ? `${i + 1} of ${flat.length}` : `${flat.length} piece${flat.length === 1 ? "" : "s"}`) + (segUI.filter && segUI.filter !== OTHER ? ` · ${segUI.filter}` : "") : "";
+    $("segPrev").disabled = i <= 0; $("segNext").disabled = !flat.length || i >= flat.length - 1;
+  }
+  /** Load the next (+1) or previous (-1) piece in the list and put it on screen. */
+  function step(dir) {
+    const flat = ordered().flatMap((g) => g.list);
+    if (!flat.length) return;
+    const i = flat.findIndex((x) => x.id === currentId);
+    const it = flat[i < 0 ? 0 : Math.max(0, Math.min(flat.length - 1, i + dir))];
+    load(it); send(visible ? "update" : "show"); paintSaved();
+  }
+  $("segSel").onchange = () => { segUI.filter = $("segSel").value; saveSegUI(); paintSaved(); };
+  $("segFollow").onchange = () => { segUI.follow = $("segFollow").checked; saveSegUI(); };
+  $("segPrev").onclick = () => step(-1);
+  $("segNext").onclick = () => step(1);
+  AWYM.listen((m) => {
+    // the Show Runner went to a segment: show that segment's pieces (matched by name)
+    if (m.from === "runner" && m.cmd === "segment" && segUI.follow && m.name) {
+      const hit = segNames().find((n) => n.toLowerCase() === String(m.name).toLowerCase());
+      if (hit && segUI.filter !== hit) { segUI.filter = hit; saveSegUI(); paintSaved(); }
+    }
+    // a hotkey / stream deck key: next or previous piece
+    if (m.to === "content" && (m.cmd === "next" || m.cmd === "prev")) step(m.cmd === "next" ? 1 : -1);
+  });
+
+  /* ---------- import a script (script-import.js does the reading) ---------- */
+  let parsed = null;
+  const IMPK = "awym-content-import-v1";
+  let impUI = { rundown: "none" };
+  try { impUI = Object.assign(impUI, JSON.parse(localStorage.getItem(IMPK) || "{}")); } catch (e) {}
+  const impNote = (t, err) => { const el = $("impMsg"); el.textContent = t || ""; el.className = "msg" + (err ? " err" : ""); };
+  /** Show what's in the script, with a tick box per segment. */
+  function paintImport() {
+    const box = $("impPrev");
+    if (!parsed) { box.innerHTML = ""; return; }
+    const segs = parsed.segments, n = segs.reduce((a, g) => a + g.pieces.length, 0);
+    if (!segs.length) { box.innerHTML = `<div class="t">Nothing to import</div>That script has no text that could go on screen.`; return; }
+    const before = items.filter((x) => x.src === parsed.title).length;
+    box.innerHTML = `<div class="t">${esc(parsed.title)}: ${segs.length} segment${segs.length === 1 ? "" : "s"}, ${n} card${n === 1 ? "" : "s"}</div>` +
+      segs.map((g, i) => `<label class="sg"><input type="checkbox" data-i="${i}" checked><span><b>${esc(g.name)}</b>
+        <small>${[g.minutes ? g.minutes + " min" : "", g.pieces.length + " card" + (g.pieces.length === 1 ? "" : "s"), g.desc].filter(Boolean).map(esc).join(" · ")}</small>
+        <small>${g.pieces.map((p) => esc(p.header || "(untitled)")).join(" · ")}</small></span></label>`).join("") +
+      (before ? `<label class="check"><input type="checkbox" id="impReplace" checked> Replace the ${before} card${before === 1 ? "" : "s"} imported earlier from this script</label>` : "") +
+      `<select id="impRundown" title="The Show Runner's rundown">
+        <option value="none">Don't change the Show Runner's rundown</option>
+        <option value="append">Add these segments to the end of the rundown</option>
+        <option value="replace">Replace the rundown with these segments</option></select>
+      <button class="primary" id="impGo" style="width:100%;margin-top:8px">Import</button>`;
+    $("impRundown").value = impUI.rundown;
+  }
+  async function take(script, how) {
+    parsed = script; impNote(how); paintImport();
+  }
+  $("impDrop").addEventListener("paste", (e) => {
+    e.preventDefault();
+    const cd = e.clipboardData || window.clipboardData; if (!cd) return;
+    const html = cd.getData("text/html"), text = cd.getData("text/plain");
+    try { take(html ? AWYM_IMPORT.fromHTML(html) : AWYM_IMPORT.fromMarkdown(text), "Pasted. Check the list, then Import."); }
+    catch (er) { impNote("Couldn't read that: " + er.message, true); }
+    $("impDrop").innerHTML = "";
+  });
+  $("impDrop").addEventListener("input", () => { $("impDrop").innerHTML = ""; });   // it's a paste target, not a text box
+  const openFile = async (f) => {
+    if (!f) return;
+    impNote("Reading " + f.name + "…");
+    try { take(await AWYM_IMPORT.fromFile(f), `Read ${f.name}. Check the list, then Import.`); }
+    catch (er) { parsed = null; paintImport(); impNote(er.message || String(er), true); }
+  };
+  $("impOpen").onclick = () => $("impFile").click();
+  $("impFile").onchange = () => { openFile($("impFile").files[0]); $("impFile").value = ""; };
+  $("impClear").onclick = () => { parsed = null; paintImport(); impNote(""); };
+  $("impDrop").addEventListener("dragover", (e) => { e.preventDefault(); $("impDrop").classList.add("drag"); });
+  $("impDrop").addEventListener("dragleave", () => $("impDrop").classList.remove("drag"));
+  $("impDrop").addEventListener("drop", (e) => {
+    e.preventDefault(); $("impDrop").classList.remove("drag");
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) openFile(f);
+    else { const html = e.dataTransfer.getData("text/html"), text = e.dataTransfer.getData("text/plain"); if (html || text) take(html ? AWYM_IMPORT.fromHTML(html) : AWYM_IMPORT.fromMarkdown(text), "Dropped. Check the list, then Import."); }
+  });
+  /** Big photos inside the script → shrunk like photos you add by hand (1600 px at most). */
+  async function shrinkPhotos(html) {
+    const d = document.createElement("div"); d.innerHTML = html;
+    for (const im of Array.from(d.querySelectorAll("img"))) {
+      const src = im.getAttribute("src") || "";
+      if (!/^data:image\/(png|jpe?g|webp|bmp)/.test(src) || src.length < 900e3) continue;
+      try {
+        const img = await loadImg(src), k = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+        im.setAttribute("src", c.toDataURL(/png|webp/.test(src.slice(0, 20)) ? "image/webp" : "image/jpeg", 0.88));
+      } catch (e) {}
+    }
+    return d.innerHTML;
+  }
+  $("impPrev").addEventListener("change", (e) => { if (e.target.id === "impRundown") { impUI.rundown = e.target.value; try { localStorage.setItem(IMPK, JSON.stringify(impUI)); } catch (er) {} } });
+  $("impPrev").addEventListener("click", async (e) => {
+    if (!e.target.closest("#impGo") || !parsed) return;
+    const picked = parsed.segments.filter((g, i) => { const c = $("impPrev").querySelector(`input[data-i="${i}"]`); return !c || c.checked; });
+    if (!picked.length) { impNote("Tick at least one segment.", true); return; }
+    const btn = $("impGo"); btn.disabled = true; btn.textContent = "Importing…";
+    const add = [], t0 = Date.now();
+    for (const g of picked) for (const pc of g.pieces) {
+      add.push({ id: newId(), created: t0, header: pc.header || "", html: AWYM.cleanHTML(await shrinkPhotos(pc.html)), seg: g.name, src: parsed.title });
+    }
+    const rep = $("impReplace") && $("impReplace").checked;
+    if (rep) items = items.filter((x) => x.src !== parsed.title);
+    items = add.concat(items);
+    await storeItems();
+    segUI.filter = picked.find((g) => g.pieces.length) ? picked.find((g) => g.pieces.length).name : ""; saveSegUI();
+    paintSaved();
+    let msg = `Imported ${add.length} card${add.length === 1 ? "" : "s"} into Saved, grouped by segment.`;
+    const mode = $("impRundown").value;
+    if (mode !== "none") {
+      const nonce = Math.random().toString(36).slice(2);
+      const ok = await new Promise((res) => {
+        const ch = new BroadcastChannel("awym-control"), done = (v) => { ch.close(); res(v); };
+        ch.onmessage = (ev) => { const m = ev.data || {}; if (m.from === "runner" && m.ack === nonce) done(true); };
+        AWYM.send({ to: "runner", cmd: "rundown", mode, nonce, segments: picked.map((g) => ({ name: g.name, minutes: g.minutes, desc: g.desc })) });
+        setTimeout(() => done(false), 1200);
+      });
+      msg += ok ? ` ${mode === "replace" ? "The rundown now has" : "Added"} ${picked.length} segment${picked.length === 1 ? "" : "s"}${mode === "replace" ? "" : " to the rundown"}.` : " The Show Runner dock isn't open, so the rundown didn't change (open it and import again).";
+    }
+    parsed = null; paintImport(); impNote(msg, mode !== "none" && !msg.includes("now has") && !msg.includes("Added"));
+  });
+
+  /** Save the list; warn if storage is full. */
+  async function storeItems() { if (!(await DB.set("items", items))) note("Couldn't save: storage is full. Delete some saved pieces or photos.", true); }
+  /** Put a piece into the box. */
+  function load(it) {
+    $("header").value = it.header || ""; editor.innerHTML = AWYM.cleanHTML(it.html || ""); blockify(); sizesToEditor(); AWYM.sizeImages(editor);
+    currentId = it.id; pickImg(null); edited();
+  }
+  $("saveBtn").onclick = async () => {
+    const d = current();
+    if (isEmpty(d)) { note("Nothing to save yet.", true); return; }
+    const it = items.find((x) => x.id === currentId);
+    if (it) Object.assign(it, d, { updated: Date.now() });
+    else { currentId = newId(); items.unshift(Object.assign({ id: currentId, created: Date.now() }, d)); }
+    await storeItems(); paintSaved(); edited(); note("Saved.");
+  };
+  $("saveNew").onclick = async () => {
+    const d = current();
+    if (isEmpty(d)) { note("Nothing to save yet.", true); return; }
+    currentId = newId(); items.unshift(Object.assign({ id: currentId, created: Date.now() }, d));
+    await storeItems(); paintSaved(); edited(); note("Saved as a new piece.");
+  };
+  $("newBtn").onclick = () => { $("header").value = ""; editor.innerHTML = ""; currentId = null; pickImg(null); edited(); editor.focus(); };
+  $("items").addEventListener("click", async (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const id = b.closest(".item").dataset.id, it = items.find((x) => x.id === id); if (!it) return;
+    if (b.dataset.act === "del") {
+      if (confirmDel !== id) { confirmDel = id; paintSaved(); setTimeout(() => { if (confirmDel === id) { confirmDel = null; paintSaved(); } }, 3000); return; }
+      items = items.filter((x) => x.id !== id); confirmDel = null;
+      if (currentId === id) currentId = null;
+      await storeItems(); paintSaved(); return;
+    }
+    load(it);
+    if (b.dataset.act === "show") send(visible ? "update" : "show");
+  });
+
+  /* ---------- start up: bring back the draft, saved pieces and layout ---------- */
+  Promise.all([DB.get("draft"), DB.get("items"), DB.get("opts"), DB.get("live")]).then(([draft, its, o, lv]) => {
+    items = Array.isArray(its) ? its : [];
+    if (o && typeof o === "object") Object.assign(opts, o);
+    if (draft) { $("header").value = draft.header || ""; editor.innerHTML = AWYM.cleanHTML(draft.html || ""); blockify(); sizesToEditor(); AWYM.sizeImages(editor); currentId = draft.id || null; }
+    live = lv || null;
+    paintOpts(); paintSaved(); paintState();
+    AWYM.send({ to: "content", cmd: "ping" });
+  });
+})();
+</script>
+<script>
+/* Collapsible sections: click a section's header to fold it away (remembered).
+   The ⊟ button in the top bar folds or unfolds everything. See AWYM.collapsible in shared.js. */
+(function () {
+  const foldAll = AWYM.collapsible("awym-content-fold-v1");
+  const btn = document.getElementById("foldAll");
+  if (btn) btn.onclick = () => {
+    const open = document.querySelectorAll("section:not(.folded) > h2.fold").length;
+    foldAll(open > 0);
+  };
+})();
+</script>
+</body>
+</html>

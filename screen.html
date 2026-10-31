@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Stream Screen</title>
+<!--
+  STREAM SCREEN — full-screen "Starting Soon", "Be Right Back", etc.
+  Source size: 1920 x 1080. It includes the animated background, so it can
+  be the only source in its OBS scene. Easiest setup: open screen-maker.html.
+
+  URL settings (all optional):
+    ?type=starting     starting, brb, technical, intermission, halftime,
+                       upnext, ending, offline, custom
+    &title=…           big headline           (%20 = space)
+    &message=…         line under the headline
+    &lines=A|B|C       messages that rotate every few seconds (separate with |)
+    &minutes=5         countdown that starts when the source loads
+    &at=19:30          …or count down to a clock time (24-hour, or 7:30pm)
+    &countlabel=…      small text under the countdown
+    &done=…            text when the countdown reaches zero
+    &socials=A|B       handles shown as chips, e.g. YouTube%20@show|TikTok%20@show
+    &next=…            e.g. Next%20show:%20Friday%208pm
+    &scene=synthwave   background scene (default: the one in theme.css)
+    &anim=…            extra background effects (see background.html)
+    &bg=0              no background (transparent, to put over your own)
+    &showname=0        hide the show name above the headline
+    &icon=…            play, cup, tv, hourglass, next, heart, moon, megaphone, none
+
+  Live changes: the Control Panel's "Stream screens" section can change the
+  text and restart the countdown while you're live.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080. Usually the only source in its OBS scene.
+  Uses:      theme.css, shared.js, screens.js (types + default wording); embeds
+             background.html (title hidden) in an iframe unless &bg=0.
+  Messages:  listens  to:"screen" (matching type or "*")  update {data} | restart
+             sends    from:"screen" {type, cmd:"hello"} (Control Panel re-sends saved words)
+  Layout:    .panel > .eyebrow (show name) · .icon (animated SVG) · .title · .message ·
+             .count (countdown + progress) · .rot (rotating lines) · .socials · .next
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Stream screen styles. Design size 1920×1080: background iframe behind a centred .panel. Classes on <body>: t-<type>, nobg. */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: var(--font-body); color: var(--light); }
+  .stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; translate: -50% -50%; transform-origin: center; overflow: hidden; }
+  iframe.bg { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
+  .nobg iframe.bg { display: none; }
+
+  .panel {
+    position: absolute; left: 50%; top: 50%; translate: -50% -50%;
+    width: 1320px; box-sizing: border-box; padding: 54px 80px 60px; text-align: center;
+    border-radius: 36px; overflow: hidden; border-top: 10px solid var(--primary);
+    box-shadow: 0 30px 80px rgba(0,0,0,.45);
+    backdrop-filter: blur(10px);
+  }
+  .panel::before { content: ""; position: absolute; inset: 0; background: var(--secondary); opacity: .78; z-index: -1; }
+  .panel::after { content: ""; position: absolute; inset: 0; z-index: -1;
+    background: radial-gradient(ellipse at 50% 0%, var(--primary), transparent 65%); opacity: .14; }
+
+  .eyebrow { font-family: var(--font-display); font-size: 34px; color: var(--light); opacity: .8; letter-spacing: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .eyebrow:empty { display: none; }
+  .icon { width: 150px; height: 150px; margin: 22px auto 10px; }
+  .icon:empty { display: none; }
+  .icon svg { width: 100%; height: 100%; overflow: visible; }
+  .title {
+    font-family: var(--font-display); font-size: 124px; line-height: 1.02; color: var(--light); white-space: nowrap; display: inline-block;
+    text-shadow: 5px 5px 0 var(--primary), 10px 10px 0 var(--dark);
+  }
+  .message { margin-top: 26px; font-size: 46px; font-weight: 600; line-height: 1.25; }
+  .message:empty { display: none; }
+
+  .count { margin-top: 26px; }
+  .count .num { font-family: var(--font-heading); font-size: 176px; line-height: 1; color: var(--clock-digit); font-variant-numeric: tabular-nums; letter-spacing: 4px; }
+  .count .lab { font-size: 28px; letter-spacing: 6px; text-transform: uppercase; opacity: .75; margin-top: 6px; }
+  .count .lab:empty { display: none; }
+  .count.done .num { font-family: var(--font-display); font-size: 70px; color: var(--accent); animation: breathe 1.6s ease-in-out infinite; }
+  .count:empty { display: none; }
+  @keyframes breathe { 50% { opacity: .55; } }
+  .progress { height: 10px; border-radius: 99px; background: var(--dark); margin: 22px auto 0; width: 70%; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--primary); width: 0; transition: width 1s linear; }
+
+  .rot { margin-top: 30px; min-height: 46px; font-size: 36px; font-weight: 700; color: var(--accent); transition: opacity .6s, translate .6s; }
+  .rot.fade { opacity: 0; translate: 0 10px; }
+  .rot:empty { display: none; }
+  .socials { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 30px; }
+  .socials:empty { display: none; }
+  .socials span { font-size: 30px; font-weight: 700; padding: 8px 22px 9px; border-radius: 999px; border: 3px solid var(--primary); background: var(--dark); }
+  .next { margin-top: 26px; font-family: var(--font-heading); font-size: 42px; letter-spacing: 1px; color: var(--light); opacity: .9; }
+  .next:empty { display: none; }
+
+  /* technical difficulties: color bars + a glitchy title */
+  .bars { display: none; position: absolute; left: 0; right: 0; top: 0; height: 16px; }
+  .t-technical .bars { display: flex; }
+  .bars i { flex: 1; animation: flick 2.4s steps(1) infinite; }
+  @keyframes flick { 92% { opacity: 1; } 94% { opacity: .2; } 96% { opacity: 1; } }
+  .t-technical .title { animation: glitch 3.5s steps(1) infinite; }
+  @keyframes glitch {
+    0%, 86%, 100% { translate: 0 0; text-shadow: 5px 5px 0 var(--primary), 10px 10px 0 var(--dark); }
+    88% { translate: -6px 2px; text-shadow: -6px 0 0 var(--accent), 6px 0 0 var(--primary); }
+    90% { translate: 5px -2px; text-shadow: 6px 0 0 var(--accent), -6px 0 0 var(--primary); }
+    92% { translate: -2px 0; }
+  }
+
+  /* icon animations */
+  .ic-ring { fill: none; stroke: var(--primary); stroke-width: 6; transform-box: fill-box; transform-origin: center; animation: ring 2.2s ease-out infinite; }
+  @keyframes ring { from { scale: .8; opacity: .9; } to { scale: 1.35; opacity: 0; } }
+  .ic-f { fill: var(--light); } .ic-p { fill: var(--primary); } .ic-a { fill: var(--accent); }
+  .ic-s { fill: none; stroke: var(--light); stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; }
+  .ic-steam { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; animation: steam 2.4s ease-in-out infinite; }
+  .ic-steam.d2 { animation-delay: .8s; } .ic-steam.d3 { animation-delay: 1.6s; }
+  @keyframes steam { 0% { opacity: 0; translate: 0 8px; } 40% { opacity: 1; } 100% { opacity: 0; translate: 0 -18px; } }
+  .ic-static { animation: stat .25s steps(2) infinite; }
+  @keyframes stat { 50% { translate: 0 6px; } }
+  .ic-hour { transform-box: view-box; transform-origin: 50% 50%; animation: flip 4s ease-in-out infinite; }
+  @keyframes flip { 0%, 80% { rotate: 0deg; } 100% { rotate: 180deg; } }
+  .ic-next { animation: slide 1.6s ease-in-out infinite; }
+  .ic-next.d2 { animation-delay: .2s; } .ic-next.d3 { animation-delay: .4s; }
+  @keyframes slide { 0%, 100% { opacity: .25; translate: -6px 0; } 50% { opacity: 1; translate: 6px 0; } }
+  .ic-heart { transform-box: fill-box; transform-origin: center; animation: beat 1.3s ease-in-out infinite; }
+  @keyframes beat { 0%, 40%, 100% { scale: 1; } 15% { scale: 1.12; } 30% { scale: 1.05; } }
+  .ic-z { font-family: var(--font-display); fill: var(--accent); animation: zz 3s ease-in-out infinite; }
+  .ic-z.d2 { animation-delay: 1s; } .ic-z.d3 { animation-delay: 2s; }
+  @keyframes zz { 0% { opacity: 0; translate: 0 10px; } 30% { opacity: 1; } 100% { opacity: 0; translate: 12px -24px; } }
+  .ic-mega { transform-box: fill-box; transform-origin: 20% 60%; animation: honk 2.5s ease-in-out infinite; }
+  @keyframes honk { 0%, 70%, 100% { rotate: 0deg; } 75% { rotate: -6deg; } 85% { rotate: 5deg; } }
+  .ic-wave { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; animation: steam 1.8s ease-out infinite; }
+  .ic-wave.d2 { animation-delay: .4s; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <iframe class="bg" id="bg" tabindex="-1" title="background"></iframe>
+    <div class="panel" id="panel">
+      <div class="bars" id="bars"></div>
+      <div class="eyebrow" id="eyebrow"></div>
+      <div class="icon" id="icon"></div>
+      <div><div class="title" id="title"></div></div>
+      <div class="message" id="message"></div>
+      <div class="count" id="count"></div>
+      <div class="rot" id="rot"></div>
+      <div class="socials" id="socials"></div>
+      <div class="next" id="next"></div>
+    </div>
+  </div>
+
+<script src="shared.js"></script>
+<script src="screens.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const stage = $("stage");
+  /** Scale the 1920×1080 design to the OBS source size. */
+  function fit() { stage.style.transform = "scale(" + Math.min(innerWidth / 1920, innerHeight / 1080) + ")"; }
+  addEventListener("resize", fit); fit();
+
+  const TYPES = window.AWYM_SCREENS;
+  const type = TYPES[AWYM.param("type", "starting")] ? AWYM.param("type", "starting") : "starting";
+  const D = TYPES[type];
+  document.body.classList.add("t-" + type);
+  const has = (k) => AWYM.params.has(k);
+  let data = {
+    title: has("title") ? AWYM.param("title") : D.title,
+    message: has("message") ? AWYM.param("message") : D.message,
+    lines: has("lines") ? AWYM.param("lines") : D.lines,
+    countlabel: has("countlabel") ? AWYM.param("countlabel") : D.countLabel,
+    done: has("done") ? AWYM.param("done") : D.done,
+    socials: AWYM.param("socials", ""),
+    next: AWYM.param("next", ""),
+    minutes: AWYM.param("minutes", ""),
+    at: AWYM.param("at", ""),
+    icon: AWYM.param("icon", D.icon)
+  };
+
+  /* background */
+  if (AWYM.param("bg") === "0") document.body.classList.add("nobg");
+  else {
+    const q = new URLSearchParams({ title: "none" });
+    ["scene", "anim", "speed", "intensity", "theme"].forEach((k) => { if (has(k)) q.set(k, AWYM.param(k)); });
+    $("bg").src = "background.html?" + q.toString();
+  }
+  if (AWYM.param("showname") !== "0") $("eyebrow").textContent = AWYM.showName();
+  AWYM.onTheme(() => { if (AWYM.param("showname") !== "0") $("eyebrow").textContent = AWYM.showName(); apply(); });
+
+  /* color bars for technical difficulties */
+  $("bars").innerHTML = ["--light", "--clock-digit", "--accent", "--primary", "--secondary", "--warning", "--dark"].map((v) => `<i style="background:var(${v})"></i>`).join("");
+
+  /* icons */
+  const ICONS = {
+    play: '<svg viewBox="0 0 100 100"><circle class="ic-ring" cx="50" cy="50" r="42"/><circle class="ic-p" cx="50" cy="50" r="40"/><path class="ic-f" d="M40 30l32 20-32 20z"/></svg>',
+    cup: '<svg viewBox="0 0 100 100"><path class="ic-steam" d="M38 30c-6-6 6-10 0-18"/><path class="ic-steam d2" d="M52 30c-6-6 6-10 0-18"/><path class="ic-steam d3" d="M66 30c-6-6 6-10 0-18"/><path class="ic-p" d="M22 40h56v22c0 16-12 28-28 28s-28-12-28-28z"/><path class="ic-s" style="stroke:var(--primary)" d="M78 48h6c8 0 8 18 0 18h-8"/></svg>',
+    tv: '<svg viewBox="0 0 100 100"><path class="ic-s" d="M36 10l14 16 14-16"/><rect class="ic-p" x="8" y="26" width="84" height="62" rx="10"/><rect x="16" y="33" width="68" height="48" rx="5" fill="var(--dark)"/><g class="ic-static"><rect class="ic-f" x="20" y="40" width="50" height="4" opacity=".5"/><rect class="ic-a" x="28" y="52" width="52" height="4" opacity=".6"/><rect class="ic-f" x="20" y="64" width="40" height="4" opacity=".4"/></g></svg>',
+    hourglass: '<svg viewBox="0 0 100 100"><g class="ic-hour"><rect class="ic-p" x="22" y="8" width="56" height="10" rx="4"/><rect class="ic-p" x="22" y="82" width="56" height="10" rx="4"/><path class="ic-s" d="M30 18c0 22 40 22 40 32S30 60 30 82M70 18c0 22-40 22-40 32s40 10 40 32"/><path class="ic-a" d="M36 76c4-10 24-10 28 0z"/></g></svg>',
+    next: '<svg viewBox="0 0 100 100"><path class="ic-s ic-next" style="stroke:var(--primary);stroke-width:10" d="M20 25l25 25-25 25"/><path class="ic-s ic-next d2" style="stroke:var(--accent);stroke-width:10" d="M42 25l25 25-25 25"/><path class="ic-s ic-next d3" style="stroke-width:10" d="M64 25l25 25-25 25"/></svg>',
+    heart: '<svg viewBox="0 0 100 100"><path class="ic-a ic-heart" d="M50 88C20 66 8 50 8 33c0-13 10-23 22-23 9 0 16 5 20 12 4-7 11-12 20-12 12 0 22 10 22 23 0 17-12 33-42 55z"/></svg>',
+    moon: '<svg viewBox="0 0 100 100"><path class="ic-p" d="M62 10a42 42 0 1 0 28 62A34 34 0 0 1 62 10z"/><text class="ic-z" x="66" y="34" font-size="20">z</text><text class="ic-z d2" x="74" y="22" font-size="16">z</text><text class="ic-z d3" x="82" y="12" font-size="12">z</text></svg>',
+    megaphone: '<svg viewBox="0 0 100 100"><g class="ic-mega"><path class="ic-p" d="M14 40h16l40-22v64L30 60H14z"/><path class="ic-p" d="M24 60h12l6 24H32z"/></g><path class="ic-wave" d="M80 38c5 6 5 18 0 24"/><path class="ic-wave d2" d="M88 30c9 10 9 30 0 40"/></svg>',
+    none: ""
+  };
+
+  /* countdown */
+  let target = null, total = 0;
+  /** "19:30" / "7:30pm" → today's time in ms, or null. */
+  function parseAt(s) {
+    const m = String(s).trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+    if (!m) return null;
+    let h = Number(m[1]); const min = Number(m[2] || 0);
+    if (m[3] === "pm" && h < 12) h += 12; if (m[3] === "am" && h === 12) h = 0;
+    const d = new Date(); d.setHours(h, min, 0, 0);
+    return d.getTime();
+  }
+  /** Start (or restart) the countdown from ?at= or ?minutes= (or live values). */
+  function startCountdown() {
+    target = null;
+    if (data.at) target = parseAt(data.at);
+    else if (Number(data.minutes) > 0) target = Date.now() + Number(data.minutes) * 60000;
+    total = target ? Math.max(1, target - Date.now()) : 0;
+    renderCount();
+  }
+  /** Format remaining time as h:mm:ss or m:ss. */
+  function fmt(ms) {
+    const s = Math.ceil(ms / 1000), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), ss = s % 60;
+    return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(ss).padStart(2, "0");
+  }
+  /** Draw the countdown, its label and progress bar, or the "done" text at zero. */
+  function renderCount() {
+    const el = $("count");
+    if (!target) { el.innerHTML = ""; el.className = "count"; return; }
+    const left = target - Date.now();
+    if (left <= 0) {
+      el.className = "count done";
+      el.innerHTML = data.done ? `<div class="num"></div>` : "";
+      if (data.done) el.querySelector(".num").textContent = data.done;
+      return;
+    }
+    if (!el.querySelector(".num") || el.classList.contains("done")) {
+      el.className = "count";
+      el.innerHTML = `<div class="num"></div><div class="lab"></div><div class="progress"><i></i></div>`;
+    }
+    el.querySelector(".num").textContent = fmt(left);
+    el.querySelector(".lab").textContent = data.countlabel || "";
+    el.querySelector(".progress i").style.width = Math.min(100, 100 * (1 - left / total)) + "%";
+  }
+  setInterval(renderCount, 250);
+
+  /* rotating lines */
+  let rotTimer = null, rotIdx = 0;
+  /** Cycle through the rotating lines every 6 seconds with a fade. */
+  function startRotation() {
+    clearInterval(rotTimer);
+    const list = String(data.lines || "").split("|").map((s) => s.trim()).filter(Boolean);
+    const el = $("rot");
+    if (!list.length) { el.textContent = ""; return; }
+    rotIdx = 0; el.textContent = list[0]; el.classList.remove("fade");
+    if (list.length < 2) return;
+    rotTimer = setInterval(() => {
+      el.classList.add("fade");
+      setTimeout(() => { rotIdx = (rotIdx + 1) % list.length; el.textContent = list[rotIdx]; el.classList.remove("fade"); }, 650);
+    }, 6000);
+  }
+
+  /** Put headline, message, socials, bottom line and icon on screen; keep the headline on one line. */
+  function apply() {
+    $("title").textContent = data.title || "";
+    $("message").textContent = data.message || "";
+    $("next").textContent = data.next || "";
+    $("socials").innerHTML = "";
+    String(data.socials || "").split("|").map((s) => s.trim()).filter(Boolean).forEach((s) => {
+      const c = document.createElement("span"); c.textContent = s; $("socials").appendChild(c);
+    });
+    $("icon").innerHTML = ICONS[data.icon] !== undefined ? ICONS[data.icon] : ICONS[D.icon];
+    // keep the headline on one line
+    const t = $("title"); let size = 124; t.style.fontSize = size + "px";
+    while (t.scrollWidth > 1160 && size > 48) { size -= 2; t.style.fontSize = size + "px"; }
+  }
+
+  /* live updates from the Control Panel */
+  AWYM.listen((m) => {
+    if (m.to !== "screen" || (m.type !== type && m.type !== "*")) return;
+    if (m.data) {
+      const restart = "minutes" in m.data || "at" in m.data;
+      data = Object.assign({}, data, m.data);
+      apply(); startRotation();
+      if (restart || m.cmd === "restart") startCountdown();
+    } else if (m.cmd === "restart") startCountdown();
+  });
+
+  apply(); startRotation(); startCountdown();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(apply);
+  AWYM.send({ from: "screen", type, cmd: "hello" });
+})();
+</script>
+</body>
+</html>

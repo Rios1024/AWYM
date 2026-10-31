@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Key Icons</title>
+<!--
+  KEY ICONS — open in your normal web browser (double-click it).
+  Makes a PNG picture for every hotkey action, for stream-deck / macro-pad keys
+  (VSD M18, Stream Deck, Stream Dock and similar). They use your show's colors
+  and fonts from theme.css. Click one icon to save it, or "Save all (.zip)".
+  Ready-made icons in the default colors are already in icons/hotkeys/.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      tool page, opened in a normal web browser.
+  Uses:      theme.css (colors, fonts), shared.js (live theme / fonts), hotkeys.js (actions).
+  Drawing:   drawIcon(ctx, action, size, opts) on a canvas: background gradient,
+             group-colored top bar, emoji or text glyph, optional ✕ badge, label.
+  Zip:       a small "stored" (uncompressed) ZIP writer, makeZip(), no libraries.
+  Hook:      window.AWYM_ICONS.render(size, opts) → [{name, dataURL}] (used to make icons/hotkeys/).
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { margin: 0 0 4px; font-family: var(--font-display, Impact, sans-serif); font-weight: 400; font-size: 28px; color: var(--primary); }
+  .sub { color: var(--ui-dim); margin: 0 0 18px; line-height: 1.45; }
+  .bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 14px; padding: 14px; margin-bottom: 18px; }
+  .bar label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ui-dim); margin-bottom: 4px; }
+  select, button { font: inherit; color: var(--ui-text); background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 8px; padding: 8px 12px; }
+  button { cursor: pointer; font-weight: 700; }
+  button.go { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .toast { color: #3DDC84; font-weight: 600; align-self: center; }
+  h2 { font-size: 14px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ui-dim); margin: 22px 0 10px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px; text-align: center; cursor: pointer; }
+  .tile:hover { border-color: var(--primary); }
+  .tile canvas { width: 108px; height: 108px; border-radius: 12px; display: block; margin: 0 auto 8px; }
+  .tile b { display: block; font-size: 14px; }
+  .tile small { display: block; color: var(--ui-dim); font-size: 12px; margin-top: 3px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Key icons</h1>
+  <p class="sub">A picture for every hotkey action, in your show's colors, for the keys of a stream controller or macro pad. Click an icon to save it, or save them all as a .zip. Then, in your controller's software, drag each picture onto the key that sends that action's keys (listed under each icon).</p>
+  <div class="bar">
+    <div><label for="size">Size (pixels)</label><select id="size"><option>72</option><option>96</option><option>120</option><option selected>144</option><option>196</option><option>256</option></select></div>
+    <div><label for="fontSel">Label font</label><select id="fontSel"><option value="theme">Show heading font</option><option value="clean">Clean bold</option></select></div>
+    <div><label for="shape">Corners</label><select id="shape"><option value="round">Rounded</option><option value="square">Square</option></select></div>
+    <button class="go" id="zip">Save all (.zip)</button>
+    <span class="toast" id="toast"></span>
+  </div>
+  <div id="groups"></div>
+</div>
+<script src="shared.js"></script>
+<script src="hotkeys.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const ACTIONS = window.AWYM_HOTKEYS, GROUPS = window.AWYM_HOTKEY_GROUPS;
+  const css = () => getComputedStyle(document.documentElement);
+  /** A theme color variable ("--primary") or a fixed color, as a usable color. */
+  const color = (v) => (v && v.startsWith("--") ? css().getPropertyValue(v).trim() : v) || "#888";
+  const EMOJI = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+
+  /** Draw one key icon. opts: {font: "theme"|"clean", shape: "round"|"square"} */
+  function drawIcon(ctx, a, S, opts) {
+    opts = opts || {};
+    const C = { dark: color("--dark"), sec: color("--secondary"), light: color("--light"), primary: color("--primary"), accent: color("--accent"), warn: color("--warning") };
+    const g = color(GROUPS[a.group].color);
+    const fontName = opts.font === "clean" ? '"Inter", "Segoe UI", "Arial Black", Arial, sans-serif' : (css().getPropertyValue("--font-heading").trim() || "Impact, sans-serif");
+    const weight = opts.font === "clean" ? "900 " : "";
+    ctx.clearRect(0, 0, S, S);
+    ctx.save();
+    // key shape
+    const r = opts.shape === "square" ? 0 : S * 0.14;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(0, 0, S, S, r) : ctx.rect(0, 0, S, S); ctx.clip();
+    const bg = ctx.createLinearGradient(0, 0, 0, S); bg.addColorStop(0, C.sec); bg.addColorStop(1, C.dark);
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, S, S);
+    // soft glow behind the glyph in the group color
+    const glow = ctx.createRadialGradient(S / 2, S * 0.42, 0, S / 2, S * 0.42, S * 0.42);
+    glow.addColorStop(0, hexA(g, 0.35)); glow.addColorStop(1, hexA(g, 0));
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, S, S);
+    // group bar
+    ctx.fillStyle = g; ctx.fillRect(0, 0, S, Math.max(3, S * 0.07));
+    // glyph
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const gy = S * 0.43;
+    if (a.text) {
+      const col = a.side === "b" ? C.accent : a.side === "a" ? C.primary : g;
+      let fs = S * (a.icon.length > 1 ? 0.46 : 0.56);
+      ctx.font = `${weight}${fs}px ${fontName}`;
+      while (ctx.measureText(a.icon).width > S * 0.8 && fs > 8) { fs -= 1; ctx.font = `${weight}${fs}px ${fontName}`; }
+      ctx.lineWidth = S * 0.04; ctx.strokeStyle = C.dark; ctx.lineJoin = "round"; ctx.strokeText(a.icon, S / 2, gy + S * 0.02);
+      ctx.fillStyle = col; ctx.fillText(a.icon, S / 2, gy + S * 0.02);
+    } else {
+      ctx.font = `${S * 0.42}px ${EMOJI}`;
+      ctx.fillText(a.icon, S / 2, gy + S * 0.03);
+    }
+    if (a.badge) {   // little "hide" badge
+      const bx = S * 0.7, by = S * 0.27, br = S * 0.1;
+      ctx.fillStyle = C.warn; ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = Math.max(1.5, S * 0.025); ctx.lineCap = "round";
+      ctx.beginPath(); ctx.moveTo(bx - br * .45, by - br * .45); ctx.lineTo(bx + br * .45, by + br * .45); ctx.moveTo(bx + br * .45, by - br * .45); ctx.lineTo(bx - br * .45, by + br * .45); ctx.stroke();
+    }
+    // label (shrinks to fit, up to two lines)
+    const words = a.label.toUpperCase().split(" ");
+    let fs = S * 0.15, lines;
+    const fit = () => {
+      ctx.font = `${weight}${fs}px ${fontName}`;
+      const one = words.join(" ");
+      if (ctx.measureText(one).width <= S * 0.88) return [one];
+      for (let i = 1; i < words.length; i++) {
+        const l1 = words.slice(0, i).join(" "), l2 = words.slice(i).join(" ");
+        if (ctx.measureText(l1).width <= S * 0.88 && ctx.measureText(l2).width <= S * 0.88) return [l1, l2];
+      }
+      return null;
+    };
+    while (!(lines = fit()) && fs > 6) fs -= 0.5;
+    if (!lines) lines = [words.join(" ")];
+    ctx.fillStyle = C.light;
+    if (opts.font === "clean") ctx.letterSpacing = "0.5px";
+    const lh = fs * 1.02, base = S * 0.86 - (lines.length - 1) * lh / 2;
+    lines.forEach((l, i) => ctx.fillText(l, S / 2, base + i * lh));
+    ctx.restore();
+  }
+  /** "#RRGGBB" (or any CSS color) with an alpha. */
+  function hexA(c, a) {
+    const m = /^#([0-9a-f]{6})$/i.exec(c.trim());
+    if (!m) return `rgba(255,255,255,${a})`;
+    const n = parseInt(m[1], 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+  const fileName = (a, i) => `${String(i + 1).padStart(2, "0")}-${a.id}.png`;
+  const opts = () => ({ font: $("fontSel").value, shape: $("shape").value });
+
+  /** Every icon at one size: [{name, dataURL}]. */
+  function render(size, o) {
+    const c = document.createElement("canvas"); c.width = c.height = size;
+    const ctx = c.getContext("2d");
+    return ACTIONS.map((a, i) => { drawIcon(ctx, a, size, o || opts()); return { name: fileName(a, i), dataURL: c.toDataURL("image/png") }; });
+  }
+  window.AWYM_ICONS = { render, drawIcon };
+
+  /** The preview grid, by group. */
+  function paint() {
+    const by = {};
+    ACTIONS.forEach((a, i) => (by[a.group] = by[a.group] || []).push([a, i]));
+    $("groups").innerHTML = Object.entries(by).map(([g, list]) => `<h2>${GROUPS[g].name}</h2><div class="grid">${list.map(([a, i]) =>
+      `<div class="tile" data-i="${i}" title="Click to save this icon"><canvas width="216" height="216"></canvas><b>${a.name.replace(/^Sound: /, "")}</b><small>${window.AWYM_HOTKEY_TEXT(a.key)}</small></div>`).join("")}</div>`).join("");
+    document.querySelectorAll(".tile").forEach((t) => drawIcon(t.querySelector("canvas").getContext("2d"), ACTIONS[t.dataset.i], 216, opts()));
+  }
+  ["size", "fontSel", "shape"].forEach((id) => $(id).onchange = paint);
+  $("groups").addEventListener("click", (e) => {
+    const t = e.target.closest(".tile"); if (!t) return;
+    const i = Number(t.dataset.i), size = Number($("size").value);
+    const c = document.createElement("canvas"); c.width = c.height = size; drawIcon(c.getContext("2d"), ACTIONS[i], size, opts());
+    save(c.toDataURL("image/png"), fileName(ACTIONS[i], i));
+  });
+  function save(href, name) { const a = document.createElement("a"); a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove(); }
+
+  /* ---------- a tiny ZIP writer (no compression) ---------- */
+  const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+  const crc32 = (b) => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  /** files: [{name, bytes: Uint8Array}] → Blob (.zip) */
+  function makeZip(files) {
+    const parts = [], central = []; let offset = 0;
+    const u16 = (v) => [v & 255, (v >>> 8) & 255], u32 = (v) => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+    files.forEach((f) => {
+      const name = new TextEncoder().encode(f.name), crc = crc32(f.bytes), n = f.bytes.length;
+      const local = new Uint8Array([...u32(0x04034b50), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(n), ...u32(n), ...u16(name.length), ...u16(0)]);
+      parts.push(local, name, f.bytes);
+      central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(n), ...u32(n), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), name);
+      offset += local.length + name.length + n;
+    });
+    const csize = central.reduce((t, p) => t + p.length, 0);
+    const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(csize), ...u32(offset), ...u16(0)]);
+    return new Blob([...parts, ...central, end], { type: "application/zip" });
+  }
+  window.AWYM_ICONS.makeZip = makeZip;
+  $("zip").onclick = () => {
+    const size = Number($("size").value);
+    const files = render(size).map((f) => ({ name: f.name, bytes: Uint8Array.from(atob(f.dataURL.split(",")[1]), (c) => c.charCodeAt(0)) }));
+    const url = URL.createObjectURL(makeZip(files));
+    save(url, `awym-key-icons-${size}px.zip`); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    $("toast").textContent = "Saved " + files.length + " icons."; setTimeout(() => $("toast").textContent = "", 2500);
+  };
+  paint();
+  if (document.fonts) document.fonts.ready.then(paint);
+})();
+</script>
+</body>
+</html>

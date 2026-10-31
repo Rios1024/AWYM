@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Camera Frame</title>
+<!--
+  CAMERA FRAME — a themed ring + name plate that sits ON TOP of a
+  circle-masked camera (see README, "Circle cutouts").
+  Source size: 600 x 660 (keep that 10:11 shape; it scales to any size).
+
+  URL settings:
+    ?id=1               links to control-panel slot 1 (name + Spotlight button)
+    &name=Big%20Mike    name on the plate   (%20 = space)
+    &role=Moderator     small line under the name
+    &number=23          jersey number badge (optional)
+    &shape=circle       circle (default), rounded, or hexagon — match your mask
+    &plate=0            hide the name plate
+    &spotlight=1        start with the "has the floor" glow on
+
+  Line-up tip: the open hole is 87% of the frame's width. Size the masked
+  camera so its HEIGHT is about 93% of the frame's width, and center them.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, designed at 600 × 660 (ring 600 × 600 + name plate).
+  Uses:      theme.css, shared.js.
+  Messages:  listens  to:"frame" spotlight {on} | shake {ms} | talk {on, lvl 0–1} | mute {on} | ping   ·  to:"lower" update {data} (same id → name plate)
+             sends    from:"frame" {id, spot, shape} · {id, cmd:"hello", shape}
+             (frame-fx.html, its effects layer, sends the shake and reads spot + shape)
+  Geometry:  ring centred at (300, 300); the open hole has radius ≈ 262 (87% of the width),
+             matching the masks in /masks when the camera is 93% of the frame's width.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Camera frame styles. Design size 600×660: ring (SVG) on top, name plate below, "Has the floor" tag for the spotlight. */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; font-family: var(--font-body); user-select: none; }
+  .stage { width: 600px; height: 660px; position: relative; flex: none; transform-origin: center; }
+  svg.ring { position: absolute; left: 0; top: 0; width: 600px; height: 600px; overflow: visible; }
+  .outer { fill: none; stroke: var(--secondary); stroke-width: 10; }
+  .main  { fill: none; stroke: var(--primary); stroke-width: 24; }
+  .inner { fill: none; stroke: var(--accent); stroke-width: 4; }
+  .seam  { fill: none; stroke: var(--dark); stroke-width: 3; opacity: .45; }
+
+  /* spotlight glow: size and strength follow the Theme Panel's Glow slider (--glow-k),
+     but never fully disappear, since it's how viewers see who has the floor */
+  .glow { fill: none; stroke: var(--accent); stroke-width: calc(14px + 12px * var(--glow-k, 1)); opacity: 0; filter: blur(calc(3px + 7px * var(--glow-k, 1))); transition: opacity .3s; }
+  .spot .glow { opacity: min(1, calc(.35 + .55 * var(--glow-k, 1))); animation: breathe 1.6s ease-in-out infinite; }
+  @keyframes breathe { 50% { opacity: .35; } }
+
+  /* speaking light (Show Runner → Talk time): a bright ring that follows the voice, and a
+     little level meter on the name plate */
+  .talk { fill: none; stroke: var(--light); stroke-width: calc(10px + 8px * var(--glow-k, 1)); opacity: 0;
+          filter: blur(calc(3px + 6px * var(--glow-k, 1))); transition: opacity .14s; }
+  .talking .talk { opacity: calc(.35 + .65 * var(--lvl, .6)); }
+  .talking .inner { stroke: var(--light); }
+  .eq { display: none; gap: 4px; align-items: flex-end; height: 30px; margin-right: 12px; vertical-align: middle; }
+  .eq i { width: 7px; background: var(--accent); border-radius: 2px; height: 30%; animation: eq .5s ease-in-out infinite alternate; }
+  .eq i:nth-child(2) { animation-delay: -.2s; } .eq i:nth-child(3) { animation-delay: -.35s; }
+  @keyframes eq { to { height: 100%; } }
+  .talking .eq { display: inline-flex; }
+  /* muted (Show Runner mute buttons / hotkeys): a red tag on the name plate */
+  .mutetag { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%) scale(.6); opacity: 0; z-index: 2;
+    font-family: var(--font-heading); font-size: 22px; letter-spacing: 2px; text-transform: uppercase; color: #fff; background: var(--warning);
+    padding: 5px 14px 4px; border-radius: 999px; white-space: nowrap; box-shadow: 0 4px 12px rgba(0,0,0,.35); transition: transform .3s cubic-bezier(.2,1.6,.4,1), opacity .2s; }
+  .muted .mutetag { opacity: 1; transform: translateX(-50%) scale(1); }
+  .noplate .mutetag { bottom: 70px; }
+  .plate .name { display: flex; align-items: center; justify-content: center; }
+  .plate #name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+  .badge {
+    position: absolute; right: 26px; top: 26px; width: 96px; height: 96px; border-radius: 50%;
+    background: var(--primary); color: var(--dark); border: 5px solid var(--secondary);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-heading); font-size: 52px; line-height: 1;
+    box-shadow: 0 4px 0 rgba(0,0,0,.25);
+  }
+  .badge:empty { display: none; }
+  .hex .badge, .rounded .badge { right: 8px; top: 8px; }
+
+  .plate {
+    position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+    min-width: 300px; max-width: 580px; box-sizing: border-box;
+    background: var(--secondary); border: 4px solid var(--primary); border-radius: 18px;
+    padding: 8px 26px 10px; text-align: center; box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
+  .plate .name { font-family: var(--font-heading); font-size: 46px; line-height: 1.05; color: var(--light); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .plate .role { font-weight: 700; font-size: 22px; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; }
+  .plate .role:empty { display: none; }
+  .noplate .plate { display: none; }
+
+  .floor {
+    position: absolute; left: 50%; top: 0; transform: translate(-50%, 0) scale(.6); opacity: 0;
+    font-family: var(--font-display); font-size: 22px; color: var(--dark); background: var(--accent);
+    padding: 6px 16px 5px; border-radius: 999px; white-space: nowrap; transition: transform .35s cubic-bezier(.2,1.6,.4,1), opacity .2s;
+  }
+  .spot .floor { opacity: 1; transform: translate(-50%, 0) scale(1); }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <svg class="ring" viewBox="0 0 600 600" aria-hidden="true">
+      <path class="glow" id="pGlow"/>
+      <path class="talk" id="pTalk"/>
+      <path class="outer" id="pOuter"/>
+      <path class="main" id="pMain"/>
+      <path class="seam" id="pSeam"/>
+      <path class="inner" id="pInner"/>
+    </svg>
+    <div class="badge" id="badge"></div>
+    <div class="floor">Has the floor</div>
+    <div class="mutetag">🔇 Muted</div>
+    <div class="plate"><div class="name"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span id="name"></span></div><div class="role" id="role"></div></div>
+  </div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById("stage");
+  /** Scale the 600×660 design to the OBS source size. */
+  function fit() { stage.style.transform = "scale(" + Math.min(innerWidth / 600, innerHeight / 660) + ")"; }
+  addEventListener("resize", fit); fit();
+
+  const id = AWYM.param("id", "1");
+  const shape = AWYM.param("shape", "circle");
+  if (shape === "hexagon") document.body.classList.add("hex");
+  if (shape === "rounded") document.body.classList.add("rounded");
+  if (AWYM.param("plate") === "0") document.body.classList.add("noplate");
+
+  /* shape outline at a given radius, centred on 300,300 (matches the PNG masks) */
+  /** SVG path for the frame shape (circle, rounded square or hexagon) at radius r around (300,300). */
+  function outline(r) {
+    const c = 300;
+    if (shape === "hexagon") {
+      const pts = [];
+      for (let i = 0; i < 6; i++) { const a = (60 * i - 90) * Math.PI / 180; pts.push((c + r * Math.cos(a)).toFixed(1) + "," + (c + r * Math.sin(a)).toFixed(1)); }
+      return "M" + pts.join("L") + "Z";
+    }
+    if (shape === "rounded") {
+      const k = r * 2 * 0.18, x = c - r, y = c - r, s = r * 2;
+      return `M${x + k},${y}H${x + s - k}Q${x + s},${y} ${x + s},${y + k}V${y + s - k}Q${x + s},${y + s} ${x + s - k},${y + s}H${x + k}Q${x},${y + s} ${x},${y + s - k}V${y + k}Q${x},${y} ${x + k},${y}Z`;
+    }
+    return `M${c - r},${c}a${r},${r} 0 1,0 ${r * 2},0a${r},${r} 0 1,0 ${-r * 2},0Z`;
+  }
+  // hole edge = 262 → hole is 524/600 = 87% of the frame width
+  document.getElementById("pGlow").setAttribute("d", outline(282));
+  document.getElementById("pTalk").setAttribute("d", outline(287));
+  document.getElementById("pOuter").setAttribute("d", outline(291));
+  document.getElementById("pMain").setAttribute("d", outline(274));
+  document.getElementById("pSeam").setAttribute("d", outline(274));
+  document.getElementById("pSeam").setAttribute("stroke-dasharray", "2 34");
+  document.getElementById("pInner").setAttribute("d", outline(263));
+
+  let data = { name: AWYM.param("name", ""), role: AWYM.param("role", ""), number: AWYM.param("number", "") };
+  /** Update the name plate and jersey badge; hide the plate when there's no name or role. */
+  function apply() {
+    document.getElementById("name").textContent = data.name || "";
+    document.getElementById("role").textContent = data.role || "";
+    document.getElementById("badge").textContent = String(data.number || "").trim().slice(0, 2);
+    document.querySelector(".plate").style.display = (data.name || data.role) && AWYM.param("plate") !== "0" ? "" : "none";
+  }
+  /** Turn the "Has the floor" glow on/off and tell the Control Panel. */
+  function spotlight(on) { document.body.classList.toggle("spot", !!on); AWYM.send({ from: "frame", id, spot: !!on, shape }); }
+  /** The speaking light: on/off, with the voice level (0–1) setting its brightness. */
+  let talkOff = null;
+  function talk(on, lvl) {
+    document.body.classList.toggle("talking", !!on);
+    if (isFinite(lvl)) document.body.style.setProperty("--lvl", String(Math.max(0, Math.min(1, lvl))));
+    clearTimeout(talkOff); if (on) talkOff = setTimeout(() => talk(false), 3000);   // the dock went quiet: switch off
+  }
+  /** A jolt that settles (the 💥 Shake frame effect); the effects layer shakes in step. */
+  function shake(ms) {
+    const amp = 9 * Math.min(innerWidth / 600, innerHeight / 660), keys = [];
+    for (let i = 0; i <= 10; i++) { const a = amp * (1 - i / 10); keys.push({ transform: `translate(${(Math.random() * 2 - 1) * a}px, ${(Math.random() * 2 - 1) * a}px) rotate(${(Math.random() * 2 - 1) * a * 0.12}deg)` }); }
+    keys[10] = { transform: "translate(0,0) rotate(0deg)" };
+    try { document.body.animate(keys, { duration: Math.max(200, Math.min(3000, Number(ms) || 650)), easing: "linear" }); } catch (e) {}
+  }
+
+  AWYM.listen((m) => {
+    // name/role/number come from the same control-panel slot as the lower third
+    if (m.to === "lower" && (m.id === id) && m.data) { data = Object.assign({}, data, m.data); apply(); }
+    if (m.to === "frame" && (m.id === id || m.id === "*")) {
+      if (m.cmd === "spotlight") spotlight(m.on);
+      else if (m.cmd === "shake") shake(m.ms);
+      else if (m.cmd === "talk") talk(m.on, m.lvl);
+      else if (m.cmd === "mute") document.body.classList.toggle("muted", !!m.on);
+      else if (m.cmd === "ping") AWYM.send({ from: "frame", id, spot: document.body.classList.contains("spot"), shape });
+    }
+  });
+  AWYM.onClear(() => { if (document.body.classList.contains("spot")) spotlight(false); talk(false); });   // 🚨 Clear
+  document.addEventListener("click", () => spotlight(!document.body.classList.contains("spot")));
+
+  apply();
+  spotlight(AWYM.param("spotlight") === "1");
+  AWYM.send({ from: "frame", id, cmd: "hello", shape });
+})();
+</script>
+</body>
+</html>

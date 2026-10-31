@@ -1,0 +1,1283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Show Runner</title>
+<!--
+  SHOW RUNNER — add as an OBS Custom Browser Dock (Docks → Custom Browser Docks…).
+  Everything for running the show itself:
+    Rundown      your segments in order; "Go" sets the shot clock, plays a segment
+                 intro on screen and (optionally) switches OBS scenes
+    Scoreboard   the debate score and "who's winning" meter, plus Declare winner
+    Receipts     log hot takes, mark them cashed or busted, show them on screen
+    Sound board  air horn, rimshot, sad trombone… and your own sounds
+    Frame FX     set a camera frame on fire, freeze it, zap it… (the camera stays clear)
+    Mute         a mute button per seat (top of the dock and in Talk time), on hotkeys too
+    Talk time    who's talking (a speaking light on their frame), how long each person
+                 talked, how much you talked over each other, and who cut in; on screen too
+                 (needs the OBS connection: it reads each mic's level)
+    Clips        save replays, play an instant replay on screen, mark moments
+                 (needs OBS's WebSocket server, see the section)
+    Backup       save every setting from every dock to one file, and restore it
+  The 🚨 Clear button at the top hides every graphic on every overlay at once.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS Custom Browser Dock.
+  Uses:      theme.css, shared.js, sfx.js (sound list + dock preview), obs-ws.js (OBS WebSocket).
+  Sends:     from:"runner" {cmd:"segment", index, name} when a segment starts (the Content Panel follows) ·
+             to:"debate" (debate.html) · to:"sfx" (sfx.html) · to:"fx" (frame-fx.html) · to:"clock" set/label/start ·
+             to:"docks" reload (after a restore). See shared.js for every message.
+  Hears:     to:"runner" {cmd:"rundown", segments, mode: append|replace} (a script imported in the
+             Content Panel) · from:"debate" / from:"sfx" / from:"fx" (connection lights, re-send after reload, what's playing).
+  Saved:     localStorage "awym-runner-v1" (rundown, scoreboard, receipts, sound and OBS
+             settings, clips, moments) · "awym-obsws-pass" (OBS password, never in backups) ·
+             IndexedDB "awym-sounds" (your own sound files).
+  Backup:    every localStorage key starting "awym-" plus the IndexedDB databases
+             "awym-content" and "awym-sounds", as one JSON file (see makeBackup()).
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Show Runner dock styles: compact, readable at dock widths from about 280px. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--dark); color: var(--light); }
+  body { font-family: var(--font-body); font-size: 16px; padding: 12px; min-width: 280px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+  header h1 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 400; color: var(--primary); line-height: 1.1; }
+  header .tools { display: flex; align-items: center; gap: 6px; }
+  .foldall { padding: 2px 8px; font-size: 15px; line-height: 1.2; opacity: .8; }
+  .links { display: flex; gap: 12px; flex-wrap: wrap; font-size: 13px; opacity: .85; margin: 0 2px 10px; }
+  .links span { display: inline-flex; align-items: center; gap: 5px; }
+  .links i { width: 9px; height: 9px; border-radius: 50%; background: #777; display: inline-block; }
+  .links .ok i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+
+  section { background: var(--secondary); border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.08); }
+  h2 { margin: 0 0 10px; font-family: var(--font-heading); font-weight: 400; font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  h2 small { font-family: var(--font-body); font-size: 13px; letter-spacing: .5px; opacity: .7; text-transform: none; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 14px 0 6px; font-weight: 700; }
+
+  button {
+    font: inherit; font-weight: 700; font-size: 15px; letter-spacing: .5px;
+    background: rgba(255,255,255,.08); color: var(--light);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+    padding: 8px 6px; cursor: pointer; text-transform: uppercase; min-width: 0;
+  }
+  button:hover { background: rgba(255,255,255,.16); }
+  button:active { filter: brightness(.82); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.primary { background: var(--primary); color: var(--dark); border-color: transparent; }
+  button.accent { background: var(--accent); color: var(--dark); border-color: transparent; }
+  button.danger { background: var(--warning); color: #fff; border-color: transparent; }
+  button.on, .seg button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  button.showing { outline: 2px solid #3DDC84; outline-offset: 1px; }
+  .grid { display: grid; gap: 6px; }
+  .g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .seg button { font-size: 14px; padding: 7px 2px; }
+  label { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 10px 0 4px; }
+  input[type=text], input[type=password], input[type=number], select, textarea {
+    width: 100%; font: inherit; font-size: 16px; color: var(--light);
+    background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 7px 9px; }
+  textarea { resize: vertical; min-height: 60px; }
+  input[type=range] { width: 100%; accent-color: var(--primary); }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 15px; margin-top: 8px; text-transform: none; opacity: 1; letter-spacing: 0; }
+  .check input { width: 18px; height: 18px; accent-color: var(--primary); flex: none; }
+  .hint { font-size: 13px; opacity: .7; margin: 8px 0 0; line-height: 1.4; }
+  .msg { font-size: 14px; line-height: 1.35; padding: 7px 10px; border-radius: 8px; background: rgba(0,0,0,.25); margin-top: 8px; }
+  .msg.err { background: rgba(255, 60, 60, .18); }
+  .msg:empty { display: none; }
+  .row2 { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .empty { opacity: .65; font-size: 14px; padding: 4px 2px; }
+
+  /* rundown */
+  .now { background: var(--dark); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
+  .now small { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; opacity: .7; }
+  .now b { display: block; font-family: var(--font-heading); font-weight: 400; font-size: 24px; text-transform: uppercase; line-height: 1.1; margin-top: 2px; }
+  .now .nx { font-size: 14px; opacity: .8; margin-top: 4px; }
+  .rlist { display: grid; gap: 4px; margin-top: 8px; }
+  .ritem { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; gap: 4px; align-items: center; background: var(--dark); border-radius: 8px; padding: 4px; border: 1px solid transparent; }
+  .ritem.cur { border-color: var(--primary); }
+  .ritem.done .nm { opacity: .5; }
+  .ritem.sel { background: rgba(255,255,255,.08); }
+  .ritem .nm { cursor: pointer; padding: 2px 4px; font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ritem .nm small { font-weight: 500; opacity: .65; margin-left: 4px; }
+  .ritem button { padding: 4px 7px; font-size: 13px; }
+  .ritem .go { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .edit { background: rgba(0,0,0,.2); border-radius: 10px; padding: 8px 10px 10px; margin-top: 8px; }
+  .edit[hidden] { display: none; }
+
+  /* scoreboard */
+  .side { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; gap: 5px; align-items: center; margin-top: 6px; }
+  .side .pts { min-width: 46px; text-align: center; font-family: var(--font-heading); font-size: 30px; line-height: 1; }
+  .side .bar { width: 6px; align-self: stretch; border-radius: 3px; }
+  .side button { padding: 6px 9px; }
+  .round { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 6px; align-items: center; margin-top: 8px; }
+  .round span { text-align: center; font-weight: 700; }
+
+  /* receipts */
+  .tlist { display: grid; gap: 5px; margin-top: 8px; max-height: 420px; overflow: auto; }
+  .take { background: var(--dark); border-radius: 8px; padding: 7px 8px; border-left: 4px solid #8a6a12; }
+  .take.cashed { border-left-color: #3DDC84; } .take.busted { border-left-color: var(--warning); }
+  .take.showing { outline: 2px solid #3DDC84; }
+  .take .t { font-size: 15px; line-height: 1.3; cursor: pointer; }
+  .take .t b { color: var(--accent); }
+  .take .m { font-size: 12px; opacity: .65; margin: 3px 0 5px; }
+  .take .acts { display: flex; gap: 4px; flex-wrap: wrap; }
+  .take .acts button { padding: 3px 8px; font-size: 12px; }
+  .take .acts button.st.on { background: var(--primary); color: var(--dark); }
+
+  /* sound board */
+  .pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 5px; }
+  .pad { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 6px; text-transform: none; font-size: 12px; letter-spacing: 0; line-height: 1.15; }
+  .pad .ic { font-size: 24px; line-height: 1; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+  .pad .k { position: absolute; left: 4px; top: 3px; font-size: 10px; opacity: .55; }
+  .pad .x { position: absolute; right: 2px; top: 1px; font-size: 11px; opacity: .6; padding: 0 3px; }
+  .pad.playing { background: var(--primary); color: var(--dark); }
+  .pad .src { position: absolute; right: 3px; top: 3px; font-size: 9px; letter-spacing: .5px; text-transform: uppercase; opacity: .7; padding: 0 3px; border-radius: 4px; background: rgba(0,0,0,.3); }
+  .pad .src.mine { background: var(--primary); color: var(--dark); opacity: .9; }
+
+  /* talk time */
+  .tkseat { background: var(--dark); border-radius: 9px; padding: 7px 8px; margin-top: 6px; }
+  .tkseat .t1 { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 6px; align-items: center; font-size: 14px; }
+  .tkseat .mute { padding: 3px 8px; font-size: 13px; text-transform: none; }
+  .tkseat.muted { box-shadow: inset 3px 0 0 var(--warning); }
+  button.muted, .tkseat .mute.muted { background: var(--warning); color: #fff; border-color: transparent; }
+  .mutebar { display: flex; flex-wrap: wrap; gap: 5px; margin: -4px 0 10px; }
+  .mutebar:empty { display: none; }
+  .mutebar button { padding: 4px 9px; font-size: 13px; text-transform: none; letter-spacing: 0; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tkseat .dot { width: 11px; height: 11px; border-radius: 50%; background: #555; transition: background .1s, box-shadow .1s; }
+  .tkseat.on .dot { background: #3DDC84; box-shadow: 0 0 8px #3DDC84; }
+  .tkseat .nm { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tkseat .tm { font-variant-numeric: tabular-nums; } .tkseat .pc { font-variant-numeric: tabular-nums; opacity: .7; min-width: 34px; text-align: right; }
+  .tkseat select { margin-top: 5px; font-size: 14px; padding: 5px 7px; }
+  .tkmeter { position: relative; height: 8px; border-radius: 4px; background: rgba(255,255,255,.1); margin-top: 6px; overflow: hidden; }
+  .tkmeter i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #888; border-radius: 4px; }
+  .tkseat.on .tkmeter i { background: #3DDC84; }
+  .tkmeter b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--accent); }
+  .tkstats { font-size: 14px; line-height: 1.45; background: rgba(0,0,0,.2); border-radius: 9px; padding: 8px 10px; margin-top: 8px; }
+  .tkstats b { color: var(--accent); }
+  .tkstats:empty { display: none; }
+  #tkTrack.on { background: var(--warning); color: #fff; border-color: transparent; }
+
+  /* frame effects */
+  .fxbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 6px; text-transform: none; font-size: 13px; letter-spacing: 0; }
+  .fxbtn .ic { font-size: 24px; line-height: 1; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
+  .fxbtn.live { outline: 2px solid #3DDC84; outline-offset: 1px; }
+  #fxSeat button { text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* clips */
+  .status { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .status i { width: 10px; height: 10px; border-radius: 50%; background: #777; }
+  .status.ok i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; } .status.rec i { background: var(--warning); box-shadow: 0 0 6px var(--warning); }
+  .clist { display: grid; gap: 4px; margin-top: 6px; max-height: 260px; overflow: auto; }
+  .clip { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px; align-items: center; background: var(--dark); border-radius: 8px; padding: 4px 4px 4px 8px; font-size: 13px; }
+  .clip .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .clip .n small { display: block; opacity: .6; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .clip button { padding: 4px 8px; font-size: 12px; }
+  .needobs[disabled] { opacity: .35; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Show Runner</h1>
+    <div class="tools"><button class="foldall" id="foldAll" title="Fold or unfold every section">⊟</button></div>
+  </header>
+  <div class="links">
+    <span id="lnDebate" title="The Debate overlay (debate.html) in your scene"><i></i>Graphics</span>
+    <span id="lnSfx" title="The Sound Effects source (sfx.html) in your scene"><i></i>Sounds</span>
+    <span id="lnFx" title="The Frame FX sources (frame-fx.html) over your camera frames"><i></i>Frame FX</span>
+    <span id="lnObs" title="OBS WebSocket (Clips & replays section)"><i></i>OBS</span>
+  </div>
+  <div class="mutebar" id="muteBar" title="Mute or unmute each person's mic in OBS (pick their mics in Talk time)"></div>
+  <div class="msg" id="muteMsg" style="margin:-4px 0 10px"></div>
+
+  <!-- ================= RUNDOWN ================= -->
+  <section data-fold="rundown">
+    <h2><span class="ttl">Rundown</span> <small id="rdTotal"></small></h2>
+    <div class="now"><small>Now</small><b id="rdNow">—</b><div class="nx" id="rdNext"></div></div>
+    <div class="grid g3"><button id="rdPrev">◀ Prev</button><button class="primary" id="rdGo" style="grid-column: span 2">Next segment ▶</button></div>
+    <div class="rlist" id="rdList"></div>
+    <div class="edit" id="rdEdit" hidden>
+      <label for="eName">Segment name</label><input type="text" id="eName">
+      <label for="eDesc">Line under the name (intro)</label><input type="text" id="eDesc">
+      <div class="grid g2">
+        <div><label for="eMin">Shot clock (minutes)</label><input type="number" id="eMin" min="0" max="99" step="0.5"></div>
+        <div><label for="eLabel">Clock label</label><input type="text" id="eLabel" placeholder="(segment name)"></div>
+      </div>
+      <label for="eScene">Switch OBS to scene</label><select id="eScene"><option value="">Don't switch</option></select>
+      <div class="grid g2" style="margin-top:8px"><button id="eDone">Done</button><button id="eDel" class="danger">Remove</button></div>
+    </div>
+    <h3>Add a segment</h3>
+    <div class="row2"><select id="rdLib"></select><button id="rdAdd">Add</button></div>
+    <div class="grid g2" style="margin-top:6px"><button id="rdSample">Load sample show</button><button id="rdClear">Clear list</button></div>
+    <label class="check"><input type="checkbox" id="oIntro" checked> Show the segment intro on screen</label>
+    <label class="check"><input type="checkbox" id="oClock" checked> Set the shot clock</label>
+    <label class="check"><input type="checkbox" id="oStart"> …and start it</label>
+    <label class="check"><input type="checkbox" id="oMark" checked> Mark a moment (for chapters) when OBS is recording</label>
+    <p class="hint">Click a segment's name to edit it. ▶ jumps straight to it. Moving to a segment never ends the previous one on its own; you decide when.</p>
+  </section>
+
+  <!-- ================= SCOREBOARD ================= -->
+  <section data-fold="score">
+    <h2><span class="ttl">Scoreboard</span> <small>who's winning</small></h2>
+    <div class="grid g2">
+      <div><label for="sAName">Side A</label><input type="text" id="sAName" placeholder="Side A"></div>
+      <div><label for="sBName">Side B</label><input type="text" id="sBName" placeholder="Side B"></div>
+    </div>
+    <button id="sPeople" style="width:100%;margin-top:6px;font-size:13px">Use people 1 &amp; 2 from the Control Panel</button>
+    <div class="side"><b id="sALabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Side A</b><button data-s="a" data-d="-1">−1</button><span class="pts" id="sAPts">0</span><button data-s="a" data-d="1" class="primary">+1</button><button data-s="a" data-d="2">+2</button></div>
+    <div class="side"><b id="sBLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Side B</b><button data-s="b" data-d="-1">−1</button><span class="pts" id="sBPts">0</span><button data-s="b" data-d="1" class="accent">+1</button><button data-s="b" data-d="2">+2</button></div>
+    <div class="round"><button id="sRoundDn">−</button><span id="sRound">No round</span><button id="sRoundUp">+</button></div>
+    <label for="sTitle">Middle text</label><input type="text" id="sTitle" placeholder="Who's winning?">
+    <label>Show</label>
+    <div class="grid g2 seg" id="sNums"><button data-v="1">Score</button><button data-v="0" title="Only the tug-of-war meter, no numbers">Meter only</button></div>
+    <div class="grid g2 seg" id="sPos" style="margin-top:6px"><button data-v="top">Top</button><button data-v="bottom">Bottom</button></div>
+    <div class="grid g2" style="margin-top:10px"><button class="primary" id="sShow">Show</button><button id="sReset">Reset</button></div>
+    <button class="accent" id="sWin" style="width:100%;margin-top:6px">🏆 Declare winner</button>
+    <label class="check"><input type="checkbox" id="sWinSound" checked> Air horn + applause with the winner</label>
+    <p class="hint">Scores update on screen as you click. The meter leans toward whoever's ahead.</p>
+  </section>
+
+  <!-- ================= RECEIPTS ================= -->
+  <section data-fold="receipts">
+    <h2><span class="ttl">Receipts</span> <small>hot-take tracker</small></h2>
+    <label for="tWho">Who said it</label><input type="text" id="tWho" list="tPeople" placeholder="Name">
+    <datalist id="tPeople"></datalist>
+    <label for="tTake">The take</label><textarea id="tTake" rows="2" placeholder="e.g. The Knicks win the East this year."></textarea>
+    <div class="grid g2">
+      <div><label for="tDue">Check by (optional)</label><input type="text" id="tDue" placeholder="e.g. June 2027"></div>
+      <div><label for="tNote">Note (optional)</label><input type="text" id="tNote"></div>
+    </div>
+    <div class="grid g2" style="margin-top:8px"><button class="primary" id="tSave">Log it</button><button id="tCancel">Clear</button></div>
+    <h3>Logged takes</h3>
+    <div class="row2"><input type="text" id="tFind" placeholder="Search…"><select id="tFilter" style="width:auto"><option value="">All</option><option value="pending">Pending</option><option value="cashed">Cashed</option><option value="busted">Busted</option></select></div>
+    <div class="tlist" id="tList"></div>
+    <div class="grid g2" style="margin-top:8px"><button id="tRecord">Show record</button><button id="tHide">Hide receipt</button></div>
+    <label class="check"><input type="checkbox" id="tSound" checked> Cha-ching / sad trombone when marking a take that's on screen</label>
+  </section>
+
+  <!-- ================= SOUND BOARD ================= -->
+  <section data-fold="sounds">
+    <h2><span class="ttl">Sound board</span> <small>keys 1–9, 0</small></h2>
+    <div class="pads" id="pads"></div>
+    <label for="vol">Volume <b id="volVal" style="float:right">80%</b></label>
+    <input type="range" id="vol" min="0" max="100" step="5" value="80">
+    <div class="grid g2" style="margin-top:6px"><button id="sfxStop">■ Stop all</button><button id="sfxAdd">+ Your own sound</button></div>
+    <input type="file" id="sfxFile" accept="audio/*" multiple hidden>
+    <label class="check"><input type="checkbox" id="sfxLocal"> Preview here only (not on stream)</label>
+    <div class="msg" id="sfxMsg"></div>
+    <p class="hint"><b>REAL</b> = a real recording that comes with the kit. To swap any sound for your own, put a file named after it in the kit's <b>sounds</b> folder (e.g. <b>sounds/airhorn.mp3</b>; see sounds/README.txt) and reload; it shows <b>YOURS</b>.</p>
+    <p class="hint">Sounds play through the <b>Sound Effects</b> source in your scene, so they're in the stream and recording (tick "Control audio via OBS" on it to get a volume slider in the Audio Mixer). Keys 1–9 and 0 play the first ten when this dock is clicked and you're not typing.</p>
+  </section>
+
+  <!-- ================= FRAME EFFECTS ================= -->
+  <section data-fold="fx">
+    <h2><span class="ttl">Frame effects</span> <small>the camera stays clear</small></h2>
+    <label>Whose frame</label>
+    <div class="grid g3 seg" id="fxSeat"></div>
+    <div class="grid g3" id="fxBtns" style="margin-top:8px"></div>
+    <label>How long</label>
+    <div class="grid g3 seg" id="fxLen">
+      <button data-len="short" title="About 3 seconds">Quick</button>
+      <button data-len="normal" title="Fire 8 s, ice 7 s, smoke 6 s, lightning 2.5 s">Normal</button>
+      <button data-len="hold" title="Keeps going until you press Stop">Until stopped</button>
+    </div>
+    <button id="fxStop" style="width:100%;margin-top:8px">🧯 Stop effects</button>
+    <div class="msg" id="fxMsg"></div>
+    <p class="hint"><b>★ Floor</b> means whoever has the spotlight (Control Panel's ★ button); if nobody does, every frame. The FX hotkeys (Ctrl+Alt+Shift+F, I, L, O, A, B, U) use whatever you pick here. 🚨 Clear stops them all.</p>
+  </section>
+
+  <!-- ================= TALK TIME ================= -->
+  <section data-fold="talk">
+    <h2><span class="ttl">Talk time</span> <small>speaking light · who talked most</small></h2>
+    <div class="msg" id="tkMsg"></div>
+    <div id="tkSeats"></div>
+    <div class="grid g3" style="margin-top:8px">
+      <button id="tkTrack" title="Count talk time (pause it any time)">● Track</button>
+      <button id="tkShow" title="The talk-time card on screen (Debate overlay)">On screen</button>
+      <button id="tkReset" title="Start the counts over">Reset</button>
+    </div>
+    <div class="tkstats" id="tkStats"></div>
+    <div class="grid g2" style="margin-top:6px"><button id="tkCopy">Copy stats</button><button id="tkPos">Card: right</button></div>
+    <label for="tkThr">Sensitivity <b id="tkThrVal" style="float:right"></b></label>
+    <input type="range" id="tkThr" min="-60" max="-15" step="1">
+    <label for="tkGap">Ignore mic bleed <b id="tkGapVal" style="float:right"></b></label>
+    <input type="range" id="tkGap" min="0" max="30" step="1">
+    <label class="check"><input type="checkbox" id="tkLight"> Speaking light on the camera frames</label>
+    <label class="check"><input type="checkbox" id="tkLive"> Only count while streaming or recording</label>
+    <p class="hint">Pick each person's mic (remote guests: their <b>AWYM Guest Seat</b> source). The bar shows their level; the yellow line is the <b>Sensitivity</b>. A person is talking when their bar crosses it. Mics in the same room hear each other: <b>Ignore mic bleed</b> skips a mic that's this many dB quieter than the loudest one, so only real talking over each other counts. One mic shared by two people counts as one. Needs the OBS connection (Clips &amp; replays).</p>
+  </section>
+
+  <!-- ================= CLIPS & REPLAYS ================= -->
+  <section data-fold="clips">
+    <h2><span class="ttl">Clips &amp; replays</span> <small>OBS WebSocket</small></h2>
+    <div class="status" id="obsStatus"><i></i><span>Not connected</span></div>
+    <div class="grid g2" style="margin-top:6px">
+      <div><label for="obsUrl">Address</label><input type="text" id="obsUrl" value="ws://127.0.0.1:4455"></div>
+      <div><label for="obsPass">Password</label><input type="password" id="obsPass" autocomplete="off"></div>
+    </div>
+    <div class="grid g2" style="margin-top:6px"><button class="primary" id="obsConnect">Connect</button><button id="obsDisconnect">Disconnect</button></div>
+    <label class="check"><input type="checkbox" id="obsAuto" checked> Connect automatically when OBS starts</label>
+    <p class="hint">One-time setup: in OBS, <b>Tools → WebSocket Server Settings</b> → tick <b>Enable WebSocket server</b> → <b>Show Connect Info</b> → copy the password here. For replays, also turn on <b>Settings → Output → Replay Buffer</b> (it sets how many seconds a clip keeps).</p>
+
+    <h3>Replay buffer <span class="status" id="rbStatus" style="display:inline-flex;margin-left:6px;text-transform:none;letter-spacing:0"><i></i><span>—</span></span></h3>
+    <div class="grid g2"><button class="needobs" id="rbToggle">Start buffer</button><button class="primary needobs" id="rbSave">💾 Save clip</button></div>
+    <div class="grid g2" style="margin-top:6px"><button class="accent needobs" id="rbReplay">🎬 Instant replay</button><button class="needobs" id="rbStopReplay">Stop replay</button></div>
+    <label for="rbSource">Media source for instant replays</label><input type="text" id="rbSource" value="AWYM Instant Replay">
+    <div class="clist" id="clipList"></div>
+
+    <h3>Recording <span class="status" id="recStatus" style="display:inline-flex;margin-left:6px;text-transform:none;letter-spacing:0"><i></i><span>—</span></span></h3>
+    <div class="grid g2"><button class="needobs" id="recToggle">Start recording</button><button class="needobs" id="markBtn">📍 Mark moment</button></div>
+    <input type="text" id="markName" placeholder="Moment name (optional)" style="margin-top:6px">
+    <div class="clist" id="markList"></div>
+    <div class="grid g2" style="margin-top:6px"><button id="markCopy">Copy as chapters</button><button id="markClear">Clear moments</button></div>
+    <div class="msg" id="obsMsg"></div>
+  </section>
+
+  <!-- ================= BACKUP ================= -->
+  <section data-fold="backup">
+    <h2><span class="ttl">Backup &amp; restore</span></h2>
+    <p class="hint" style="margin-top:0">Saves everything from every dock in one file: people, background title, stream screen words, theme, stats options, Content Panel pieces (with photos), rundown, scoreboard, receipts, your sounds, clips and moments. Your OBS password is never included.</p>
+    <p class="hint">Inside OBS, <b>Save backup file</b> puts the file in the kit's <b>backups</b> folder. It needs the setup script loaded (Tools → Scripts) and this dock connected to OBS (Clips &amp; replays above). Without that, the backup is copied for you to paste into Notepad.</p>
+    <div class="grid g2" style="margin-top:8px"><button class="primary" id="bkDownload">⬇ Save backup file</button><button id="bkCopy">Copy backup</button></div>
+    <h3>Restore</h3>
+    <div class="grid g2"><button id="bkPick">Open backup file…</button><button id="bkPasteBtn">Paste backup</button></div>
+    <input type="file" id="bkFile" accept=".json,application/json" hidden>
+    <textarea id="bkPaste" rows="3" placeholder="Paste a copied backup here, then click Restore" hidden style="margin-top:6px"></textarea>
+    <button class="danger" id="bkRestore" style="width:100%;margin-top:6px" hidden>Restore (replaces current settings)</button>
+    <div class="msg" id="bkMsg"></div>
+  </section>
+
+<script src="shared.js"></script>
+<script src="sfx.js"></script>
+<script src="obs-ws.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const STORE = "awym-runner-v1", PASS = "awym-obsws-pass";
+  let S = {};
+  try { S = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+  /** Short note in a .msg box (errors stay, others fade). */
+  function note(id, text, err) {
+    const el = $(id); el.textContent = text || ""; el.className = "msg" + (err ? " err" : "");
+    clearTimeout(el._t); if (text && !err) el._t = setTimeout(() => { el.textContent = ""; }, 5000);
+  }
+  /** Two-click confirm: first click arms the button, second (within 3 s) runs fn. */
+  function confirmClick(btn, label, fn) {
+    if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; fn(); return; }
+    btn.dataset.orig = btn.textContent; btn.dataset.armed = "1"; btn.textContent = label;
+    setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = btn.dataset.orig; } }, 3000);
+  }
+  const today = () => new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  /** Names from the Control Panel's People slots. */
+  function peopleNames() {
+    try { const c = JSON.parse(localStorage.getItem("awym-control-v1") || "{}"); return Object.keys(c.slots || {}).sort().map((k) => (c.slots[k].name || "").trim()).filter(Boolean); } catch (e) { return []; }
+  }
+
+  /* ---------- connection lights ---------- */
+  const heard = { debate: 0, sfx: 0, fx: 0 };
+  let sentAt = 0;   // when we last showed something (to ignore "not showing" replies that crossed with it)
+  const debate = (cmd, extra) => { if (!/^(hide|ping)/.test(cmd)) sentAt = Date.now(); AWYM.send(Object.assign({ to: "debate", cmd }, extra || {})); };
+  setInterval(() => {
+    AWYM.send({ to: "debate", cmd: "ping" }); AWYM.send({ to: "sfx", cmd: "ping" });
+    $("lnDebate").classList.toggle("ok", Date.now() - heard.debate < 3500);
+    $("lnSfx").classList.toggle("ok", Date.now() - heard.sfx < 3500);
+    AWYM.send({ to: "fx", cmd: "ping" });
+    $("lnFx").classList.toggle("ok", Date.now() - heard.fx < 3500);
+  }, 1500);
+
+  /* =====================================================================
+     RUNDOWN
+     ===================================================================== */
+  /* Ready-made segments for a sports debate show. Add your own here: [name, minutes, line]. */
+  const LIBRARY = [
+    ["Opening Tip-Off", 3, "Welcome in: who's here and what's on the table"],
+    ["Hot Takes", 5, "Say it with your chest"],
+    ["Buy or Sell", 5, "Quick verdicts on the league's hottest stocks"],
+    ["Starting Five", 6, "Build the five, then defend every pick"],
+    ["Fast Break", 3, "Rapid fire: one question, thirty seconds"],
+    ["Yo Momma Says", 4, "Mom weighs in. No appeals."],
+    ["Tin Foil Hat", 4, "Conspiracy theories: crazy or credible?"],
+    ["GOAT Talk", 6, "Rings, stats or the eye test?"],
+    ["Overreaction Corner", 4, "Overreaction, or are we onto something?"],
+    ["Trade Machine", 5, "Pitch the trade, the panel grades it"],
+    ["Fact or Fiction", 4, "True, false, or somewhere in between"],
+    ["Who Ya Got?", 4, "Pick a side. No fence-sitting."],
+    ["Power Rankings", 6, "Top five, bottom five, biggest movers"],
+    ["Rookie Watch", 4, "Real deal or summer-league legend?"],
+    ["Mailbag", 5, "Your questions from the chat"],
+    ["Receipts", 3, "Old hot takes: cashed or busted?"],
+    ["Closing Arguments", 3, "Last word, then we crown a winner"]
+  ];
+  const SAMPLE = ["Opening Tip-Off", "Hot Takes", "Buy or Sell", "Fast Break", "Receipts", "Yo Momma Says", "Closing Arguments"];
+  S.rundown = S.rundown || { items: [], current: -1, opts: { intro: true, clock: true, start: false, mark: true } };
+  const RD = S.rundown;
+  let editing = -1;
+  const segFrom = (n) => { const l = LIBRARY.find((x) => x[0] === n) || [n, 5, ""]; return { name: l[0], minutes: l[1], desc: l[2], label: "", scene: "" }; };
+  $("rdLib").innerHTML = LIBRARY.map((l) => `<option>${esc(l[0])}</option>`).join("") + `<option value="__blank">(blank segment)</option>`;
+  [["oIntro", "intro"], ["oClock", "clock"], ["oStart", "start"], ["oMark", "mark"]].forEach(([id, k]) => {
+    $(id).checked = !!RD.opts[k]; $(id).onchange = () => { RD.opts[k] = $(id).checked; save(); };
+  });
+  /** Draw the rundown list, the "Now" box and the total time. */
+  function paintRundown() {
+    const it = RD.items;
+    $("rdList").innerHTML = it.length ? it.map((s, i) => `<div class="ritem ${i === RD.current ? "cur" : ""} ${i < RD.current ? "done" : ""} ${i === editing ? "sel" : ""}" data-i="${i}">
+      <button class="go" data-a="go" title="Go to this segment now">▶</button>
+      <div class="nm" data-a="edit" title="Click to edit">${i + 1}. ${esc(s.name)}<small>${s.minutes ? esc(s.minutes) + " min" : ""}</small></div>
+      <button data-a="up" title="Move up">▲</button><button data-a="dn" title="Move down">▼</button></div>`).join("")
+      : `<div class="empty">No segments yet. Add some below, or load the sample show.</div>`;
+    const cur = it[RD.current], nxt = it[RD.current + 1];
+    $("rdNow").textContent = cur ? `${RD.current + 1}. ${cur.name}` : "Not started";
+    $("rdNext").textContent = nxt ? `Up next: ${nxt.name}` : (cur ? "Last segment" : (it[0] ? `First up: ${it[0].name}` : ""));
+    $("rdGo").textContent = RD.current < 0 ? "Start the show ▶" : (nxt ? "Next segment ▶" : "End of rundown");
+    $("rdGo").disabled = !nxt && RD.current >= 0 || !it.length;
+    $("rdPrev").disabled = RD.current <= 0;
+    const total = it.reduce((t, s) => t + (Number(s.minutes) || 0), 0);
+    $("rdTotal").textContent = it.length ? `${it.length} segments · about ${Math.round(total)} min` : "";
+  }
+  /** Go to segment i: clock, intro, scene, moment. */
+  async function goTo(i) {
+    const s = RD.items[i]; if (!s) return;
+    RD.current = i; save(); paintRundown();
+    const next = RD.items[i + 1];
+    if (RD.opts.clock && Number(s.minutes) > 0) {
+      AWYM.send({ to: "clock", cmd: "set", seconds: Math.round(Number(s.minutes) * 60), autostart: !!RD.opts.start });
+      AWYM.send({ to: "clock", cmd: "label", label: s.label || s.name });
+    }
+    if (RD.opts.intro) debate("segment", { data: { num: i + 1, name: s.name, desc: s.desc, next: next ? next.name : "" } });
+    if (s.scene && obs.ready) obs.req("SetCurrentProgramScene", { sceneName: s.scene }).catch((e) => note("obsMsg", "Couldn't switch scene: " + e.message, true));
+    if (RD.opts.mark && obs.ready && rec.active) mark(s.name, true);
+    AWYM.send({ from: "runner", cmd: "segment", index: i, name: s.name });   // the Content Panel follows along
+  }
+  /* segments from a script imported in the Content Panel */
+  AWYM.listen((m) => {
+    if (m.to !== "runner" || m.cmd !== "rundown" || !Array.isArray(m.segments)) return;
+    const add = m.segments.map((g) => ({ name: String(g.name || "Segment").slice(0, 80), minutes: Number(g.minutes) || 0, desc: String(g.desc || "").slice(0, 200), label: "", scene: "" }));
+    if (m.mode === "replace") { RD.items = add; RD.current = -1; editing = -1; $("rdEdit").hidden = true; }
+    else RD.items.push(...add);
+    save(); paintRundown();
+    AWYM.send({ from: "runner", ack: m.nonce, cmd: "rundown", count: add.length });
+  });
+  $("rdGo").onclick = () => goTo(RD.current + 1);
+  $("rdPrev").onclick = () => goTo(RD.current - 1);
+  $("rdList").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-a]"); if (!el) return;
+    const i = Number(el.closest(".ritem").dataset.i), a = el.dataset.a, it = RD.items;
+    if (a === "go") goTo(i);
+    else if (a === "edit") openEdit(i === editing ? -1 : i);
+    else if (a === "up" && i > 0) { [it[i - 1], it[i]] = [it[i], it[i - 1]]; fixIdx(i, i - 1); }
+    else if (a === "dn" && i < it.length - 1) { [it[i + 1], it[i]] = [it[i], it[i + 1]]; fixIdx(i, i + 1); }
+    save(); paintRundown();
+  });
+  /** Keep "current" and "editing" pointing at the same segments after a move. */
+  function fixIdx(from, to) {
+    if (RD.current === from) RD.current = to; else if (RD.current === to) RD.current = from;
+    if (editing === from) editing = to; else if (editing === to) editing = from;
+  }
+  /** Open the edit box for segment i (-1 closes it). */
+  function openEdit(i) {
+    editing = i; $("rdEdit").hidden = i < 0;
+    const s = RD.items[i];
+    if (s) { $("eName").value = s.name; $("eDesc").value = s.desc || ""; $("eMin").value = s.minutes || ""; $("eLabel").value = s.label || ""; fillScenes(s.scene || ""); }
+    paintRundown();
+  }
+  ["eName", "eDesc", "eMin", "eLabel", "eScene"].forEach((id) => $(id).addEventListener("input", () => {
+    const s = RD.items[editing]; if (!s) return;
+    s.name = $("eName").value.trim() || "Segment"; s.desc = $("eDesc").value; s.minutes = Number($("eMin").value) || 0;
+    s.label = $("eLabel").value.trim(); s.scene = $("eScene").value; save(); paintRundown();
+  }));
+  $("eDone").onclick = () => openEdit(-1);
+  $("eDel").onclick = (e) => confirmClick(e.currentTarget, "Sure?", () => {
+    RD.items.splice(editing, 1); if (RD.current >= editing) RD.current--; openEdit(-1); save(); paintRundown();
+  });
+  $("rdAdd").onclick = () => {
+    const v = $("rdLib").value;
+    RD.items.push(v === "__blank" ? { name: "New segment", minutes: 5, desc: "", label: "", scene: "" } : segFrom(v));
+    save(); if (v === "__blank") openEdit(RD.items.length - 1); else paintRundown();
+  };
+  $("rdSample").onclick = (e) => {
+    const go = () => { RD.items = SAMPLE.map(segFrom); RD.current = -1; editing = -1; $("rdEdit").hidden = true; save(); paintRundown(); };
+    RD.items.length ? confirmClick(e.currentTarget, "Replace list?", go) : go();
+  };
+  $("rdClear").onclick = (e) => confirmClick(e.currentTarget, "Sure?", () => { RD.items = []; RD.current = -1; openEdit(-1); save(); paintRundown(); });
+
+  /* =====================================================================
+     SCOREBOARD
+     ===================================================================== */
+  S.score = Object.assign({ a: { name: "", score: 0 }, b: { name: "", score: 0 }, round: 0, title: "", numbers: true, pos: "top", visible: false, winSound: true }, S.score || {});
+  const SC = S.score;
+  /** Scoreboard data for the overlay. */
+  const scoreData = () => ({ a: { name: SC.a.name || "Side A", score: SC.a.score }, b: { name: SC.b.name || "Side B", score: SC.b.score },
+    round: SC.round ? "Round " + SC.round : "", title: SC.title || "Who's winning?", numbers: SC.numbers, pos: SC.pos });
+  /** Show the scoreboard state in the controls (and on screen if it's up). */
+  function paintScore(send) {
+    $("sAName").value = SC.a.name; $("sBName").value = SC.b.name;
+    $("sALabel").textContent = SC.a.name || "Side A"; $("sBLabel").textContent = SC.b.name || "Side B";
+    $("sAPts").textContent = SC.a.score; $("sBPts").textContent = SC.b.score;
+    $("sRound").textContent = SC.round ? "Round " + SC.round : "No round";
+    $("sTitle").value = SC.title;
+    $("sNums").querySelectorAll("button").forEach((b) => b.classList.toggle("on", (b.dataset.v === "1") === SC.numbers));
+    $("sPos").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === SC.pos));
+    $("sShow").textContent = SC.visible ? "Hide" : "Show"; $("sShow").classList.toggle("showing", SC.visible);
+    $("sWinSound").checked = SC.winSound !== false;
+    if (send && SC.visible) debate("score", { data: scoreData() });
+  }
+  const scoreChanged = () => { save(); paintScore(true); };
+  $("sAName").addEventListener("input", () => { SC.a.name = $("sAName").value; scoreChanged(); });
+  $("sBName").addEventListener("input", () => { SC.b.name = $("sBName").value; scoreChanged(); });
+  $("sTitle").addEventListener("input", () => { SC.title = $("sTitle").value; scoreChanged(); });
+  $("sPeople").onclick = () => {
+    const p = peopleNames();
+    if (!p.length) { $("sPeople").textContent = "No names in the Control Panel yet"; setTimeout(() => $("sPeople").textContent = "Use people 1 & 2 from the Control Panel", 2500); return; }
+    SC.a.name = p[0] || ""; SC.b.name = p[1] || ""; scoreChanged();
+  };
+  document.querySelectorAll(".side button").forEach((b) => b.onclick = () => {
+    const s = SC[b.dataset.s]; s.score = Math.max(0, s.score + Number(b.dataset.d)); scoreChanged();
+  });
+  $("sRoundUp").onclick = () => { SC.round++; scoreChanged(); };
+  $("sRoundDn").onclick = () => { SC.round = Math.max(0, SC.round - 1); scoreChanged(); };
+  $("sNums").onclick = (e) => { const b = e.target.closest("button"); if (b) { SC.numbers = b.dataset.v === "1"; scoreChanged(); } };
+  $("sPos").onclick = (e) => { const b = e.target.closest("button"); if (b) { SC.pos = b.dataset.v; scoreChanged(); } };
+  $("sShow").onclick = () => {
+    SC.visible = !SC.visible; save(); paintScore(false);
+    SC.visible ? debate("score", { data: scoreData() }) : debate("hideScore");
+  };
+  $("sReset").onclick = (e) => confirmClick(e.currentTarget, "Reset scores?", () => { SC.a.score = 0; SC.b.score = 0; SC.round = 0; scoreChanged(); });
+  $("sWinSound").onchange = () => { SC.winSound = $("sWinSound").checked; save(); };
+  $("sWin").onclick = () => {
+    const a = SC.a, b = SC.b, an = a.name || "Side A", bn = b.name || "Side B";
+    if (a.score === b.score) debate("winner", { name: "It's a tie!", sub: `${an} and ${bn} · ${a.score}–${b.score}` });
+    else { const w = a.score > b.score ? [an, a.score, b.score] : [bn, b.score, a.score]; debate("winner", { name: w[0], sub: `takes the debate ${w[1]}–${w[2]}` }); }
+    if (SC.winSound !== false) { playSound("airhorn"); setTimeout(() => playSound("applause"), 900); }
+  };
+
+  /* =====================================================================
+     RECEIPTS (hot-take tracker)
+     ===================================================================== */
+  S.receipts = S.receipts || { items: [], nextNo: 1 };
+  const RC = S.receipts;
+  let rEdit = null, rShown = null;
+  const STATUS = { pending: "⏳", cashed: "✓", busted: "✗" };
+  /** Draw the list of takes (search + status filter). */
+  function paintTakes() {
+    const q = $("tFind").value.trim().toLowerCase(), f = $("tFilter").value;
+    const list = RC.items.filter((t) => (!f || t.status === f) && (!q || (t.who + " " + t.take + " " + (t.note || "")).toLowerCase().includes(q)));
+    $("tList").innerHTML = list.length ? list.map((t) => `<div class="take ${t.status} ${rShown === t.id ? "showing" : ""}" data-id="${t.id}">
+      <div class="t" data-a="edit" title="Click to edit"><b>${esc(t.who)}:</b> ${esc(t.take)}</div>
+      <div class="m">#${String(t.no).padStart(4, "0")} · ${esc(t.said)}${t.due ? " · check by " + esc(t.due) : ""}</div>
+      <div class="acts">
+        <button data-a="show" title="Show this receipt on screen">▶ Show</button>
+        ${["pending", "cashed", "busted"].map((s) => `<button class="st ${t.status === s ? "on" : ""}" data-a="st" data-s="${s}" title="${s}">${STATUS[s]} ${s}</button>`).join("")}
+        <button data-a="del" title="Delete">✕</button></div></div>`).join("")
+      : `<div class="empty">${RC.items.length ? "No takes match." : "No takes logged yet."}</div>`;
+    $("tPeople").innerHTML = [...new Set(peopleNames().concat(RC.items.map((t) => t.who)))].map((n) => `<option value="${esc(n)}">`).join("");
+    $("tSave").textContent = rEdit ? "Save changes" : "Log it";
+  }
+  const receiptData = (t) => ({ no: t.no, who: t.who, take: t.take, said: t.said, due: t.due, status: t.status, note: t.note });
+  $("tSave").onclick = () => {
+    const who = $("tWho").value.trim(), take = $("tTake").value.trim();
+    if (!who || !take) { $("tSave").textContent = "Add who + the take"; setTimeout(paintTakes, 1800); return; }
+    if (rEdit) {
+      const t = RC.items.find((x) => x.id === rEdit);
+      if (t) Object.assign(t, { who, take, due: $("tDue").value.trim(), note: $("tNote").value.trim() });
+      if (t && rShown === t.id) debate("receipt", { data: receiptData(t) });
+    } else {
+      RC.items.unshift({ id: Date.now().toString(36), no: RC.nextNo++, who, take, said: today(), due: $("tDue").value.trim(), note: $("tNote").value.trim(), status: "pending" });
+    }
+    rEdit = null; ["tTake", "tDue", "tNote"].forEach((id) => $(id).value = ""); save(); paintTakes();
+  };
+  $("tCancel").onclick = () => { rEdit = null; ["tWho", "tTake", "tDue", "tNote"].forEach((id) => $(id).value = ""); paintTakes(); };
+  $("tFind").addEventListener("input", paintTakes); $("tFilter").onchange = paintTakes;
+  $("tList").addEventListener("click", (e) => {
+    const el = e.target.closest("[data-a]"); if (!el) return;
+    const id = el.closest(".take").dataset.id, t = RC.items.find((x) => x.id === id); if (!t) return;
+    const a = el.dataset.a;
+    if (a === "edit") { rEdit = id; $("tWho").value = t.who; $("tTake").value = t.take; $("tDue").value = t.due || ""; $("tNote").value = t.note || ""; $("tTake").focus(); }
+    else if (a === "show") {
+      if (rShown === id) { debate("hideReceipt"); rShown = null; }
+      else { debate("receipt", { data: receiptData(t) }); rShown = id; }
+    }
+    else if (a === "st") {
+      const was = t.status; t.status = el.dataset.s;
+      if (rShown === id && was !== t.status) {
+        debate("receipt", { data: receiptData(t) });
+        if ($("tSound").checked && t.status !== "pending") playSound(t.status === "cashed" ? "chaching" : "sadtrombone");
+      }
+    }
+    else if (a === "del") {
+      return confirmClick(el, "Sure?", () => { RC.items = RC.items.filter((x) => x.id !== id); if (rShown === id) { debate("hideReceipt"); rShown = null; } save(); paintTakes(); });
+    }
+    save(); paintTakes();
+  });
+  $("tRecord").onclick = () => {
+    const by = {};
+    RC.items.forEach((t) => { const r = by[t.who] = by[t.who] || { who: t.who, cashed: 0, busted: 0, pending: 0 }; r[t.status]++; });
+    const rows = Object.values(by).sort((a, b) => (b.cashed - b.busted) - (a.cashed - a.busted));
+    debate("record", { data: { rows } }); rShown = "__record"; paintTakes();
+  };
+  $("tHide").onclick = () => { debate("hideReceipt"); rShown = null; paintTakes(); };
+
+  /* =====================================================================
+     SOUND BOARD
+     ===================================================================== */
+  const SFX = window.AWYM_SFX;
+  S.sounds = Object.assign({ volume: 80, local: false }, S.sounds || {});
+  let custom = [];   // [{id, name, data}] from IndexedDB
+  const SDB = (() => {   // tiny key/value store in IndexedDB "awym-sounds" (room for audio files)
+    let p = null;
+    const open = () => p || (p = new Promise((res, rej) => { const r = indexedDB.open("awym-sounds", 1); r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); }; r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }));
+    return {
+      async get(k) { const db = await open(); return new Promise((res, rej) => { const q = db.transaction("kv").objectStore("kv").get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+      async set(k, v) { const db = await open(); return new Promise((res, rej) => { const tx = db.transaction("kv", "readwrite"); tx.objectStore("kv").put(v, k); tx.oncomplete = () => res(true); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); }
+    };
+  })();
+  /** All pads: built-in sounds, then your own. */
+  const pads = () => SFX.list.map((s) => ({ id: s.id, name: s.name, icon: s.icon })).concat(custom.map((c) => ({ id: c.id, name: c.name, icon: "🔊", custom: true })));
+  function paintPads() {
+    const SRC = { yours: ["mine", "Your file in the sounds folder"], recording: ["rec", "Real recording (sounds/kit)"], synth: ["", "Made in code. Put your own file in the sounds folder to replace it"] };
+    $("pads").innerHTML = pads().map((p, i) => {
+      const src = p.custom ? null : SRC[SFX.source ? SFX.source(p.id) : "synth"];
+      const tip = p.name + (src ? " · " + src[1] : "");
+      return `<button class="pad" data-id="${esc(p.id)}" title="${esc(tip)}">${i < 10 ? `<span class="k">${(i + 1) % 10}</span>` : ""}<span class="ic">${p.icon}</span>${esc(p.name)}${src && src[0] ? `<span class="src ${src[0]}">${src[0] === "mine" ? "yours" : "real"}</span>` : ""}${p.custom ? `<span class="x" data-del="${esc(p.id)}" title="Remove this sound">✕</span>` : ""}</button>`;
+    }).join("");
+    $("vol").value = S.sounds.volume; $("volVal").textContent = S.sounds.volume + "%"; $("sfxLocal").checked = !!S.sounds.local;
+  }
+  /** Play a sound on stream (through sfx.html), or here if previewing / no source found. */
+  function playSound(id) {
+    const vol = S.sounds.volume / 100;
+    const pad = document.querySelector(`.pad[data-id="${CSS.escape(id)}"]`);
+    if (pad) { pad.classList.add("playing"); setTimeout(() => pad.classList.remove("playing"), 350); }
+    const sfxHere = Date.now() - heard.sfx < 3500;
+    if (S.sounds.local || !sfxHere) {
+      const c = custom.find((x) => x.id === id);
+      if (c) SFX.decode(c.data).then((b) => SFX.playBuffer(b, vol)).catch(() => {}); else SFX.play(id, vol);
+      if (!S.sounds.local) note("sfxMsg", "Sound Effects source not found, so this played in the dock only (not on stream).", true);
+      return;
+    }
+    AWYM.send({ to: "sfx", cmd: "play", id, volume: vol });
+  }
+  $("pads").addEventListener("click", (e) => {
+    const del = e.target.closest("[data-del]");
+    if (del) { e.stopPropagation(); return confirmClick(del, "✓?", async () => { custom = custom.filter((c) => c.id !== del.dataset.del); await SDB.set("custom", custom).catch(() => {}); paintPads(); }); }
+    const b = e.target.closest(".pad"); if (b) playSound(b.dataset.id);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if (!/^[0-9]$/.test(e.key)) return;
+    const p = pads()[(Number(e.key) + 9) % 10]; if (p) { e.preventDefault(); playSound(p.id); }
+  });
+  $("vol").addEventListener("input", () => { S.sounds.volume = Number($("vol").value); $("volVal").textContent = S.sounds.volume + "%"; save(); });
+  $("sfxLocal").onchange = () => { S.sounds.local = $("sfxLocal").checked; save(); };
+  $("sfxStop").onclick = () => { AWYM.send({ to: "sfx", cmd: "stop" }); SFX.stop(); };
+  $("sfxAdd").onclick = () => $("sfxFile").click();
+  $("sfxFile").onchange = async () => {
+    for (const f of [...$("sfxFile").files]) {
+      if (!/^audio\//.test(f.type) && !/\.(mp3|wav|ogg|m4a|aac|flac|webm)$/i.test(f.name)) { note("sfxMsg", `"${f.name}" isn't a sound file.`, true); continue; }
+      if (f.size > 8e6) { note("sfxMsg", `"${f.name}" is over 8 MB. Use a shorter clip.`, true); continue; }
+      const data = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+      try { await SFX.decode(data); } catch (e) { note("sfxMsg", `"${f.name}" couldn't be played. Try MP3 or WAV.`, true); continue; }
+      custom.push({ id: "c" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: f.name.replace(/\.[^.]+$/, "").slice(0, 24), data });
+    }
+    try { await SDB.set("custom", custom); note("sfxMsg", "Sound added."); } catch (e) { note("sfxMsg", "Couldn't save the sound (storage full?).", true); }
+    $("sfxFile").value = ""; paintPads();
+  };
+
+  /* =====================================================================
+     CLIPS & REPLAYS (OBS WebSocket)
+     ===================================================================== */
+  const obs = new window.AWYMObs();
+  S.obs = Object.assign({ url: "ws://127.0.0.1:4455", auto: true, source: "AWYM Instant Replay" }, S.obs || {});
+  S.clips = S.clips || []; S.marks = S.marks || [];
+  const rec = { active: false }, rb = { active: false }, stream = { active: false };
+  obs.meters(true);   // every mic's level, for Talk time
+  let replayItem = null;   // {scene, id} of the instant replay while it's on screen
+  $("obsUrl").value = S.obs.url; $("obsAuto").checked = S.obs.auto; $("rbSource").value = S.obs.source;
+  try { $("obsPass").value = localStorage.getItem(PASS) || ""; } catch (e) {}
+  /** Status lights and button states for OBS. */
+  function paintObs(state, text) {
+    const ok = obs.ready;
+    $("obsStatus").className = "status" + (ok ? " ok" : ""); $("obsStatus").querySelector("span").textContent = text || (ok ? "Connected to OBS" : "Not connected");
+    $("lnObs").classList.toggle("ok", ok);
+    document.querySelectorAll(".needobs").forEach((b) => b.disabled = !ok);
+    $("rbStatus").className = "status" + (rb.active ? " ok" : ""); $("rbStatus").querySelector("span").textContent = ok ? (rb.active ? "on" : "off") : "—";
+    $("rbToggle").textContent = rb.active ? "Stop buffer" : "Start buffer";
+    $("rbSave").disabled = !ok || !rb.active;
+    $("recStatus").className = "status" + (rec.active ? " rec" : ""); $("recStatus").querySelector("span").textContent = ok ? (rec.active ? "recording" : "off") : "—";
+    $("recToggle").textContent = rec.active ? "Stop recording" : "Start recording";
+    $("markBtn").disabled = !ok;
+  }
+  obs.onStatus = (state, text) => { paintObs(state, text); if (state === "error") note("obsMsg", text, true); };
+  obs.onEvent = (type, d) => {
+    if (type === "ReplayBufferStateChanged") { rb.active = !!d.outputActive; paintObs(); }
+    else if (type === "RecordStateChanged") { rec.active = !!d.outputActive; paintObs(); }
+    else if (type === "StreamStateChanged") { stream.active = !!d.outputActive; }
+    else if (type === "InputVolumeMeters") talkMeters(d.inputs || []);
+    else if (type === "InputMuteStateChanged") muteChanged(d.inputName, !!d.inputMuted);
+    else if (type === "ReplayBufferSaved" && d.savedReplayPath) addClip(d.savedReplayPath);
+    else if (type === "MediaInputPlaybackEnded" && d.inputName === S.obs.source) endReplay();
+    else if (type === "ExitStarted") obs.close();
+  };
+  /** Connect with the address and password typed in. */
+  async function connect(quiet) {
+    S.obs.url = $("obsUrl").value.trim() || "ws://127.0.0.1:4455"; save();
+    try { localStorage.setItem(PASS, $("obsPass").value); } catch (e) {}
+    try {
+      await obs.connect(S.obs.url, $("obsPass").value);
+      const [r1, r2, r3] = await Promise.all([obs.req("GetReplayBufferStatus").catch(() => ({})), obs.req("GetRecordStatus").catch(() => ({})), obs.req("GetStreamStatus").catch(() => ({}))]);
+      rb.active = !!r1.outputActive; rec.active = !!r2.outputActive; stream.active = !!r3.outputActive; paintObs();
+      fillScenes(editing >= 0 && RD.items[editing] ? RD.items[editing].scene : "");
+      refreshMutes();
+      if (!quiet) note("obsMsg", "Connected.");
+    } catch (e) { if (quiet) note("obsMsg", ""); }
+  }
+  $("obsConnect").onclick = () => connect(false);
+  $("obsDisconnect").onclick = () => obs.close();
+  $("obsAuto").onchange = () => { S.obs.auto = $("obsAuto").checked; save(); };
+  $("rbSource").addEventListener("input", () => { S.obs.source = $("rbSource").value.trim() || "AWYM Instant Replay"; save(); });
+  /** Fill the rundown's scene picker from OBS (when connected). */
+  async function fillScenes(keep) {
+    let names = [];
+    if (obs.ready) { try { names = ((await obs.req("GetSceneList")).scenes || []).map((s) => s.sceneName).reverse(); } catch (e) {} }
+    if (keep && !names.includes(keep)) names.unshift(keep);
+    $("eScene").innerHTML = `<option value="">Don't switch</option>` + names.map((n) => `<option ${n === keep ? "selected" : ""}>${esc(n)}</option>`).join("");
+    if (!obs.ready && !names.length) $("eScene").innerHTML += `<option disabled>(connect to OBS to list scenes)</option>`;
+  }
+
+  /* replay buffer + clips */
+  $("rbToggle").onclick = () => obs.req(rb.active ? "StopReplayBuffer" : "StartReplayBuffer")
+    .catch((e) => note("obsMsg", /not enabled|disabled|unavailable/i.test(e.message) ? "Turn on the Replay Buffer first: OBS Settings → Output → Replay Buffer." : e.message, true));
+  let waitingClip = null;
+  $("rbSave").onclick = async () => {
+    try {
+      await obs.req("SaveReplayBuffer"); note("obsMsg", "Saving clip…");
+      // older OBS versions don't say where it was saved, so ask after a moment
+      clearTimeout(waitingClip);
+      waitingClip = setTimeout(async () => { try { const r = await obs.req("GetLastReplayBufferReplay"); if (r.savedReplayPath) addClip(r.savedReplayPath); } catch (e) {} }, 2500);
+    } catch (e) { note("obsMsg", e.message, true); }
+  };
+  /** Remember a saved clip (once). */
+  function addClip(path) {
+    clearTimeout(waitingClip);
+    if (S.clips[0] && S.clips[0].path === path) return;
+    const seg = RD.items[RD.current];
+    S.clips.unshift({ path, at: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), seg: seg ? seg.name : "" });
+    S.clips = S.clips.slice(0, 50); save(); paintClips(); note("obsMsg", "Clip saved.");
+  }
+  function paintClips() {
+    $("clipList").innerHTML = S.clips.length ? S.clips.map((c, i) => `<div class="clip" data-i="${i}"><div class="n">${esc(c.path.split(/[\\/]/).pop())}<small>${esc(c.at)}${c.seg ? " · " + esc(c.seg) : ""}</small></div>
+      <button class="needobs" data-a="play" title="Play it on screen as an instant replay" ${obs.ready ? "" : "disabled"}>▶</button><button data-a="copy" title="Copy the file's location">Copy</button></div>`).join("")
+      : `<div class="empty">Saved clips appear here.</div>`;
+    $("markList").innerHTML = S.marks.length ? S.marks.map((m) => `<div class="clip"><div class="n">${esc(m.tc)} · ${esc(m.name)}</div></div>`).join("") : `<div class="empty">Moments you mark appear here.</div>`;
+  }
+  $("clipList").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-a]"); if (!b) return;
+    const c = S.clips[Number(b.closest(".clip").dataset.i)]; if (!c) return;
+    if (b.dataset.a === "play") playReplay(c.path); else copyText(c.path).then(() => note("obsMsg", "File location copied."));
+  });
+  $("rbReplay").onclick = async () => {
+    let path = S.clips[0] && S.clips[0].path;
+    try { const r = await obs.req("GetLastReplayBufferReplay"); if (r.savedReplayPath) path = r.savedReplayPath; } catch (e) {}
+    if (!path) { note("obsMsg", "Save a clip first (💾 Save clip).", true); return; }
+    playReplay(path);
+  };
+  /** Instant replay: load the clip into the media source, show it, tag it REPLAY, hide it when it ends. */
+  async function playReplay(path) {
+    const src = S.obs.source;
+    try {
+      await obs.req("SetInputSettings", { inputName: src, inputSettings: { is_local_file: true, local_file: path, looping: false, restart_on_activate: true, close_when_inactive: true }, overlay: true });
+      const cur = await obs.req("GetCurrentProgramScene");
+      const scene = cur.currentProgramSceneName || cur.sceneName;
+      let item;
+      try { item = (await obs.req("GetSceneItemId", { sceneName: scene, sourceName: src })).sceneItemId; }
+      catch (e) { note("obsMsg", `Add the media source "${src}" to the "${scene}" scene first (the setup script adds it to Main Show).`, true); return; }
+      await obs.req("SetSceneItemEnabled", { sceneName: scene, sceneItemId: item, sceneItemEnabled: true });
+      await obs.req("TriggerMediaInputAction", { inputName: src, mediaAction: "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART" }).catch(() => {});
+      replayItem = { scene, id: item };
+      debate("replay", { on: true });
+      note("obsMsg", "Instant replay rolling.");
+    } catch (e) {
+      note("obsMsg", /No source was found|not found/i.test(e.message) ? `OBS has no source called "${src}". Run the setup script again, or add a Media Source with that name.` : e.message, true);
+    }
+  }
+  /** Take the replay off screen. */
+  async function endReplay() {
+    debate("replay", { on: false });
+    if (!replayItem) return;
+    const r = replayItem; replayItem = null;
+    try { await obs.req("SetSceneItemEnabled", { sceneName: r.scene, sceneItemId: r.id, sceneItemEnabled: false }); } catch (e) {}
+  }
+  $("rbStopReplay").onclick = endReplay;
+
+  /* recording + moments */
+  $("recToggle").onclick = () => obs.req(rec.active ? "StopRecord" : "StartRecord").catch((e) => note("obsMsg", e.message, true));
+  /** Mark a moment at the recording's (or stream's) current time; also adds an OBS chapter when supported. */
+  async function mark(name, quiet) {
+    name = (name || "").trim() || (RD.items[RD.current] ? RD.items[RD.current].name : "Moment");
+    let tc = "";
+    try { const r = await obs.req("GetRecordStatus"); if (r.outputActive) tc = r.outputTimecode; } catch (e) {}
+    if (!tc) { try { const r = await obs.req("GetStreamStatus"); if (r.outputActive) tc = r.outputTimecode; } catch (e) {} }
+    if (!tc) { if (!quiet) note("obsMsg", "Start recording (or streaming) first: moments are times in the recording.", true); return; }
+    tc = tc.replace(/\.\d+$/, "").replace(/^00:/, "");
+    obs.req("CreateRecordChapter", { chapterName: name }).catch(() => {});   // OBS 30.2+ with Hybrid MP4; harmless otherwise
+    S.marks.push({ tc, name }); save(); paintClips();
+    if (!quiet) note("obsMsg", `Marked ${tc} · ${name}`);
+  }
+  $("markBtn").onclick = () => { mark($("markName").value); $("markName").value = ""; };
+  $("markCopy").onclick = () => {
+    if (!S.marks.length) { note("obsMsg", "No moments yet.", true); return; }
+    // YouTube chapters need the first one at 0:00
+    const lines = S.marks.map((m) => `${m.tc.replace(/^0(\d:)/, "$1")} ${m.name}`);
+    if (!/^0?0:00 /.test(lines[0])) lines.unshift("0:00 Intro");
+    copyText(lines.join("\n")).then(() => note("obsMsg", "Copied. Paste it into a YouTube description to make chapters."));
+  };
+  $("markClear").onclick = (e) => confirmClick(e.currentTarget, "Sure?", () => { S.marks = []; save(); paintClips(); });
+
+  /** Copy text (clipboard API, with an old-school fallback). */
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); return; } catch (e) {}
+    const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0"; document.body.appendChild(t); t.select();
+    try { document.execCommand("copy"); } catch (e) {} t.remove();
+  }
+
+  /* =====================================================================
+     BACKUP & RESTORE
+     ===================================================================== */
+  const IDBS = ["awym-content", "awym-sounds"];
+  /** Open one of the kit's IndexedDB databases (making its "kv" store if needed). */
+  const openDB = (name) => new Promise((res, rej) => {
+    const r = indexedDB.open(name, 1);
+    r.onupgradeneeded = () => { if (!r.result.objectStoreNames.contains("kv")) r.result.createObjectStore("kv"); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+  });
+  async function dumpDB(name) {
+    const db = await openDB(name);
+    return new Promise((res, rej) => {
+      const out = {}, st = db.transaction("kv").objectStore("kv"), q = st.openCursor();
+      q.onsuccess = () => { const c = q.result; if (c) { out[c.key] = c.value; c.continue(); } else { db.close(); res(out); } };
+      q.onerror = () => rej(q.error);
+    });
+  }
+  async function loadDB(name, data) {
+    const db = await openDB(name);
+    await new Promise((res, rej) => {
+      const tx = db.transaction("kv", "readwrite"), st = tx.objectStore("kv");
+      st.clear(); Object.entries(data || {}).forEach(([k, v]) => st.put(v, k));
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+    db.close();
+  }
+  /** Everything from every dock, as one object. */
+  async function makeBackup() {
+    const ls = {};
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (/^awym-/.test(k) && k !== PASS) ls[k] = localStorage.getItem(k); }
+    const idb = {};
+    for (const n of IDBS) { try { idb[n] = await dumpDB(n); } catch (e) { idb[n] = {}; } }
+    return { kind: "awym-obs-backup", version: 1, created: new Date().toISOString(), show: AWYM.showName(), localStorage: ls, indexedDB: idb };
+  }
+  /** Local date and time for file names, e.g. 2026-10-29-19-44. */
+  const stamp = () => { const d = new Date(), p = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}-${p(d.getMinutes())}`; };
+  /* Saving a file. OBS docks can't download, so inside OBS the backup goes to the setup
+     script (awym-obs-setup.lua) through OBS's WebSocket server, and the script writes it into
+     the kit's backups folder. In a normal browser it's an ordinary download. */
+  const inOBS = /\bOBS\//.test(navigator.userAgent) || !!window.obsstudio;
+  const WRITER = "AWYM Backup Writer";
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  /** Hand the backup to the setup script and wait for it to say where it saved it. */
+  async function saveThroughOBS(json, name) {
+    const nonce = Math.random().toString(36).slice(2);
+    try { await obs.req("SetInputSettings", { inputName: WRITER, inputSettings: { backup_json: json, backup_name: name, nonce }, overlay: true }); }
+    catch (e) { throw new Error("the setup script isn't loaded (Tools → Scripts → awym-obs-setup.lua)"); }
+    for (let i = 0; i < 24; i++) {
+      await sleep(350);
+      const st = ((await obs.req("GetInputSettings", { inputName: WRITER })) || {}).inputSettings || {};
+      if (st.saved_nonce === nonce) { if (/^ERROR/.test(st.saved_path || "")) throw new Error(st.saved_path.replace(/^ERROR: /, "")); return st.saved_path; }
+    }
+    throw new Error("the setup script didn't answer. Is it loaded in Tools → Scripts? (Update it to the latest version.)");
+  }
+  $("bkDownload").onclick = async () => {
+    const btn = $("bkDownload"); btn.disabled = true; note("bkMsg", "Saving…");
+    try {
+      const json = JSON.stringify(await makeBackup()), name = `awym-backup-${stamp()}.json`, kb = (json.length / 1024).toFixed(0);
+      // 1) inside OBS: through the setup script (needs the OBS connection from Clips & replays)
+      if (obs.ready) {
+        try { const path = await saveThroughOBS(json, name); note("bkMsg", `Saved (${kb} KB): ${path}`); return; }
+        catch (e) { if (inOBS) { await copyText(json); note("bkMsg", `Couldn't save the file: ${e.message}. The backup was copied instead: paste it into Notepad and save it as a .json file.`, true); return; } }
+      }
+      if (inOBS) {
+        await copyText(json);
+        note("bkMsg", `OBS docks can't save files on their own. To save straight into the kit's backups folder, connect to OBS in "Clips & replays" (and keep the setup script loaded). For now the backup (${kb} KB) was copied: paste it into Notepad and save it as a .json file.`, true);
+        return;
+      }
+      // 2) a normal browser: a save dialog if it has one, otherwise a download
+      if (window.showSaveFilePicker) {
+        try {
+          const h = await window.showSaveFilePicker({ suggestedName: name, types: [{ description: "Backup", accept: { "application/json": [".json"] } }] });
+          const w = await h.createWritable(); await w.write(json); await w.close();
+          note("bkMsg", `Saved (${kb} KB) as ${h.name}.`); return;
+        } catch (e) { if (e && e.name === "AbortError") { note("bkMsg", ""); return; } }
+      }
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+      note("bkMsg", `Backup (${kb} KB) saved to your Downloads folder.`);
+    } finally { btn.disabled = false; }
+  };
+  $("bkCopy").onclick = async () => {
+    const json = JSON.stringify(await makeBackup());
+    await copyText(json);
+    note("bkMsg", `Copied (${(json.length / 1024).toFixed(0)} KB). Paste it into Notepad and save it as a .json file.`);
+  };
+  let pending = null;   // a backup waiting for the Restore click
+  /** Check a backup's text and get it ready to restore. */
+  function stage(text, from) {
+    try {
+      const b = JSON.parse(text);
+      if (!b || b.kind !== "awym-obs-backup") throw new Error();
+      pending = b; $("bkRestore").hidden = false;
+      const n = Object.keys(b.localStorage || {}).length;
+      note("bkMsg", `${from}: backup from ${new Date(b.created).toLocaleString()} (${n} settings). Click Restore to use it.`);
+    } catch (e) { pending = null; $("bkRestore").hidden = true; note("bkMsg", "That isn't a backup from this kit.", true); }
+  }
+  $("bkPick").onclick = () => $("bkFile").click();
+  $("bkFile").onchange = () => { const f = $("bkFile").files[0]; if (!f) return; const r = new FileReader(); r.onload = () => stage(r.result, f.name); r.readAsText(f); $("bkFile").value = ""; };
+  $("bkPasteBtn").onclick = () => { $("bkPaste").hidden = false; $("bkPaste").focus(); };
+  $("bkPaste").addEventListener("input", () => { if ($("bkPaste").value.trim()) stage($("bkPaste").value.trim(), "Pasted"); });
+  $("bkRestore").onclick = (e) => confirmClick(e.currentTarget, "Click again to replace everything", async () => {
+    if (!pending) return;
+    try {
+      Object.entries(pending.localStorage || {}).forEach(([k, v]) => { if (/^awym-/.test(k) && k !== PASS) localStorage.setItem(k, v); });
+      for (const n of IDBS) if (pending.indexedDB && pending.indexedDB[n]) await loadDB(n, pending.indexedDB[n]);
+      const lt = (pending.localStorage || {})["awym-live-theme-v1"];
+      if (lt) AWYM.setLiveTheme(lt);   // overlays pick up the theme right away
+      note("bkMsg", "Restored. The docks will reload now. Restart OBS to be sure every overlay shows the restored settings.");
+      $("bkRestore").hidden = true; $("bkPaste").hidden = true; $("bkPaste").value = ""; pending = null;
+      setTimeout(() => AWYM.send({ to: "docks", cmd: "reload" }), 1200);
+      setTimeout(() => location.reload(), 1800);
+    } catch (err) { note("bkMsg", "Restore failed: " + err.message, true); }
+  });
+
+  /* =====================================================================
+     overlays saying hello, the Clear button, start-up
+     ===================================================================== */
+  AWYM.listen((m) => {
+    if (m.from === "debate") {
+      heard.debate = Date.now();
+      if (m.cmd === "hello" && SC.visible) debate("score", { data: scoreData() });
+      const settled = m.cmd !== "hello" && Date.now() - sentAt > 1500;
+      if (settled && "score" in m && !m.score && SC.visible) { SC.visible = false; save(); paintScore(false); }
+      if (settled && "receipt" in m && !m.receipt && rShown) { rShown = null; paintTakes(); }
+    } else if (m.from === "sfx") {
+      heard.sfx = Date.now();
+      if (m.cmd === "missing") {
+        const c = custom.find((x) => x.id === m.id);
+        if (c) AWYM.send({ to: "sfx", cmd: "load", id: c.id, data: c.data, play: true, volume: S.sounds.volume / 100 });
+      }
+    }
+  });
+  /* =====================================================================
+     FRAME EFFECTS (frame-fx.html over each camera frame)
+     ===================================================================== */
+  const FX_LIST = [["fire", "🔥", "Fire"], ["ice", "🧊", "Ice"], ["zap", "⚡", "Lightning"], ["smoke", "💨", "Smoke"], ["sparks", "✨", "Sparks"], ["shake", "💥", "Shake"]];
+  const FX_LEN = { short: 3, normal: null, hold: 0 };
+  S.fx = Object.assign({ target: "floor", len: "normal" }, S.fx || {});
+  const fxPlaying = {};   // seat → [effects playing]
+  const fxSeen = {};      // seat → last heard (which Frame FX sources exist)
+  function paintFx() {
+    const names = (() => { try { const c = JSON.parse(localStorage.getItem("awym-control-v1") || "{}"); return c.slots || {}; } catch (e) { return {}; } })();
+    const nameOf = (n) => ((names[n] || names[String(n)] || {}).name || "").trim();
+    const seat = (n) => nameOf(n) ? esc(nameOf(n)) : `Seat ${n}`;
+    const tip = { floor: "Whoever has the floor (★ spotlight); everyone if nobody does", "*": "Every camera frame" };
+    $("fxSeat").innerHTML = [["floor", "★ Floor"], ["*", "Everyone"], ["1", seat(1)], ["2", seat(2)], ["3", seat(3)], ["4", seat(4)]]
+      .map(([v, l]) => `<button data-t="${v}" class="${S.fx.target === v ? "on" : ""}" title="${esc(tip[v] || ("Seat " + v + (nameOf(v) ? " · " + nameOf(v) : "")))}">${l}</button>`).join("");
+    const live = new Set(S.fx.target === "*" || S.fx.target === "floor" ? Object.values(fxPlaying).flat() : (fxPlaying[S.fx.target] || []));
+    $("fxBtns").innerHTML = FX_LIST.map(([id, ic, nm]) => `<button class="fxbtn${live.has(id) ? " live" : ""}" data-fx="${id}"><span class="ic">${ic}</span>${nm}</button>`).join("");
+    document.querySelectorAll("#fxLen button").forEach((b) => b.classList.toggle("on", b.dataset.len === S.fx.len));
+  }
+  function fxPlay(effect) {
+    AWYM.send({ to: "fx", id: S.fx.target, cmd: "play", effect, dur: FX_LEN[S.fx.len] });
+    if (Date.now() - heard.fx > 3500) note("fxMsg", "No Frame FX source answered. In OBS: Tools → Scripts → awym-obs-setup.lua → Build my scenes (it adds one above each camera frame, also inside groups; the status line says what it added). If they're already in Main Show, right-click one → Refresh.", true);
+  }
+  function fxStop() { AWYM.send({ to: "fx", id: S.fx.target === "floor" ? "*" : S.fx.target, cmd: "stop" }); }
+  $("fxSeat").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.fx.target = b.dataset.t; save(); paintFx(); };
+  $("fxBtns").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) fxPlay(b.dataset.fx); };
+  $("fxLen").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.fx.len = b.dataset.len; save(); paintFx(); };
+  $("fxStop").onclick = fxStop;
+  AWYM.listen((m) => {
+    if (m.from !== "fx" || m.id == null) return;
+    heard.fx = Date.now(); fxSeen[m.id] = Date.now();
+    if (Array.isArray(m.playing)) { fxPlaying[m.id] = m.playing; paintFx(); }
+  });
+  addEventListener("storage", (e) => { if (e.key === "awym-control-v1") paintFx(); });   // names changed in the Control Panel
+
+  /* =====================================================================
+     TALK TIME (mic levels from OBS → who's talking)
+     ===================================================================== */
+  S.talk = Object.assign({ seats: {}, thr: -40, gap: 15, light: true, onlyLive: false, tracking: false, shown: false, pos: "right", auto: {} }, S.talk || {});
+  const freshTotals = () => ({ secs: {}, talk: 0, overlap: 0, quiet: 0, pairs: {}, cutins: {} });
+  S.talk.totals = Object.assign(freshTotals(), S.talk.totals || {});
+  const SEATS = [1, 2, 3, 4];
+  const TK = { lv: {}, on: {}, since: {}, lastRaw: {}, raw: {}, lastSent: {}, lastMeter: 0, inputs: [], dirty: true, last: performance.now(), lastSave: 0, lastCard: 0 };
+  const seatName = (n) => { try { const c = JSON.parse(localStorage.getItem("awym-control-v1") || "{}"); const nm = ((c.slots || {})[n] || {}).name; if (nm && nm.trim()) return nm.trim(); } catch (e) {} return "Seat " + n; };
+  const mmss = (x) => { x = Math.round(x || 0); return Math.floor(x / 60) + ":" + String(x % 60).padStart(2, "0"); };
+  const used = () => SEATS.filter((n) => S.talk.seats[n]);
+  const counting = () => S.talk.tracking && (!S.talk.onlyLive || rec.active || stream.active);
+  const lvlOf = (db) => Math.max(0, Math.min(1, (db - S.talk.thr) / 30));
+  /** Tell a camera frame its speaking light state (throttled while on). */
+  function frameTalk(n, on, force) {
+    if (!S.talk.light && on) return;
+    const t = performance.now();
+    if (!force && on && t - (TK.lastSent[n] || 0) < 120) return;
+    TK.lastSent[n] = t;
+    AWYM.send({ to: "frame", id: String(n), cmd: "talk", on: !!on, lvl: on ? lvlOf(TK.lv[n]) : 0 });
+  }
+  /** OBS sent every input's level (~20×/s): work out who's talking. */
+  function talkMeters(inputs) {
+    const t = performance.now(); TK.lastMeter = t;
+    const lv = {};
+    inputs.forEach((i) => {
+      let m = 0; (i.inputLevelsMul || []).forEach((ch) => { if (ch && ch[0] > m) m = ch[0]; });
+      lv[i.inputName] = m > 0 ? 20 * Math.log10(m) : -100;
+    });
+    const names = Object.keys(lv).sort();
+    if (names.join("|") !== TK.inputs.join("|")) { TK.inputs = names; TK.dirty = true; }
+    // remote guests: their AWYM Guest Seat source is their mic
+    SEATS.forEach((n) => { const g = "AWYM Guest Seat " + n; if (!S.talk.seats[n] && !S.talk.auto[n] && lv[g] != null) { S.talk.seats[n] = g; S.talk.auto[n] = true; TK.dirty = true; save(); } });
+    const act = used();
+    act.forEach((n) => { TK.lv[n] = lv[S.talk.seats[n]] != null ? lv[S.talk.seats[n]] : -100; });
+    const loud = Math.max(-100, ...act.map((n) => TK.lv[n]));
+    act.forEach((n) => {
+      const raw = TK.lv[n] > S.talk.thr && (S.talk.gap <= 0 || TK.lv[n] >= loud - S.talk.gap);
+      if (raw) {
+        TK.lastRaw[n] = t; TK.raw[n] = (TK.raw[n] || 0) + 1;
+        if (!TK.on[n] && TK.raw[n] >= 2) talkStart(n, t);
+        else if (TK.on[n]) frameTalk(n, true);
+      } else {
+        TK.raw[n] = 0;
+        if (TK.on[n] && t - (TK.lastRaw[n] || 0) > 380) talkStop(n);
+        else if (TK.on[n]) frameTalk(n, true);
+      }
+    });
+  }
+  function talkStart(n, t) {
+    TK.on[n] = true; TK.since[n] = t;
+    if (counting()) {   // a cut-in: starting while someone else has been going for a second or more
+      used().forEach((o) => { if (o !== n && TK.on[o] && t - TK.since[o] >= 1000) { const k = n + ">" + o; S.talk.totals.cutins[k] = (S.talk.totals.cutins[k] || 0) + 1; } });
+    }
+    frameTalk(n, true, true);
+  }
+  function talkStop(n) { TK.on[n] = false; frameTalk(n, false, true); }
+  function talkAllOff() { SEATS.forEach((n) => { if (TK.on[n]) talkStop(n); }); }
+
+  /** Every 100 ms: add up the time, refresh the dock (and the on-screen card once a second). */
+  setInterval(() => {
+    const t = performance.now(), dt = Math.min(0.25, (t - TK.last) / 1000); TK.last = t;
+    if (TK.lastMeter && t - TK.lastMeter > 1500) { talkAllOff(); TK.lastMeter = 0; SEATS.forEach((n) => TK.lv[n] = -100); }
+    const tot = S.talk.totals, act = used().filter((n) => TK.on[n]);
+    if (counting() && used().length) {
+      act.forEach((n) => { tot.secs[n] = (tot.secs[n] || 0) + dt; });
+      if (act.length) tot.talk += dt; else tot.quiet += dt;
+      if (act.length >= 2) {
+        tot.overlap += dt;
+        for (let i = 0; i < act.length; i++) for (let j = i + 1; j < act.length; j++) { const k = act[i] + "&" + act[j]; tot.pairs[k] = (tot.pairs[k] || 0) + dt; }
+      }
+      if (t - TK.lastSave > 3000) { TK.lastSave = t; save(); }
+    }
+    paintTalkLive();
+    if (S.talk.shown && t - TK.lastCard > 1000) { TK.lastCard = t; sendTalkCard(); }
+  }, 100);
+
+  function talkRows() {
+    const tot = S.talk.totals, sum = used().reduce((a, n) => a + (tot.secs[n] || 0), 0);
+    return used().map((n) => ({ n, name: seatName(n), secs: tot.secs[n] || 0, pct: sum ? 100 * (tot.secs[n] || 0) / sum : 0, live: !!TK.on[n] }));
+  }
+  function cutinsBy() {
+    const by = {};
+    Object.entries(S.talk.totals.cutins).forEach(([k, v]) => { const [a, b] = k.split(">"); by[a] = by[a] || { n: 0, on: {} }; by[a].n += v; by[a].on[b] = (by[a].on[b] || 0) + v; });
+    return by;
+  }
+  function sendTalkCard() {
+    const tot = S.talk.totals, by = cutinsBy();
+    AWYM.send({ to: "debate", cmd: "talk", data: { title: "Talk time", pos: S.talk.pos, total: tot.talk,
+      rows: talkRows().map((r) => ({ name: r.name, secs: r.secs, pct: r.pct, live: r.live })),
+      overlap: tot.overlap, overlapPct: tot.talk ? 100 * tot.overlap / tot.talk : 0,
+      cutins: Object.entries(by).map(([n, v]) => ({ name: seatName(n), n: v.n })) } });
+  }
+  /** The seat rows (rebuilt when the mic list or names change, never while you're picking). */
+  function paintTalk() {
+    if (document.activeElement && document.activeElement.closest && document.activeElement.closest("#tkSeats")) return;
+    TK.dirty = false;
+    const opts = (cur) => `<option value="">— no mic —</option>` + [...new Set(TK.inputs.concat(cur ? [cur] : []))].map((i) => `<option${i === cur ? " selected" : ""}>${esc(i)}</option>`).join("");
+    $("tkSeats").innerHTML = SEATS.map((n) => `<div class="tkseat" data-n="${n}"><div class="t1"><span class="dot"></span><span class="nm">${esc(seatName(n))}</span><span class="tm"></span><span class="pc"></span><button class="mute" data-m="${n}" title="Mute or unmute this mic in OBS">🔇</button></div>
+      <select data-n="${n}" title="This person's mic in OBS">${opts(S.talk.seats[n] || "")}</select>
+      <div class="tkmeter"><i></i><b></b></div></div>`).join("");
+    $("tkThr").value = S.talk.thr; $("tkGap").value = S.talk.gap; $("tkLight").checked = S.talk.light; $("tkLive").checked = S.talk.onlyLive;
+    $("tkPos").textContent = "Card: " + (S.talk.pos === "left" ? "left" : "right");
+    paintTalkLive();
+  }
+  /** The live bits: meters, lights, times, the stats box and the buttons. */
+  function paintTalkLive() {
+    if (TK.dirty) return paintTalk();
+    const rows = talkRows(), R = {}; rows.forEach((r) => R[r.n] = r);
+    const pos = (db) => Math.max(0, Math.min(100, (db + 60) / 60 * 100));   // -60 … 0 dB
+    document.querySelectorAll("#tkSeats .tkseat").forEach((el) => {
+      const n = Number(el.dataset.n), has = !!S.talk.seats[n];
+      el.classList.toggle("on", has && !!TK.on[n]);
+      el.querySelector(".tkmeter i").style.width = has ? pos(TK.lv[n] == null ? -100 : TK.lv[n]) + "%" : "0";
+      el.querySelector(".tkmeter b").style.left = pos(S.talk.thr) + "%";
+      el.querySelector(".tm").textContent = has ? mmss(R[n] ? R[n].secs : 0) : "";
+      el.querySelector(".pc").textContent = has && R[n] ? Math.round(R[n].pct) + "%" : "";
+      el.style.opacity = has ? "" : ".6";
+      const mb = el.querySelector(".mute"), mu = !!TK.muted[n];
+      el.classList.toggle("muted", mu); mb.classList.toggle("muted", mu); mb.textContent = mu ? "Muted" : "🔇"; mb.disabled = !micOf(n);
+    });
+    paintMuteBar();
+    $("tkThrVal").textContent = S.talk.thr + " dB"; $("tkGapVal").textContent = S.talk.gap ? S.talk.gap + " dB" : "off";
+    $("tkTrack").textContent = S.talk.tracking ? (counting() ? "❚❚ Pause" : "❚❚ Waiting…") : "● Track";
+    $("tkTrack").classList.toggle("on", S.talk.tracking);
+    $("tkTrack").title = S.talk.tracking && !counting() ? "Waiting for you to start streaming or recording" : "Count talk time (pause it any time)";
+    $("tkShow").classList.toggle("on", !!S.talk.shown);
+    const tot = S.talk.totals, by = cutinsBy(), lines = [];
+    if (tot.talk > 0) {
+      lines.push(`Talking at the same time: <b>${mmss(tot.overlap)}</b> (${Math.round(100 * tot.overlap / tot.talk)}% of the talking)`);
+      const pairs = Object.entries(tot.pairs).filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]);
+      pairs.slice(0, 4).forEach(([k, v]) => { const [a, b] = k.split("&"); lines.push(`&nbsp;· ${esc(seatName(a))} &amp; ${esc(seatName(b))}: ${mmss(v)}`); });
+      Object.entries(by).sort((a, b) => b[1].n - a[1].n).forEach(([n, v]) => {
+        const most = Object.entries(v.on).sort((a, b) => b[1] - a[1])[0];
+        lines.push(`${esc(seatName(n))} cut in <b>${v.n}×</b>${most ? ` (mostly on ${esc(seatName(most[0]))})` : ""}`);
+      });
+      lines.push(`Dead air: ${mmss(tot.quiet)}`);
+    }
+    $("tkStats").innerHTML = lines.join("<br>");
+    const msg = !obs.ready ? "Connect to OBS (Clips & replays) to read the mics." : !TK.inputs.length ? "Waiting for audio levels from OBS…" : !used().length ? "Pick each person's mic below." : "";
+    if ($("tkMsg").textContent !== msg) { $("tkMsg").textContent = msg; $("tkMsg").className = "msg"; }
+  }
+  $("tkSeats").addEventListener("click", (e) => { const b = e.target.closest("button[data-m]"); if (b) toggleMute(Number(b.dataset.m)); });
+  $("tkSeats").addEventListener("change", (e) => {
+    const sel = e.target.closest("select[data-n]"); if (!sel) return;
+    const n = sel.dataset.n; S.talk.seats[n] = sel.value; S.talk.auto[n] = true;
+    if (!sel.value) { delete S.talk.seats[n]; if (TK.on[n]) talkStop(n); }
+    save(); sel.blur(); TK.dirty = true; refreshMutes();
+  });
+
+  /* ---------- mute (each seat's mic, in OBS) ---------- */
+  TK.muted = {};
+  /** The OBS input that is seat n's mic: the one picked in Talk time, or their guest source. */
+  const micOf = (n) => S.talk.seats[n] || (TK.inputs.includes("AWYM Guest Seat " + n) ? "AWYM Guest Seat " + n : "");
+  const tellFrame = (n) => AWYM.send({ to: "frame", id: String(n), cmd: "mute", on: !!TK.muted[n] });
+  /** Ask OBS which mics are muted (after connecting or picking a mic). */
+  async function refreshMutes() {
+    if (!obs.ready) return;
+    for (const n of SEATS) {
+      const mic = micOf(n); if (!mic) { if (TK.muted[n]) { TK.muted[n] = false; tellFrame(n); } continue; }
+      try { const r = await obs.req("GetInputMute", { inputName: mic }); TK.muted[n] = !!r.inputMuted; tellFrame(n); } catch (e) {}
+    }
+    paintTalkLive();
+  }
+  /** OBS says a mic was muted or unmuted (by us, a hotkey, or someone clicking in OBS). */
+  function muteChanged(name, on) {
+    SEATS.forEach((n) => { if (micOf(n) === name && !!TK.muted[n] !== on) { TK.muted[n] = on; tellFrame(n); } });
+  }
+  async function toggleMute(n) {
+    const mic = micOf(n);
+    if (!obs.ready) { note("muteMsg", "Connect to OBS (Clips & replays) to mute mics.", true); return; }
+    if (!mic) { note("muteMsg", `Pick ${seatName(n)}'s mic in Talk time first, so mute knows which one it is.`, true); return; }
+    try { const r = await obs.req("ToggleInputMute", { inputName: mic }); muteChanged(mic, !!r.inputMuted); }
+    catch (e) { note("muteMsg", "Couldn't mute " + mic + ": " + e.message, true); }
+  }
+  async function unmuteAll() {
+    if (!obs.ready) { note("muteMsg", "Connect to OBS (Clips & replays) to unmute mics.", true); return; }
+    for (const n of SEATS) { const mic = micOf(n); if (mic) try { await obs.req("SetInputMute", { inputName: mic, inputMuted: false }); muteChanged(mic, false); } catch (e) {} }
+  }
+  /** The quick mute buttons under the dock's title (one per seat with a mic). */
+  let muteSig = "";
+  function paintMuteBar() {
+    const seats = SEATS.filter((n) => micOf(n));
+    const sig = seats.map((n) => n + seatName(n) + !!TK.muted[n]).join("|") + obs.ready;
+    if (sig === muteSig) return; muteSig = sig;
+    $("muteBar").innerHTML = seats.map((n) => `<button data-m="${n}" class="${TK.muted[n] ? "muted" : ""}" title="${TK.muted[n] ? "Muted: click to unmute" : "Click to mute"} ${esc(micOf(n))}">${TK.muted[n] ? "🔇" : "🎙️"} ${esc(seatName(n))}</button>`).join("") +
+      (seats.some((n) => TK.muted[n]) ? `<button data-unall="1" title="Unmute everyone">🔊 Unmute all</button>` : "");
+  }
+  $("muteBar").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.unall) unmuteAll(); else toggleMute(Number(b.dataset.m)); });
+  AWYM.listen((m) => { if (m.from === "frame" && m.cmd === "hello" && m.id && TK.muted[m.id]) tellFrame(Number(m.id)); });   // a frame reloaded
+  $("tkThr").addEventListener("input", () => { S.talk.thr = Number($("tkThr").value); save(); });
+  $("tkGap").addEventListener("input", () => { S.talk.gap = Number($("tkGap").value); save(); });
+  $("tkLight").onchange = () => { S.talk.light = $("tkLight").checked; save(); if (!S.talk.light) SEATS.forEach((n) => AWYM.send({ to: "frame", id: String(n), cmd: "talk", on: false })); };
+  $("tkLive").onchange = () => { S.talk.onlyLive = $("tkLive").checked; save(); };
+  $("tkTrack").onclick = () => { S.talk.tracking = !S.talk.tracking; save(); };
+  $("tkShow").onclick = () => { S.talk.shown = !S.talk.shown; save(); if (S.talk.shown) { TK.lastCard = performance.now(); sendTalkCard(); } else AWYM.send({ to: "debate", cmd: "hideTalk" }); };
+  $("tkPos").onclick = () => { S.talk.pos = S.talk.pos === "left" ? "right" : "left"; save(); TK.dirty = true; if (S.talk.shown) sendTalkCard(); };
+  $("tkReset").onclick = () => confirmClick($("tkReset"), "Sure?", () => { S.talk.totals = freshTotals(); save(); if (S.talk.shown) sendTalkCard(); });
+  $("tkCopy").onclick = async () => {
+    const tot = S.talk.totals, by = cutinsBy();
+    const out = ["Talk time"].concat(talkRows().map((r) => `${r.name}: ${mmss(r.secs)} (${Math.round(r.pct)}%)`));
+    if (tot.talk) {
+      out.push(`Talking at the same time: ${mmss(tot.overlap)} (${Math.round(100 * tot.overlap / tot.talk)}%)`);
+      Object.entries(tot.pairs).filter(([, v]) => v >= 1).sort((a, b) => b[1] - a[1]).forEach(([k, v]) => { const [a, b] = k.split("&"); out.push(`  ${seatName(a)} & ${seatName(b)}: ${mmss(v)}`); });
+      Object.entries(by).forEach(([n, v]) => out.push(`${seatName(n)} cut in ${v.n} times`));
+      out.push(`Dead air: ${mmss(tot.quiet)}`);
+    }
+    try { await navigator.clipboard.writeText(out.join("\n")); note("tkMsg", "Copied."); } catch (e) { note("tkMsg", "Couldn't copy here: select the stats and copy them.", true); }
+  };
+  addEventListener("storage", (e) => { if (e.key === "awym-control-v1") TK.dirty = true; });   // names changed in the Control Panel
+  paintTalk();
+
+  /* OBS hotkeys / stream-deck keys (relayed by hotkeys.html): do the action, then say we did */
+  const HOTKEY = {
+    next: () => { if (RD.items[RD.current + 1]) goTo(RD.current + 1); },
+    prev: () => { if (RD.current > 0) goTo(RD.current - 1); },
+    "score-a": () => { SC.a.score++; scoreChanged(); },
+    "score-b": () => { SC.b.score++; scoreChanged(); },
+    "score-show": () => $("sShow").click(),
+    winner: () => $("sWin").click(),
+    "save-clip": () => obs.ready ? $("rbSave").click() : note("obsMsg", "Hotkey: connect to OBS first (Clips & replays).", true),
+    replay: () => obs.ready ? $("rbReplay").click() : note("obsMsg", "Hotkey: connect to OBS first (Clips & replays).", true),
+    mark: () => obs.ready ? mark("") : note("obsMsg", "Hotkey: connect to OBS first (Clips & replays).", true),
+    "fx-stop": () => fxStop(),
+    "unmute-all": () => unmuteAll()
+  };
+  [1, 2, 3, 4].forEach((n) => { HOTKEY["mute-" + n] = () => toggleMute(n); });
+  FX_LIST.forEach(([id]) => { HOTKEY["fx-" + id] = () => fxPlay(id); });
+  AWYM.listen((m) => {
+    if (m.to !== "runner" || m.cmd !== "hotkey") return;
+    const a = String(m.action || "");
+    if (a.startsWith("snd-")) playSound(a.slice(4));
+    else if (HOTKEY[a]) HOTKEY[a]();
+    else return;
+    AWYM.send({ from: "runner", ack: m.nonce });
+  });
+
+  AWYM.onClear(() => {
+    SC.visible = false; S.talk.shown = false; save(); paintScore(false); rShown = null; paintTakes(); SFX.stop();
+    if (replayItem) endReplay();
+  });
+
+  paintRundown(); paintScore(false); paintTakes(); paintPads(); paintFx(); paintClips(); paintObs();
+  SDB.get("custom").then((v) => { custom = Array.isArray(v) ? v : []; paintPads(); }).catch(() => {});
+  if (SFX.ready) SFX.ready.then(paintPads);   // mark the pads that use a recording or your own file
+  // connect automatically, and keep trying every 20 s (OBS may still be starting up)
+  let manualOff = false;
+  $("obsDisconnect").addEventListener("click", () => { manualOff = true; });
+  $("obsConnect").addEventListener("click", () => { manualOff = false; });
+  if (S.obs.auto) connect(true);
+  setInterval(() => { if (S.obs.auto && !manualOff && !obs.ready && !obs.ws) connect(true); }, 20000);
+  AWYM.dock("runner");
+})();
+</script>
+<script>
+/* Collapsible sections: click a section's header to fold it away (remembered).
+   The ⊟ button in the top bar folds or unfolds everything. See AWYM.collapsible in shared.js. */
+(function () {
+  const foldAll = AWYM.collapsible("awym-runner-fold-v1");
+  const btn = document.getElementById("foldAll");
+  if (btn) btn.onclick = () => {
+    const open = document.querySelectorAll("section:not(.folded) > h2.fold").length;
+    foldAll(open > 0);
+  };
+})();
+</script>
+</body>
+</html>

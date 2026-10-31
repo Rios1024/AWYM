@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Background</title>
+<!--
+  BACKGROUND — full-screen show background with the show's title and
+  subtle animations. Put it at the BOTTOM of your scene's source list.
+  Source size: 1920 x 1080. Colors, fonts and the title come from theme.css.
+
+  Easiest way to pick a look: open background-gallery.html in your browser,
+  choose a scene and effects, and click "Copy OBS address".
+
+  URL settings:
+    ?scene=court         which background (see backgrounds.js or the gallery):
+                         Shows:    court, fighter, retro, fantasy, spire, tabletop,
+                                   boardgame, cards, music, hiphop, anime, tinfoil
+                         Style:    synthwave, vaporwave, neonrain, papercut, comic,
+                                   chalktalk, vhs
+                         Abstract: aurora, waves, shapes, lowpoly, flow, warp, halftone,
+                                   lava, ribbons, plexus, topo, bokeh, truchet, kaleido
+                         (leave it out to use the scene set in theme.css)
+    &foilbg=0            don't switch to the Tin Foil board while the Tin Foil alert is on
+    &anim=arena          extra effects on top. Mix with commas, e.g. &anim=drift,flashes
+                         (pulse, lines and bounce only work on the court scene;
+                          other scenes have their own motion built in)
+        Effects:  spotlights  moving arena spotlights
+                  sheen       a slow glint of light gliding across the floor
+                  pulse       center-court circle softly breathing, with ripples
+                  lines       light running along the court lines
+                  drift       soft glowing particles floating upward
+                  bounce      faint basketballs bouncing across the floor
+                  flashes     scattered camera flashes in the "stands"
+                  none        no animation
+        Presets:  arena (spotlights + sheen + flashes)   — the default
+                  chill (drift + pulse)
+                  hoops (bounce + lines)
+                  hype  (spotlights + flashes + pulse + lines)
+    &speed=1             0.5 = half speed … 2 = double speed
+    &intensity=medium    low, medium or high
+    &title=top           top, center, bottom, or none
+    &tagline=Hoops%20debates%20since%202026   line under the title (%20 = space)
+    &court=0             hide the court lines
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080 (fills the source; crops rather than letterboxes).
+  Uses:      theme.css, shared.js, backgrounds.js (the canvas scenes).
+  Messages:  listens  to:"background" update {data:{title, tagline, position}} | reset | ping
+             (only when it's the top-level page, not when embedded in screen.html)
+             sends    from:"background" {cmd:"hello"|"state", …}
+             plus the live theme (shared.js): colour/scene/animation changes reload this
+             page with a fade; title text/size/font changes apply in place.
+  Layers:    #scenecv (canvas scenes) · .wood + svg.court (the court scene, HTML/SVG) ·
+             .sheen · .beam (spotlights) · canvas#fx (drift/bounce/flashes) · .vignette · .title
+  Settings precedence: Theme Panel (top-level page only) → address → theme.css → default.
+  Performance: canvases are sized to the source's real pixels (K), not always 1920 × 1080.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Background styles. Design size 1920×1080 (.stage), scaled to cover the source. Classes on <body>: fx-<effect>, pos-<title position>, title-<style>, scene-canvas, nocourt. */
+  :root { --spd: 1; --amt: 1; }
+  canvas#scenecv { position: absolute; inset: 0; width: 1920px; height: 1080px; display: none; }
+  .scene-canvas canvas#scenecv { display: block; }
+  .scene-canvas .wood, .scene-canvas svg.court { display: none; }
+  /* glows scale with the Theme Panel's Glow slider (--glow-k: 0 off, 1 normal, 2 double) */
+  .title-neon .name { text-shadow: 0 0 calc(6px * var(--glow-k, 1)) var(--light), 0 0 calc(18px * var(--glow-k, 1)) var(--accent), 0 0 calc(44px * var(--glow-k, 1)) var(--primary), 0 0 calc(90px * var(--glow-k, 1)) var(--primary); }
+  .title-pixel .name { text-shadow: 6px 6px 0 var(--primary), 12px 12px 0 var(--dark); letter-spacing: 4px; }
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--dark); }
+  .stage { position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px; transform-origin: center; translate: -50% -50%; overflow: hidden;
+    background: radial-gradient(ellipse 75% 70% at 50% 55%, var(--secondary), var(--dark) 78%); }
+
+  /* hardwood planks */
+  .wood { position: absolute; inset: 0; opacity: .07;
+    background: repeating-linear-gradient(90deg, var(--light) 0 2px, transparent 2px 64px); }
+  .wood::after { content: ""; position: absolute; inset: 0;
+    background: repeating-linear-gradient(90deg, transparent 0 13px, rgba(255,255,255,.35) 13px 14px, transparent 14px 37px); opacity: .25; }
+
+  svg.court { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .court .line { fill: none; stroke: var(--light); stroke-width: 6; opacity: .09; }
+  .court .paint { fill: var(--primary); opacity: .07; }
+  .court .circle { fill: var(--primary); opacity: .1; }
+  .nocourt svg.court { display: none; }
+
+  /* ---------- effect: spotlights ---------- */
+  .beam { position: absolute; top: -200px; width: 900px; height: 1500px; filter: blur(45px); transform-origin: 50% 0; display: none;
+    opacity: calc(.16 * var(--amt)); }
+  .beam i { position: absolute; inset: 0; background: linear-gradient(180deg, var(--light), transparent 75%); clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); }
+  .beam.l { left: 80px; rotate: -22deg; animation: swayL calc(14s / var(--spd)) ease-in-out infinite alternate; }
+  .beam.r { right: 80px; rotate: 22deg; animation: swayR calc(17s / var(--spd)) ease-in-out infinite alternate; }
+  .beam.c { left: 510px; rotate: 0deg; opacity: calc(.08 * var(--amt)); animation: swayC calc(21s / var(--spd)) ease-in-out infinite alternate; }
+  @keyframes swayL { to { rotate: -6deg; } }
+  @keyframes swayR { to { rotate: 8deg; } }
+  @keyframes swayC { from { rotate: -9deg; } to { rotate: 9deg; } }
+  .fx-spotlights .beam { display: block; }
+
+  /* ---------- effect: sheen ---------- */
+  .sheen { position: absolute; top: -10%; bottom: -10%; left: 0; width: 55%; display: none; pointer-events: none;
+    background: linear-gradient(100deg, transparent 30%, var(--light) 50%, transparent 70%);
+    opacity: calc(.05 * var(--amt)); filter: blur(20px);
+    animation: sheen calc(16s / var(--spd)) ease-in-out infinite; }
+  @keyframes sheen { 0% { translate: -110% 0; } 55%, 100% { translate: 300% 0; } }
+  .fx-sheen .sheen { display: block; }
+
+  /* ---------- effect: pulse ---------- */
+  .ripple { fill: none; stroke: var(--accent); stroke-width: 4; opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .fx-pulse .court .circle { animation: breathe calc(5s / var(--spd)) ease-in-out infinite; }
+  .fx-pulse .ripple { animation: ripple calc(7.5s / var(--spd)) cubic-bezier(.2,.6,.3,1) infinite; }
+  .fx-pulse .ripple.r2 { animation-delay: calc(3.75s / var(--spd)); }
+  @keyframes breathe { 50% { opacity: calc(.1 + .1 * var(--amt)); } }
+  @keyframes ripple { 0% { scale: 1; opacity: calc(.22 * var(--amt)); } 100% { scale: 2.6; opacity: 0; } }
+  .nocourt.fx-pulse .ripple { display: none; }
+
+  /* ---------- effect: lines (light runs along the court lines) ---------- */
+  .glow { fill: none; stroke: var(--primary); stroke-width: 7; stroke-linecap: round; display: none;
+    stroke-dasharray: 70 930; opacity: calc(.45 * var(--amt) * min(1.6, var(--glow-k, 1))); filter: drop-shadow(0 0 calc(8px * var(--glow-k, 1)) var(--primary));
+    animation: run calc(9s / var(--spd)) linear infinite; }
+  .glow.alt { stroke: var(--accent); filter: drop-shadow(0 0 calc(8px * var(--glow-k, 1)) var(--accent)); animation-duration: calc(12s / var(--spd)); animation-direction: reverse; }
+  .fx-lines .glow { display: block; }
+  @keyframes run { from { stroke-dashoffset: 1000; } to { stroke-dashoffset: 0; } }
+
+  canvas#fx { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+  .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55)); }
+
+  /* ---------- title ---------- */
+  .title { position: absolute; left: 0; right: 0; text-align: center; padding: 0 80px; }
+  .pos-top .title    { top: 54px; }
+  .pos-center .title { top: 50%; translate: 0 -50%; }
+  .pos-bottom .title { bottom: 70px; }
+  .pos-none .title   { display: none; }
+  .name {
+    display: inline-block; font-family: var(--font-display); font-size: 112px; line-height: 1;
+    color: var(--light); white-space: nowrap; letter-spacing: 2px;
+    text-shadow: 5px 5px 0 var(--primary), 10px 10px 0 var(--secondary), 0 0 60px rgba(0,0,0,.5);
+  }
+  .tagline { margin-top: 22px; font-family: var(--font-body); font-weight: 700; font-size: 38px; letter-spacing: 6px; text-transform: uppercase; color: var(--accent); }
+  .tagline:empty { display: none; }
+  .title { transition: opacity .25s ease; }
+  /* Tin Foil: the conspiracy board fades in over the scene (under the title) while the alert is on */
+  .foilbg { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
+  .foilbg.on { opacity: 1; }
+  .title.swap { opacity: 0; }
+  .name:empty { display: none; }
+  .title.blank { display: none; }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <canvas id="scenecv"></canvas>
+    <div class="wood"></div>
+    <div class="sheen"></div>
+    <svg class="court" id="court" viewBox="0 0 1920 1080" aria-hidden="true">
+      <g id="lines">
+        <!-- half-court line and center circle -->
+        <line class="line" x1="960" y1="0" x2="960" y2="1080"/>
+        <circle class="circle" cx="960" cy="560" r="180"/>
+        <circle class="line" cx="960" cy="560" r="180"/>
+        <circle class="line" cx="960" cy="560" r="60"/>
+        <!-- left key + three-point arc -->
+        <rect class="paint" x="0" y="400" width="380" height="320"/>
+        <rect class="line" x="-10" y="400" width="390" height="320"/>
+        <path class="line" d="M380,400 a160,160 0 0,1 0,320"/>
+        <path class="line" d="M0,90 H150 A470,470 0 0,1 150,1030 H0"/>
+        <!-- right key + three-point arc -->
+        <rect class="paint" x="1540" y="400" width="380" height="320"/>
+        <rect class="line" x="1540" y="400" width="390" height="320"/>
+        <path class="line" d="M1540,400 a160,160 0 0,0 0,320"/>
+        <path class="line" d="M1920,90 H1770 A470,470 0 0,0 1770,1030 H1920"/>
+      </g>
+      <!-- center-court ripples (pulse effect) -->
+      <circle class="ripple" cx="960" cy="560" r="180"/>
+      <circle class="ripple r2" cx="960" cy="560" r="180"/>
+      <!-- running light along the lines (lines effect) -->
+      <g id="glows"></g>
+    </svg>
+    <div class="beam l"><i></i></div><div class="beam r"><i></i></div><div class="beam c"><i></i></div>
+    <canvas id="fx" width="1920" height="1080"></canvas>
+    <div class="vignette"></div>
+    <div class="title"><div class="name" id="name"></div><div class="tagline" id="tagline"></div></div>
+  </div>
+
+<script src="shared.js"></script>
+<script src="backgrounds.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById("stage");
+  /** Scale the 1920×1080 stage to cover the whole source. */
+  function fit() { stage.style.transform = "scale(" + Math.max(innerWidth / 1920, innerHeight / 1080) + ")"; }
+  addEventListener("resize", fit); fit();
+
+  /* ---------- settings ---------- */
+  const PRESETS = {
+    arena: ["spotlights", "sheen", "flashes"],
+    chill: ["drift", "pulse"],
+    hoops: ["bounce", "lines"],
+    hype:  ["spotlights", "flashes", "pulse", "lines"]
+  };
+  const SCENES = window.AWYM_SCENES || {};
+  /* Where each setting comes from. On the main, full-screen background the Theme
+     Panel's live choice wins; inside a stream screen, the screen's own choice wins.
+     Then the address (?scene=…), then theme.css, then the built-in default. */
+  const liveT = (() => { try { return AWYM.liveTheme ? JSON.parse(AWYM.liveTheme) : {}; } catch (e) { return {}; } })();
+  const liveWins = window.self === window.top;
+  function setting(key, urlKey, dflt) {
+    if (liveWins && liveT[key] != null && liveT[key] !== "") return String(liveT[key]);
+    if (urlKey && AWYM.params.has(urlKey) && AWYM.param(urlKey) !== "") return AWYM.param(urlKey);
+    return AWYM.themeValue(key, dflt) || dflt;
+  }
+  let sceneKey = setting("scene", "scene", "court").toLowerCase();
+  if (!SCENES[sceneKey]) sceneKey = "court";
+  const scene = SCENES[sceneKey];
+  const isCourt = sceneKey === "court";
+  if (!isCourt) document.body.classList.add("scene-canvas");
+  document.body.classList.add("title-" + (scene.title || "block"));
+
+  const EFFECTS = isCourt ? ["spotlights", "sheen", "pulse", "lines", "drift", "bounce", "flashes"] : ["spotlights", "sheen", "drift", "flashes"];
+  let wanted = setting("bg-anim", "anim", AWYM.param("motion") === "0" ? "none" : (isCourt ? "arena" : "none")).toLowerCase().split(/[,+ ]+/).filter(Boolean);
+  const fx = new Set();
+  wanted.forEach((w) => (PRESETS[w] || [w]).forEach((e) => { if (EFFECTS.includes(e)) fx.add(e); }));
+  fx.forEach((e) => document.body.classList.add("fx-" + e));
+
+  const speed = Math.max(0.25, Math.min(3, Number(setting("bg-speed", "speed", "1")) || 1));
+  const amt = { low: 0.6, medium: 1, high: 1.6 }[setting("bg-intensity", "intensity", "medium")] || 1;
+  const courtOn = setting("bg-court", "court", "1") !== "0";
+  document.documentElement.style.setProperty("--spd", speed);
+  document.documentElement.style.setProperty("--amt", amt);
+
+  const POS = ["top", "center", "bottom", "none"];
+  let pos = AWYM.param("title", "top"); if (!POS.includes(pos)) pos = "top";
+  /** Move the title: "top" | "center" | "bottom" | "none". */
+  function setPos(p) { POS.forEach((x) => document.body.classList.remove("pos-" + x)); document.body.classList.add("pos-" + p); pos = p; }
+  setPos(pos);
+  if (!courtOn) document.body.classList.add("nocourt");
+
+  /* ---------- title ---------- */
+  const name = document.getElementById("name"), tag = document.getElementById("tagline");
+  name.textContent = AWYM.showName();
+  tag.textContent = AWYM.param("tagline", "");
+  const original = { title: name.textContent, tagline: tag.textContent, position: pos };
+  /** Size the title (Theme Panel "Title size", 100% = 112px), shrink it if too wide, hide if blank. */
+  function fitTitle() {
+    document.querySelector(".title").classList.toggle("blank", !name.textContent.trim() && !tag.textContent.trim());
+    // size from the Theme Panel's "Title size" slider (100% = 112px), then shrink if it's too wide
+    const pct = Math.max(30, Math.min(250, Number(AWYM.themeValue("title-size", "100")) || 100));
+    let size = Math.round(112 * pct / 100); name.style.fontSize = size + "px";
+    while (name.scrollWidth > 1760 && size > 24) { size -= 2; name.style.fontSize = size + "px"; }
+  }
+  fitTitle();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitTitle);
+
+  /* Live title changes from the Control Panel. Only the full-screen background
+     listens, not copies inside a stream screen or a preview page. */
+  if (window.self === window.top) {
+    const report = (cmd) => AWYM.send({ from: "background", cmd, title: name.textContent, tagline: tag.textContent, position: pos, original });
+    AWYM.listen((m) => {
+      if (m.to !== "background") return;
+      if (m.cmd === "ping") { report("state"); return; }
+      if (m.cmd !== "update" && m.cmd !== "reset") return;
+      const box = document.querySelector(".title");
+      box.classList.add("swap");
+      setTimeout(() => {
+        if (m.cmd === "reset") { name.textContent = original.title; tag.textContent = original.tagline; setPos(original.position); }
+        else {
+          const d = m.data || {};
+          if ("title" in d) name.textContent = String(d.title || "").trim() || original.title;
+          if ("tagline" in d) tag.textContent = String(d.tagline || "");
+          if (d.position && POS.includes(d.position)) setPos(d.position);
+        }
+        fitTitle(); box.classList.remove("swap"); report("state");
+      }, 260);
+    });
+    report("hello");
+  }
+
+  /* ---------- Tin Foil takeover ----------
+     While the shot clock's Tin Foil alert is on (🛸 button, F key, or hotkey), the
+     "Tin Foil Hat" conspiracy board fades in behind the title, and fades out when
+     it's turned off. Only on the full-screen background (not inside stream screens).
+     Add ?foilbg=0 to the address to turn this off. */
+  if (window.self === window.top && AWYM.param("foilbg") !== "0" && sceneKey !== "tinfoil" && SCENES.tinfoil) {
+    let foilFrame = null, foilOn = false, offTimer = null;
+    AWYM.listen((m) => {
+      if (m.from !== "clock" || typeof m.foil !== "boolean" || m.foil === foilOn) return;
+      foilOn = m.foil;
+      if (foilOn) {
+        clearTimeout(offTimer);
+        if (!foilFrame) {
+          foilFrame = document.createElement("iframe");
+          foilFrame.className = "foilbg"; foilFrame.setAttribute("aria-hidden", "true");
+          foilFrame.src = "background.html?scene=tinfoil&title=none&foilbg=0";
+          foilFrame.onload = () => { if (foilOn) foilFrame.classList.add("on"); };
+          stage.insertBefore(foilFrame, document.querySelector(".title"));
+        } else foilFrame.classList.add("on");
+      } else if (foilFrame) {
+        foilFrame.classList.remove("on");
+        offTimer = setTimeout(() => { if (!foilOn && foilFrame) { foilFrame.remove(); foilFrame = null; } }, 1000);
+      }
+    });
+  }
+
+  /* Theme Panel changed the theme: a show-name/font change just updates the title;
+     anything else (colors, scene) rebuilds the animation, with a quick fade. */
+  AWYM.onTheme((t, prev) => {
+    const keys = new Set(Object.keys(t || {}).concat(Object.keys(prev || {})));
+    const soft = ["show-name", "font-display", "font-heading", "font-body", "badge-icon", "title-size", "glow"];
+    const hard = [...keys].filter((k) => !soft.includes(k) && JSON.stringify((t || {})[k]) !== JSON.stringify((prev || {})[k]));
+    if (hard.length) {
+      document.body.style.transition = "opacity .35s"; document.body.style.opacity = "0";
+      setTimeout(() => location.reload(), 380);
+      return;
+    }
+    const wasDefault = name.textContent === original.title;
+    original.title = AWYM.showName();
+    if (wasDefault) name.textContent = original.title;
+    fitTitle();
+  });
+
+  /* ---------- lines effect: copy each court line as a glowing runner ---------- */
+  if (fx.has("lines") && courtOn) {
+    const glows = document.getElementById("glows");
+    document.querySelectorAll("#lines .line").forEach((el, i) => {
+      const g = el.cloneNode();
+      g.setAttribute("class", "glow" + (i % 2 ? " alt" : ""));
+      g.setAttribute("pathLength", "1000");
+      g.style.animationDelay = (-i * 1.7 / speed) + "s";
+      glows.appendChild(g);
+    });
+  }
+
+  /* ---------- render resolution: draw only as many pixels as the source shows ---------- */
+  const W = 1920, H = 1080;
+  const K = Math.max(.15, Math.min(1, Math.max(innerWidth / W, innerHeight / H)) * Math.min(2, window.devicePixelRatio || 1));
+  /** Give a canvas just enough pixels for how big the source really is (saves CPU/GPU). */
+  function sizeCanvas(c) { c.width = Math.round(W * K); c.height = Math.round(H * K); }
+
+  /* ---------- canvas scenes (everything except the court) ---------- */
+  if (!isCourt && scene.build) {
+    const scv = document.getElementById("scenecv"); sizeCanvas(scv);
+    const sctx = scv.getContext("2d");
+    const cssS = getComputedStyle(document.documentElement);
+    const colS = (v, fb) => { const c = cssS.getPropertyValue(v).trim(); return /^#[0-9a-f]{6}$/i.test(c) ? c : fb; };
+    const rand = window.AWYM_SCENE_HELPERS.seeded(20261027);
+    let glowK = AWYM.glow();                             // Theme Panel "Glow" (live, see onTheme below)
+    AWYM.onTheme(() => { glowK = AWYM.glow(); });
+    const env = {
+      amt, speed, rnd: rand,
+      get glow() { return glowK; },
+      C: { primary: colS("--primary", "#F26B1D"), secondary: colS("--secondary", "#2A1747"), accent: colS("--accent", "#FF3D7F"),
+           dark: colS("--dark", "#120A1F"), light: colS("--light", "#FFF4E0"), digit: colS("--clock-digit", "#FFB23E") },
+      layer(fn) { const c = document.createElement("canvas"); sizeCanvas(c); const x = c.getContext("2d"); x.setTransform(K, 0, 0, K, 0, 0); fn(x); return c; }
+    };
+    const inst = scene.build(env);
+    let t0 = null, tPrev = 0;
+    const loopScene = (now) => {
+      if (t0 === null) t0 = now;
+      const t = (now - t0) / 1000 * speed, dt = Math.min(.1, t - tPrev); tPrev = t;
+      sctx.setTransform(K, 0, 0, K, 0, 0);
+      if (!scene.persistent) sctx.clearRect(0, 0, W, H);
+      sctx.imageSmoothingEnabled = true;
+      inst.draw(sctx, t, Math.max(0, dt));
+      requestAnimationFrame(loopScene);
+    };
+    requestAnimationFrame(loopScene);
+  }
+
+  /* ---------- canvas effects: drift, bounce, flashes ---------- */
+  const canvasFx = ["drift", "bounce", "flashes"].filter((e) => fx.has(e));
+  if (!canvasFx.length) return;
+  const cv = document.getElementById("fx"), ctx = cv.getContext("2d");
+  sizeCanvas(cv);
+  const css = getComputedStyle(document.documentElement);
+  const col = (v, fb) => { const c = css.getPropertyValue(v).trim(); return /^#[0-9a-f]{6}$/i.test(c) ? c : fb; };
+  const C = { primary: col("--primary", "#F26B1D"), accent: col("--accent", "#FF3D7F"), light: col("--light", "#FFF4E0") };
+  const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${Math.max(0, Math.min(1, a))})`; };
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  // drift: soft glowing particles rising
+  const motes = fx.has("drift") ? Array.from({ length: 28 }, () => newMote(true)) : [];
+  /* ---- extra canvas effects: drift (motes), bounce (balls), flashes ---- */
+  /** A new glowing particle (anywhere on screen at start, otherwise from the bottom). */
+  function newMote(anywhere) {
+    const pick = Math.random();
+    return { x: rnd(0, W), y: anywhere ? rnd(0, H) : H + 100, r: rnd(18, 85), vy: rnd(10, 28), wob: rnd(0, 6.28), ws: rnd(.2, .6),
+             c: pick < .45 ? C.primary : pick < .8 ? C.accent : C.light, a: rnd(.035, .09) };
+  }
+
+  // bounce: faint basketballs bouncing along the floor
+  const FLOOR = 1000;
+  const balls = fx.has("bounce") ? Array.from({ length: 3 }, (_, i) => newBall(i)) : [];
+  /** A new faint basketball entering from one side (i = place it on screen at start). */
+  function newBall(i) {
+    const dir = Math.random() < .5 ? 1 : -1, r = rnd(34, 58);
+    return { r, dir, x: i !== undefined ? rnd(200, 1720) : (dir > 0 ? -r * 2 : W + r * 2), vx: dir * rnd(70, 120),
+             h: rnd(260, 520), period: rnd(1.5, 2.3), t: rnd(0, 2), rot: rnd(0, 6.28) };
+  }
+  /** Draw a ball at its point in the bounce, with a shadow and a little squash on landing. */
+  function drawBall(b) {
+    const T = b.period, p = (b.t % T) / T;              // 0..1 through one bounce
+    const y = FLOOR - b.r - b.h * 4 * p * (1 - p);       // parabola
+    const squash = p < .06 || p > .94 ? .9 : 1;
+    // shadow on the floor
+    const lift = (FLOOR - b.r - y) / b.h;
+    ctx.fillStyle = rgba("#000000", .22 * amt * (1 - lift * .7));
+    ctx.beginPath(); ctx.ellipse(b.x, FLOOR + 4, b.r * (1.1 - lift * .5), b.r * .22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.translate(b.x, y); ctx.scale(1 / squash, squash); ctx.rotate(b.rot);
+    ctx.strokeStyle = rgba(C.light, .11 * amt); ctx.fillStyle = rgba(C.primary, .07 * amt); ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(0, 0, b.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-b.r, 0); ctx.lineTo(b.r, 0); ctx.moveTo(0, -b.r); ctx.lineTo(0, b.r); ctx.stroke();
+    ctx.beginPath(); ctx.arc(-b.r * 1.35, 0, b.r * .95, -0.75, 0.75); ctx.stroke();
+    ctx.beginPath(); ctx.arc(b.r * 1.35, 0, b.r * .95, Math.PI - 0.75, Math.PI + 0.75); ctx.stroke();
+    ctx.restore();
+  }
+
+  // flashes: camera flashes in the "stands" (top band and the two sides)
+  const pops = [];
+  let flashClock = 0;
+  /** A camera flash somewhere in the "stands" (top band or the sides). */
+  function spawnFlash() {
+    const zone = Math.random();
+    const x = zone < .6 ? rnd(40, W - 40) : zone < .8 ? rnd(10, 240) : rnd(W - 240, W - 10);
+    const y = zone < .6 ? rnd(10, 230) : rnd(60, H - 120);
+    pops.push({ x, y, life: 0, dur: rnd(.18, .35), size: rnd(8, 20) });
+  }
+  function drawFlash(f) {
+    const k = 1 - f.life / f.dur, a = k * k * .55 * amt;
+    const g = ctx.createRadialGradient(f.x, f.y, 0, f.x, f.y, f.size * 4);
+    g.addColorStop(0, rgba(C.light, a)); g.addColorStop(1, rgba(C.light, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(f.x, f.y, f.size * 4, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = rgba(C.light, a * .8); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(f.x - f.size * 2.5, f.y); ctx.lineTo(f.x + f.size * 2.5, f.y);
+    ctx.moveTo(f.x, f.y - f.size * 2.5); ctx.lineTo(f.x, f.y + f.size * 2.5); ctx.stroke();
+  }
+
+  let last = performance.now();
+  /** Animation frame for the extra effects. */
+  function frame(now) {
+    const dt = Math.min(.1, (now - last) / 1000) * speed; last = now;
+    ctx.setTransform(K, 0, 0, K, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    for (const m of motes) {
+      m.y -= m.vy * dt; m.wob += m.ws * dt;
+      const x = m.x + Math.sin(m.wob) * 30;
+      if (m.y < -m.r * 2) Object.assign(m, newMote(false));
+      const g = ctx.createRadialGradient(x, m.y, 0, x, m.y, m.r);
+      g.addColorStop(0, rgba(m.c, m.a * amt)); g.addColorStop(.6, rgba(m.c, m.a * amt * .5)); g.addColorStop(1, rgba(m.c, 0));
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, m.y, m.r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    balls.forEach((b, i) => {
+      b.t += dt; b.x += b.vx * dt; b.rot += (b.vx / b.r) * dt;
+      if (b.x < -b.r * 3 || b.x > W + b.r * 3) balls[i] = newBall();
+      drawBall(balls[i]);
+    });
+
+    if (fx.has("flashes")) {
+      flashClock += dt;
+      const rate = 1.4 * amt;                            // flashes per second
+      while (flashClock > 1 / rate) { flashClock -= rnd(.3, 1.7) / rate; spawnFlash(); if (Math.random() < .25) spawnFlash(); }
+      for (let i = pops.length - 1; i >= 0; i--) {
+        pops[i].life += dt;
+        if (pops[i].life > pops[i].dur) pops.splice(i, 1); else drawFlash(pops[i]);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

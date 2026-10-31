@@ -1,0 +1,113 @@
+/* ==========================================================================
+   ARGUE WITH YO MOMMA!  —  THEME FILE
+   --------------------------------------------------------------------------
+   This is the ONLY file you need to edit to change fonts, colors or the
+   show name. Every overlay reads from it.
+
+   Easiest: open theme-editor.html in your browser, pick fonts and colors
+   with live previews, click "Download theme.css", and replace this file.
+   Then in OBS right-click each browser source → Refresh.
+
+   Editing by hand:
+     - Fonts: any font from fonts.google.com. Change the family name in BOTH
+       the @import line and the matching --font-… line (spaces become + in
+       the @import line only).
+     - Colors: change the hex codes (e.g. #F26B1D).
+
+   Live changes: the Theme Panel dock in OBS changes these same values on
+   top of this file while OBS runs (and remembers them). Its "Back to
+   theme.css" button returns to exactly what's written here.
+
+   How it's used: every page links this file. Pages read the values as CSS
+   variables (var(--primary), var(--font-heading), …); scripts read them with
+   AWYM.themeValue() / AWYM.showName() in shared.js.
+   ========================================================================== */
+
+/* --- Fonts (loaded from Google Fonts) --- */
+@import url("https://fonts.googleapis.com/css2?family=Bungee&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Anton&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&display=swap");
+
+:root {
+  --font-display: "Bungee", Impact, sans-serif;                      /* show title, tags, "VS" */
+  --font-heading: "Anton", Impact, sans-serif;                       /* names, scores, numbers, card titles */
+  --font-body:    "Barlow Condensed", "Arial Narrow", Arial, sans-serif;  /* roles, labels, small text */
+}
+
+/* --- Show name and colors --- */
+:root {
+  /* Show name (keep the quotes) — shown on the background */
+  --show-name: "Argue with Yo Momma!";
+
+  /* Default background scene and lower-third badge (keep the quotes) */
+  --scene: "court";        /* court, fighter, retro, fantasy, spire, tabletop, boardgame, cards,
+                              music, hiphop, anime, synthwave, aurora, waves, shapes, lowpoly,
+                              flow, warp, halftone */
+  --badge-icon: "ball";    /* ball, star, controller, note, dice, card, d20, sword, mic, bolt,
+                              crystal, vinyl, none */
+
+  /* Main colors */
+  --primary:     #F26B1D;  /* basketball orange: jersey numbers, borders, highlights */
+  --secondary:   #2A1747;  /* deep purple: panel backgrounds */
+  --accent:      #FF3D7F;  /* hot pink: role text, tags, small pops of color */
+
+  /* Neutrals */
+  --dark:        #120A1F;  /* darkest background (clock housing) */
+  --light:       #FFF4E0;  /* main text color */
+
+  /* Shot clock */
+  --clock-digit: #FFB23E;  /* lit clock digits */
+  --warning:     #FF2E3B;  /* digits + glow in the final 10 seconds */
+}
+
+/* ==========================================================================
+   OPTIONAL SETTINGS — add any of these inside the "Show name and colors"
+   :root { … } block above if you want them saved in this file (the Theme
+   Panel's "Copy as theme.css" writes them for you). Leave them out to use
+   the defaults.
+
+     --title-size: "120";        background title size in percent (100 = normal)
+     --glow: "50";               glow strength in percent: 0 = none, 100 = normal,
+                                 200 = double (clock digits, neon titles, spotlight…)
+     --bg-anim: "chill";         extra background effects: arena, chill, hoops,
+                                 hype, none, or names joined by commas, e.g.
+                                 "drift,flashes" (spotlights, sheen, drift,
+                                 flashes; court only: pulse, lines, bounce)
+     --bg-speed: "0.5";          animation speed, 0.25 to 2
+     --bg-intensity: "low";      low, medium or high
+     --bg-court: "0";            court lines: "1" on, "0" off
+   ========================================================================== */
+
+/* ==========================================================================
+   COLOR PRESETS — copy one of these over the "Show name and colors" block
+   above to switch (fonts stay as they are).
+   ==========================================================================
+
+   CLASSIC COURT (orange + navy)
+   :root {
+     --show-name: "Argue with Yo Momma!";
+     --primary: #F47A20; --secondary: #0F2240; --accent: #FFFFFF;
+     --dark: #07111F; --light: #F5F7FA; --clock-digit: #FF9B2F; --warning: #FF3030;
+   }
+
+   NIGHT GAME (purple + gold)
+   :root {
+     --show-name: "Argue with Yo Momma!";
+     --primary: #FDB927; --secondary: #3A1A6B; --accent: #B794F4;
+     --dark: #140829; --light: #FFFFFF; --clock-digit: #FDB927; --warning: #FF4D4D;
+   }
+
+   STREETBALL (lime + black)
+   :root {
+     --show-name: "Argue with Yo Momma!";
+     --primary: #C6FF2E; --secondary: #1C1C1C; --accent: #2EE6FF;
+     --dark: #0A0A0A; --light: #F2F2F2; --clock-digit: #C6FF2E; --warning: #FF3B3B;
+   }
+
+   MOMMA'S KITCHEN (red + cream)
+   :root {
+     --show-name: "Argue with Yo Momma!";
+     --primary: #E63946; --secondary: #1D3557; --accent: #F4D35E;
+     --dark: #0E1A2B; --light: #FFF8E7; --clock-digit: #F4D35E; --warning: #FF2E3B;
+   }
+   ========================================================================== */

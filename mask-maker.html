@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Mask Maker</title>
+<!--
+  MASK MAKER — open in your normal web browser.
+  Makes a PNG mask for OBS's "Image Mask/Blend" filter, so a camera shows
+  as a circle (or rounded square / hexagon). Ready-made masks are in the
+  masks folder; use this when you need a different size or position.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      tool page, opened in a normal web browser.
+  Makes a PNG mask (white shape on transparent) for OBS's Image Mask/Blend filter,
+  set to "Alpha Mask (Alpha Channel)". The preview draws the camera (or a stand-in)
+  clipped by the same mask.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Mask Maker styles: neutral UI colors (--ui-*); the checkerboard shows what the mask cuts away. */
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 17px; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 24px 16px 48px; display: grid; grid-template-columns: 340px 1fr; gap: 24px; }
+  @media (max-width: 900px) { .wrap { grid-template-columns: 1fr; } }
+  h1 { grid-column: 1 / -1; margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 28px; color: var(--primary); }
+  h1 small { display: block; font-family: var(--font-body); font-size: 17px; color: var(--ui-dim); margin-top: 4px; }
+  h2 { margin: 0 0 12px; font-family: var(--font-heading); font-weight: 400; font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ui-dim); }
+  .card { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 14px; padding: 16px; margin-bottom: 18px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .seg.four { grid-template-columns: repeat(4, 1fr); }
+  .seg button { font: inherit; font-weight: 700; font-size: 15px; padding: 9px 4px; border-radius: 8px; border: 1px solid var(--ui-line); background: var(--ui-bg); color: var(--ui-text); cursor: pointer; }
+  .seg button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .row { margin-top: 12px; }
+  .row label { display: flex; justify-content: space-between; font-size: 15px; color: var(--ui-dim); text-transform: uppercase; letter-spacing: 1px; }
+  .row label b { color: var(--ui-text); font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--primary); }
+  .custom { display: none; gap: 8px; margin-top: 8px; align-items: center; }
+  .custom.show { display: flex; }
+  .custom input { width: 90px; font: inherit; color: var(--ui-text); background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 7px; padding: 6px 8px; }
+  .preview { position: sticky; top: 16px; align-self: start; }
+  .canvasbox { background: repeating-conic-gradient(#2a2433 0 25%, #221d2a 0 50%) 0 0 / 24px 24px; border-radius: 14px; border: 1px solid var(--ui-line); padding: 14px; display: flex; justify-content: center; }
+  canvas#view { max-width: 100%; max-height: 62vh; border-radius: 6px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+  button.big { font: inherit; font-weight: 700; font-size: 17px; text-transform: uppercase; padding: 11px 18px; border-radius: 10px; border: 0; cursor: pointer; }
+  .go { background: var(--primary); color: var(--dark); }
+  .ghost { background: transparent; color: var(--ui-text); border: 1px solid var(--ui-line) !important; }
+  .note { color: var(--ui-dim); font-size: 15px; }
+  ol { margin: 6px 0 0; padding-left: 20px; color: var(--ui-dim); line-height: 1.5; }
+  ol b { color: var(--ui-text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Mask Maker<small>Make a PNG mask so a camera shows as a circle cutout in OBS</small></h1>
+
+  <div>
+    <div class="card">
+      <h2>Shape</h2>
+      <div class="seg" id="shape">
+        <button data-v="circle" class="on">Circle</button>
+        <button data-v="rounded">Rounded</button>
+        <button data-v="hexagon">Hexagon</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Camera shape</h2>
+      <div class="seg four" id="aspect">
+        <button data-v="1920x1080" class="on">16:9</button>
+        <button data-v="1440x1080">4:3</button>
+        <button data-v="1080x1080">1:1</button>
+        <button data-v="custom">Custom</button>
+      </div>
+      <div class="custom" id="customBox">
+        <input type="number" id="cw" value="1280" min="64" max="7680"> ×
+        <input type="number" id="ch" value="720" min="64" max="4320"> <span class="note">pixels</span>
+      </div>
+      <p class="note">Pick the same shape as the camera or video feed you're masking (most webcams are 16:9).</p>
+    </div>
+
+    <div class="card">
+      <h2>Size &amp; position</h2>
+      <div class="row"><label>Size <b id="vSize"></b></label><input type="range" id="size" min="20" max="100" value="96"></div>
+      <div class="row"><label>Left / right <b id="vX"></b></label><input type="range" id="x" min="-50" max="50" value="0"></div>
+      <div class="row"><label>Up / down <b id="vY"></b></label><input type="range" id="y" min="-50" max="50" value="0"></div>
+      <div class="row"><label>Soft edge <b id="vSoft"></b></label><input type="range" id="soft" min="0" max="20" value="1"></div>
+    </div>
+  </div>
+
+  <div class="preview">
+    <div class="canvasbox"><canvas id="view"></canvas></div>
+    <div class="actions">
+      <button class="big go" id="download">Download mask PNG</button>
+      <button class="big ghost" id="cam">Preview with my webcam</button>
+      <span class="note" id="info"></span>
+    </div>
+    <div class="card" style="margin-top:18px">
+      <h2>Using the mask in OBS</h2>
+      <ol>
+        <li>Right-click your camera source → <b>Filters</b> → under Effect Filters click <b>+</b> → <b>Image Mask/Blend</b>.</li>
+        <li>Type: <b>Alpha Mask (Alpha Channel)</b>. Path: choose the PNG you downloaded.</li>
+        <li>Optional: add a <b>Crop/Pad</b> filter to trim the empty sides, then drag <b>frame.html</b> on top for the themed ring.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const state = { shape: "circle", w: 1920, h: 1080 };
+  const view = $("view"), vctx = view.getContext("2d");
+  let video = null;
+
+  /** Wire up a row of toggle buttons; fn(value) runs on click, then the preview redraws. */
+  function seg(id, fn) {
+    $(id).addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      $(id).querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+      fn(b.dataset.v); draw();
+    });
+  }
+  seg("shape", (v) => state.shape = v);
+  seg("aspect", (v) => {
+    $("customBox").classList.toggle("show", v === "custom");
+    if (v === "custom") { state.w = +$("cw").value || 1280; state.h = +$("ch").value || 720; }
+    else { const [w, h] = v.split("x").map(Number); state.w = w; state.h = h; }
+  });
+  ["cw", "ch"].forEach((id) => $(id).addEventListener("input", () => {
+    state.w = Math.max(64, Math.min(7680, +$("cw").value || 1280));
+    state.h = Math.max(64, Math.min(4320, +$("ch").value || 720)); draw();
+  }));
+  ["size", "x", "y", "soft"].forEach((id) => $(id).addEventListener("input", draw));
+
+  /* draws the white mask shape on a transparent canvas */
+  /** Draw the white mask shape (size, offset, soft edge from the sliders) on a w×h canvas. */
+  function drawMask(ctx, w, h) {
+    const size = Math.min(w, h) * (+$("size").value / 100);
+    const r = size / 2;
+    const cx = w / 2 + (+$("x").value / 100) * w;
+    const cy = h / 2 + (+$("y").value / 100) * h;
+    const soft = (+$("soft").value / 1000) * Math.min(w, h) * 4;
+    ctx.clearRect(0, 0, w, h);
+    ctx.save();
+    ctx.fillStyle = "#fff";
+    if (soft > 0) ctx.filter = "blur(" + soft.toFixed(1) + "px)";
+    ctx.beginPath();
+    if (state.shape === "circle") ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    else if (state.shape === "hexagon") {
+      for (let i = 0; i < 6; i++) { const a = (60 * i - 90) * Math.PI / 180; ctx[i ? "lineTo" : "moveTo"](cx + r * Math.cos(a), cy + r * Math.sin(a)); }
+      ctx.closePath();
+    } else {
+      const k = size * 0.18;
+      if (ctx.roundRect) ctx.roundRect(cx - r, cy - r, size, size, k);
+      else { ctx.moveTo(cx - r + k, cy - r); ctx.arcTo(cx + r, cy - r, cx + r, cy + r, k); ctx.arcTo(cx + r, cy + r, cx - r, cy + r, k); ctx.arcTo(cx - r, cy + r, cx - r, cy - r, k); ctx.arcTo(cx - r, cy - r, cx + r, cy - r, k); ctx.closePath(); }
+    }
+    ctx.fill();
+    ctx.restore();
+    return { cx, cy, size };
+  }
+
+  const maskCanvas = document.createElement("canvas");
+  /** Redraw the preview (keeps running every frame while the webcam is on). */
+  function draw() {
+    $("vSize").textContent = $("size").value + "%";
+    $("vX").textContent = $("x").value; $("vY").textContent = $("y").value;
+    $("vSoft").textContent = $("soft").value;
+
+    // preview at a manageable size, same shape as the camera
+    const scale = Math.min(1, 960 / state.w);
+    const pw = Math.round(state.w * scale), ph = Math.round(state.h * scale);
+    view.width = pw; view.height = ph;
+    maskCanvas.width = pw; maskCanvas.height = ph;
+    const m = maskCanvas.getContext("2d");
+    drawMask(m, pw, ph);
+
+    // camera picture (webcam or a stand-in)
+    if (video && video.readyState >= 2) {
+      vctx.drawImage(video, 0, 0, pw, ph);
+    } else {
+      const g = vctx.createLinearGradient(0, 0, pw, ph);
+      g.addColorStop(0, "#5b6a7d"); g.addColorStop(1, "#1a1f27");
+      vctx.fillStyle = g; vctx.fillRect(0, 0, pw, ph);
+      vctx.fillStyle = "rgba(0,0,0,.35)";
+      vctx.beginPath(); vctx.arc(pw / 2, ph * .4, ph * .17, 0, Math.PI * 2); vctx.fill();
+      vctx.beginPath(); vctx.ellipse(pw / 2, ph * .98, ph * .36, ph * .38, 0, Math.PI, 0); vctx.fill();
+    }
+    // keep only the masked part; the checkerboard shows what gets cut away
+    vctx.save();
+    vctx.globalCompositeOperation = "destination-in";
+    vctx.drawImage(maskCanvas, 0, 0);
+    vctx.restore();
+    $("info").textContent = state.w + " × " + state.h + " PNG";
+    if (video) requestAnimationFrame(draw);
+  }
+
+  $("download").onclick = () => {
+    const c = document.createElement("canvas");
+    c.width = state.w; c.height = state.h;
+    drawMask(c.getContext("2d"), state.w, state.h);
+    const a = document.createElement("a");
+    a.download = `mask-${state.shape}-${state.w}x${state.h}.png`;
+    a.href = c.toDataURL("image/png");
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  $("cam").onclick = async () => {
+    if (video) { video.srcObject.getTracks().forEach((t) => t.stop()); video = null; $("cam").textContent = "Preview with my webcam"; draw(); return; }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video = document.createElement("video"); video.muted = true; video.playsInline = true;
+      video.srcObject = stream; await video.play();
+      $("cam").textContent = "Stop webcam";
+      draw();
+    } catch (e) { $("info").textContent = "Webcam not available here — the mask still works."; }
+  };
+
+  draw();
+})();
+</script>
+</body>
+</html>

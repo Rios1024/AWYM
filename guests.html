@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Remote Guests</title>
+<!--
+  REMOTE GUESTS — bring people in over the internet with VDO.Ninja (free, runs
+  in the browser, nothing for guests to install).
+  Open it in your normal browser to set up (or add it as an OBS dock, which also
+  lets "Send names to the Control Panel" fill in the lower thirds).
+    1. Pick which seats (People slots 1–4) are remote guests and type their names.
+    2. Send each guest their invite link.
+    3. Put each guest's OBS address into a Browser source behind their camera
+       frame, or let the setup script do it (type the room name, password and
+       seats from the "Setup script" box into Tools → Scripts).
+    4. Join the room yourself with "Your link" so the guests can hear you.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      tool page (normal browser) or OBS Custom Browser Dock.
+  Uses:      theme.css, shared.js (messaging, theme).
+  Links:     VDO.Ninja (https://vdo.ninja). One room + optional password. Every seat has a
+             fixed stream ID, <room>seat<N>, so links stay the same show after show:
+               guest invite  https://vdo.ninja/?room=R&push=RseatN&label=Name[&password=P]
+               OBS address   https://vdo.ninja/?room=R&view=RseatN&solo[&password=P]
+               your link     https://vdo.ninja/?room=R&push=Rhost&label=Host[&password=P][&novideo]
+               director      https://vdo.ninja/?director=R[&password=P]
+             The setup script (awym-obs-setup.lua) builds the same OBS addresses from the
+             room name, password and seat list, so keep the two in step.
+  Sends:     to:"control" person {id, data:{name, role}, nonce} → Control Panel fills that
+             People slot (answers from:"control" {ack}).
+  Saved:     localStorage "awym-guests-v1" (included in Show Runner backups).
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; --ok: #3DDC84; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.45; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { margin: 0; font-family: var(--font-display, Impact, sans-serif); font-weight: 400; font-size: 28px; color: var(--primary); }
+  .lede { color: var(--ui-dim); margin: 6px 0 18px; }
+  .card { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 16px; padding: 16px 18px; margin: 14px 0; }
+  h2 { margin: 0 0 8px; font-size: 19px; }
+  h2 small { font-size: 14px; font-weight: 500; color: var(--ui-dim); margin-left: 6px; }
+  label { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ui-dim); margin: 10px 0 4px; }
+  input[type=text], select { width: 100%; font: inherit; color: var(--ui-text); background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 8px; padding: 7px 9px; }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin-top: 10px; font-size: 15px; text-transform: none; letter-spacing: 0; color: var(--ui-text); }
+  .check input { width: 18px; height: 18px; accent-color: var(--primary); margin-top: 2px; flex: none; }
+  button, .btn { font: inherit; font-size: 14px; font-weight: 700; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--ui-line); background: var(--ui-bg); color: var(--ui-text); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  button.primary { background: var(--primary); color: var(--dark); border-color: transparent; }
+  button.did { background: var(--ok); color: #0b0b0b; border-color: transparent; }
+  .addr { background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 12px; margin: 10px 0 0; }
+  .addr .top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+  .addr .top b { font-size: 15px; }
+  .chip { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--ui-panel); border: 1px solid var(--ui-line); color: var(--ui-dim); white-space: nowrap; }
+  .chip.kind { color: var(--dark); background: var(--accent); border-color: transparent; }
+  .line { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; margin-top: 6px; }
+  .line input { min-width: 0; }
+  .row { grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); }
+  .seat .head select { min-width: 0 !important; }
+  .seat, .row > div, .card { min-width: 0; }
+  .line input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; }
+  .note { font-size: 13px; color: var(--ui-dim); margin-top: 6px; }
+  .seats { display: grid; gap: 12px; }
+  .seat { border: 1px solid var(--ui-line); border-radius: 14px; padding: 12px; background: rgba(0,0,0,.15); }
+  .seat.remote { border-color: var(--primary); }
+  .seat .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .seat .badge { width: 34px; height: 34px; border-radius: 9px; background: var(--primary); color: var(--dark); display: flex; align-items: center; justify-content: center; font-family: var(--font-heading, Impact, sans-serif); font-size: 20px; flex: none; }
+  .seat .head select { width: auto; flex: 1; min-width: 160px; }
+  .seat .links { display: none; }
+  .seat.remote .links { display: block; }
+  .msg { font-size: 14px; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.25); margin-top: 8px; }
+  .msg:empty { display: none; }
+  .msg.err { background: rgba(255, 60, 60, .18); }
+  ul.tips { margin: 6px 0 0; padding-left: 20px; } ul.tips li { margin: 3px 0; }
+  kbd { font: 12px ui-monospace, monospace; background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 5px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Remote guests</h1>
+  <p class="lede">Bring people in over the internet with <b>VDO.Ninja</b> (free, works in Chrome or Edge, nothing to install). Each remote guest becomes their own source in OBS, so they get a camera frame, a lower third and the ★ spotlight like anyone in the room.</p>
+
+  <div class="card">
+    <h2>1. Your room</h2>
+    <div class="row">
+      <div><label for="room">Room name</label><div class="line" style="grid-template-columns:minmax(0,1fr) auto"><input type="text" id="room"><button id="newRoom" title="Make a new random room name">New</button></div></div>
+      <div><label for="pass">Room password</label><div class="line" style="grid-template-columns:minmax(0,1fr) auto"><input type="text" id="pass"><button id="newPass" title="Make a new random password">New</button></div></div>
+    </div>
+    <p class="note">Keep these the same every week and the links never change. The password keeps strangers out: anyone with it could watch, so only share invite links, never this page.</p>
+  </div>
+
+  <div class="card">
+    <h2>2. Who sits in each seat <small>seats = People slots 1–4 in the Control Panel</small></h2>
+    <div class="seats" id="seats"></div>
+    <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
+      <button class="primary" id="sendNames">Send names to the Control Panel</button>
+      <span class="note" style="margin:0">Works when this page is open as a dock in OBS. Otherwise, type the names in the Control Panel's People section.</span>
+    </div>
+    <div class="msg" id="namesMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. Your link <small>join the room so your guests can hear and see you</small></h2>
+    <label class="check"><input type="checkbox" id="novideo" checked> Don't download the guests' video in this tab (you'll watch them in OBS instead; saves your internet)</label>
+    <div id="hostLinks"></div>
+    <ul class="tips">
+      <li>Open <b>Your link</b> in Chrome or Edge on the computer running OBS, pick your mic (and camera if you want guests to see you), and leave the tab open during the show.</li>
+      <li><b>Wear headphones.</b> In OBS, turn off <b>Desktop Audio</b> (Settings → Audio → Desktop Audio: Disabled) so the guests aren't recorded twice: their sound already comes from their own sources.</li>
+      <li>The director link (optional) lets you mute guests, check their connection and change settings from one page.</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>4. Let the setup script add the guests <small>optional</small></h2>
+    <p class="note" style="margin-top:0">In OBS: Tools → Scripts → awym-obs-setup.lua, fill in these three boxes, then click <b>Build my scenes</b>. It puts each remote guest behind their camera frame in Main Show, already cropped and cut out to match. (If Main Show already exists, tick "add the overlays it's missing".)</p>
+    <div id="scriptBox"></div>
+  </div>
+
+  <div class="card">
+    <h2>Before the first show</h2>
+    <ul class="tips">
+      <li>Do a 5-minute test call with each guest: Chrome or Edge on a computer, <b>headphones</b>, a light in front of them (not behind), and a wired connection if they can.</li>
+      <li>Phones work too: they open the invite link in the phone's browser and allow camera and mic.</li>
+      <li>In OBS, each guest source has <b>Control audio via OBS</b> ticked, so every guest gets their own slider in the Audio Mixer.</li>
+      <li>If a guest's picture freezes, right-click their source → <b>Refresh</b>. If their sound echoes, someone isn't on headphones.</li>
+    </ul>
+  </div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const STORE = "awym-guests-v1";
+  const rand = (n, set) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => set[b % set.length]).join("");
+  const LOWER = "abcdefghjkmnpqrstuvwxyz23456789";
+  let S = {};
+  try { S = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) {}
+  S.room = S.room || "awym" + rand(6, LOWER);
+  S.pass = S.pass ?? rand(10, LOWER);
+  S.novideo = S.novideo !== false;
+  S.seats = S.seats || { 1: { who: "local", name: "", role: "Moderator" }, 2: { who: "remote", name: "", role: "Guest" }, 3: { who: "empty", name: "", role: "" }, 4: { who: "empty", name: "", role: "" } };
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
+
+  /* ---------- the links (same rules as the setup script) ---------- */
+  const clean = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 30);
+  const room = () => clean(S.room) || "awymshow";
+  const pw = () => (S.pass ? "&password=" + encodeURIComponent(S.pass) : "");
+  const sid = (n) => room() + "seat" + n;
+  const invite = (n) => `https://vdo.ninja/?room=${room()}&push=${sid(n)}&label=${encodeURIComponent(S.seats[n].name || "Guest " + n)}${pw()}`;
+  const view = (n) => `https://vdo.ninja/?room=${room()}&view=${sid(n)}&solo${pw()}`;
+  const host = () => `https://vdo.ninja/?room=${room()}&push=${room()}host&label=Host${pw()}${S.novideo ? "&novideo" : ""}`;
+  const director = () => `https://vdo.ninja/?director=${room()}${pw()}`;
+  const remoteSeats = () => [1, 2, 3, 4].filter((n) => S.seats[n].who === "remote");
+
+  /** One copyable address box. */
+  function addr(title, kind, value, notes, chips, key) {
+    return `<div class="addr" ${key ? `data-key="${key}"` : ""}><div class="top"><b>${esc(title)}</b><span class="chip kind">${esc(kind)}</span>${(chips || []).map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+      <div class="line"><input type="text" readonly value="${esc(value)}"><button class="copy" data-v="${esc(value)}">Copy</button>${/^https?:/.test(value) ? `<a class="btn" href="${esc(value)}" target="_blank" rel="noopener" title="Open it to test">Open</a>` : "<span></span>"}</div>
+      ${notes ? `<div class="note">${notes}</div>` : ""}</div>`;
+  }
+  /** The friendly message to send a guest with their link. */
+  const inviteText = (n) => { const show = AWYM.showName() || "the show"; return `You're on ${show}${/[!?.]$/.test(show) ? "" : "!"} Here's your link to join:\n${invite(n)}\n\nOpen it in Chrome or Edge (a computer is best), allow your camera and microphone, and please wear headphones. Leave the tab open while we're live.`; };
+
+  /** Draw the seats, links and setup-script values. */
+  function paint() {
+    $("room").value = S.room; $("pass").value = S.pass; $("novideo").checked = S.novideo;
+    $("seats").innerHTML = [1, 2, 3, 4].map((n) => {
+      const s = S.seats[n];
+      return `<div class="seat ${s.who === "remote" ? "remote" : ""}" data-n="${n}">
+        <div class="head"><span class="badge">${n}</span>
+          <select data-k="who"><option value="local" ${s.who === "local" ? "selected" : ""}>In the studio (local camera)</option><option value="remote" ${s.who === "remote" ? "selected" : ""}>Remote guest (VDO.Ninja)</option><option value="empty" ${s.who === "empty" ? "selected" : ""}>Nobody</option></select></div>
+        <div class="row"><div><label>Name</label><input type="text" data-k="name" value="${esc(s.name)}" placeholder="Name"></div>
+          <div><label>Role</label><input type="text" data-k="role" value="${esc(s.role)}" placeholder="e.g. Guest"></div></div>
+        <div class="links">
+          ${addr("Invite link for " + (s.name || "guest " + n), "Send to the guest", invite(n), `<button class="copy invmsg" data-v="${esc(inviteText(n))}">Copy invite message</button> a ready-to-send text with the link and what to do.`, null, "invite")}
+          ${addr("OBS address for seat " + n, "Browser source", view(n), "In Main Show: Sources → + → Browser → paste as the URL → Width <b>1280</b>, Height <b>720</b> → tick <b>Control audio via OBS</b>. Then put it behind camera frame " + n + " with the same crop and mask as a camera (START-HERE step 5).", ["Width 1280", "Height 720", "☑ Control audio via OBS"])}
+        </div></div>`;
+    }).join("");
+    $("hostLinks").innerHTML = addr("Your link", "Open in your browser", host(), "Your stream ID is <b>" + esc(room()) + "host</b>.") + addr("Director link (optional)", "Open in your browser", director());
+    const seats = remoteSeats().join(",");
+    $("scriptBox").innerHTML = addr("Guest room name", "Setup script box", room()) + addr("Room password", "Setup script box", S.pass || "(none)") +
+      addr("Remote guest seats", "Setup script box", seats || "(none yet: pick Remote guest above)", "Also set <b>People on the show</b> to at least " + (Math.max(0, ...remoteSeats()) || 1) + " so those seats have frames.");
+  }
+  document.addEventListener("click", async (e) => {
+    const b = e.target.closest("button.copy"); if (!b) return;
+    const v = b.dataset.v;
+    try { await navigator.clipboard.writeText(v); } catch (err) { const t = document.createElement("textarea"); t.value = v; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); } catch (e2) {} t.remove(); }
+    const was = b.textContent; b.textContent = "Copied!"; b.classList.add("did"); setTimeout(() => { b.textContent = was; b.classList.remove("did"); }, 1400);
+  });
+  $("seats").addEventListener("change", (e) => { const el = e.target.closest("select[data-k]"); if (!el) return; S.seats[el.closest(".seat").dataset.n][el.dataset.k] = el.value; save(); paint(); });
+  /* typing a name only updates that seat's invite link (no redraw, so the cursor stays put) */
+  $("seats").addEventListener("input", (e) => {
+    const el = e.target.closest("input[data-k]"); if (!el) return;
+    const n = el.closest(".seat").dataset.n; S.seats[n][el.dataset.k] = el.value; save();
+    const box = document.querySelector(`.seat[data-n="${n}"] .addr[data-key="invite"]`); if (!box) return;
+    box.querySelector(".top b").textContent = "Invite link for " + (S.seats[n].name || "guest " + n);
+    box.querySelector("input").value = invite(n); box.querySelector(".line button.copy").dataset.v = invite(n);
+    box.querySelector(".line a").href = invite(n); box.querySelector(".invmsg").dataset.v = inviteText(n);
+  });
+  $("room").addEventListener("change", () => { S.room = clean($("room").value) || S.room; save(); paint(); });
+  $("pass").addEventListener("change", () => { S.pass = $("pass").value.trim(); save(); paint(); });
+  $("newRoom").onclick = () => { S.room = "awym" + rand(6, LOWER); save(); paint(); };
+  $("newPass").onclick = () => { S.pass = rand(10, LOWER); save(); paint(); };
+  $("novideo").onchange = () => { S.novideo = $("novideo").checked; save(); paint(); };
+
+  /* ---------- names → Control Panel (when open as an OBS dock) ---------- */
+  $("sendNames").onclick = () => {
+    const acks = new Set(), sent = [];
+    const nonces = {};
+    [1, 2, 3, 4].forEach((n) => {
+      const s = S.seats[n]; if (s.who === "empty" || !s.name.trim()) return;
+      nonces[n] = Math.random().toString(36).slice(2); sent.push(n);
+      AWYM.send({ to: "control", cmd: "person", id: String(n), data: { name: s.name.trim(), role: s.role.trim() }, nonce: nonces[n] });
+    });
+    if (!sent.length) { msg("Type at least one name first.", true); return; }
+    const onAck = (m) => { if (m.from === "control" && Object.values(nonces).includes(m.ack)) acks.add(m.ack); };
+    AWYM.listen(onAck);
+    setTimeout(() => {
+      if (acks.size) msg(`Sent ${acks.size} name${acks.size > 1 ? "s" : ""} to the Control Panel (People ${sent.join(", ")}).`);
+      else msg("The Control Panel didn't answer. Open this page as a dock in OBS (Docks → Custom Browser Docks…), or type the names into the Control Panel.", true);
+    }, 900);
+  };
+  function msg(t, err) { $("namesMsg").textContent = t; $("namesMsg").className = "msg" + (err ? " err" : ""); }
+
+  save(); paint();
+})();
+</script>
+</body>
+</html>

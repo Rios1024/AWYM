@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Hotkey Relay</title>
+<!--
+  HOTKEY RELAY — a tiny invisible OBS browser source (named "AWYM Hotkeys").
+  When you press one of the kit's OBS hotkeys (or a stream-deck key set to it),
+  the setup script (awym-obs-setup.lua) points this source at an address like
+      hotkeys.html#next~1767039600~12
+  and this page carries out that action: it tells the overlays and docks what
+  to do, through the same channel the docks use. It draws nothing.
+  The setup script adds it to Main Show; keep that script loaded in
+  Tools → Scripts so the hotkeys keep working.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 16 × 16, transparent. Reloaded for every key press
+             (OBS rebuilds a browser source when its address changes).
+  Uses:      hotkeys.js (the action list). It does NOT load shared.js, so a key press
+             doesn't make the Theme Panel count a new overlay; it opens its own
+             BroadcastChannel("awym-control").
+  Address:   #<action id>~<unix time in seconds>~<press number>. Presses older than
+             20 s are ignored, so reopening OBS doesn't repeat the last one.
+  Actions:   route "direct" → sends the overlay message itself (clear, shot clock,
+             lower thirds, hide stats/text).
+             route "runner" → {to:"runner", cmd:"hotkey", action, nonce}; the Show Runner
+             answers {from:"runner", ack: nonce}. If it doesn't answer within 0.6 s
+             (dock closed), sound actions play straight through sfx.html at 80%, and frame
+             effects go to whoever has the floor.
+  Test it:   open hotkeys.html?test=1 in a normal browser for a button per action.
+-->
+<style>
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  .test { display: none; font: 14px system-ui, sans-serif; background: #1b1626; color: #fff; padding: 10px; flex-wrap: wrap; gap: 6px; }
+  .test.on { display: flex; }
+  .test button { font: inherit; padding: 6px 9px; }
+  #log { width: 100%; opacity: .75; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="test" id="test"><div id="log"></div></div>
+<script src="hotkeys.js"></script>
+<script>
+(function () {
+  let ch = null;
+  try { ch = new BroadcastChannel("awym-control"); } catch (e) {}
+  const send = (m) => { if (ch) ch.postMessage(m); };
+  const BY_ID = {}; (window.AWYM_HOTKEYS || []).forEach((a) => BY_ID[a.id] = a);
+  const log = (t) => { const el = document.getElementById("log"); if (el) el.textContent = t; };
+
+  /** Carry out one action. */
+  function run(id) {
+    const a = BY_ID[id];
+    if (!a) { log("Unknown action: " + id); return; }
+    log("Pressed: " + a.name);
+    if (a.route === "direct") {
+      if (id === "clear") send({ to: "all", cmd: "clear" });
+      else if (id === "clock-toggle") send({ to: "clock", cmd: "toggle" });
+      else if (id === "clock-reset") send({ to: "clock", cmd: "reset" });
+      else if (id === "clock-buzz") send({ to: "clock", cmd: "buzz" });
+      else if (id === "clock-foil") send({ to: "clock", cmd: "foil" });            // toggles
+      else if (id === "clock-hide") send({ to: "clock", cmd: "visible" });         // toggles
+      else if (/^lt-[1-4]$/.test(id)) send({ to: "lower", id: id.slice(3), cmd: "toggle" });
+      else if (id === "lt-hide") send({ to: "lower", id: "*", cmd: "hide" });
+      else if (id === "hide-stats") send({ to: "stats", cmd: "hide" });
+      else if (id === "hide-text") send({ to: "content", cmd: "hide" });
+      return;
+    }
+    // actions the Show Runner dock carries out
+    const nonce = Math.random().toString(36).slice(2);
+    let acked = false;
+    const onMsg = (e) => { const m = e.data || {}; if (m.from === "runner" && m.ack === nonce) acked = true; };
+    if (ch) ch.addEventListener("message", onMsg);
+    send({ to: "runner", cmd: "hotkey", action: id, nonce });
+    setTimeout(() => {
+      if (ch) ch.removeEventListener("message", onMsg);
+      if (acked) return;
+      if (a.sound) { send({ to: "sfx", cmd: "play", id: a.sound, volume: 0.8 }); log(a.name + " (played without the Show Runner)"); }
+      else if (a.fx) { send({ to: "fx", id: "floor", cmd: "play", effect: a.fx }); log(a.name + " (on whoever has the floor, without the Show Runner)"); }
+      else if (id === "fx-stop") { send({ to: "fx", id: "*", cmd: "stop" }); log(a.name + " (without the Show Runner)"); }
+      else log(a.name + ": open the Show Runner dock for this one.");
+    }, 600);
+  }
+
+  /** Read the action from the address (#id~time~n), ignoring old presses. */
+  function fromHash() {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (!h) return;
+    const [id, t] = h.split("~");
+    const age = Math.abs(Date.now() / 1000 - Number(t));
+    if (!isFinite(age) || age > 20) return;
+    run(id);
+  }
+  fromHash();
+  addEventListener("hashchange", fromHash);
+
+  // ?test=1: a button per action, for trying them in a normal browser
+  if (new URLSearchParams(location.search).get("test") === "1") {
+    const box = document.getElementById("test"); box.classList.add("on");
+    (window.AWYM_HOTKEYS || []).forEach((a) => {
+      const b = document.createElement("button"); b.textContent = (a.text ? "" : a.icon + " ") + a.name;
+      b.onclick = () => run(a.id); box.appendChild(b);
+    });
+  }
+})();
+</script>
+</body>
+</html>
