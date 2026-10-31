@@ -1,0 +1,868 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Start Here: OBS Setup</title>
+<!--
+  START HERE — double-click this file to open it in your web browser.
+  It works out where this folder is on your computer and gives you the
+  exact address to paste into OBS for every overlay, with step-by-step
+  instructions.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      setup guide, opened in a normal web browser from the kit folder.
+  Uses:      theme.css, shared.js, screens.js.
+  How it builds addresses: the folder is taken from this page's own location
+  (location.href) or from the "moved the folder" box; toFileURL/toDiskPath convert
+  between "C:\Users\…" / "/Users/…" and file:/// addresses (spaces → %20, etc.).
+  Every address box is made by row(); "Copy all addresses" collects them.
+  Progress (ticked steps, names, calculator values) is saved in browser storage
+  under awym-setup-v1.
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Setup guide styles: neutral UI colors (--ui-*), numbered step cards, copyable address boxes. */
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; --ok: #3DDC84; --warn: #FFB84D; --bad: #FF5C6C; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; line-height: 1.5; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 80px; }
+  h1 { margin: 0; font-family: var(--font-display, Impact, sans-serif); font-weight: 400; font-size: 34px; color: var(--primary); line-height: 1.15; }
+  .lede { color: var(--ui-dim); margin: 6px 0 18px; font-size: 17px; }
+  a { color: var(--primary); }
+  b { color: var(--ui-text); }
+
+  .progress { position: sticky; top: 0; z-index: 5; background: var(--ui-bg); padding: 10px 0 12px; display: flex; align-items: center; gap: 12px; }
+  .progress .bar { flex: 1; height: 10px; background: var(--ui-panel); border-radius: 99px; overflow: hidden; border: 1px solid var(--ui-line); }
+  .progress .bar i { display: block; height: 100%; width: 0; background: var(--primary); transition: width .3s; }
+  .progress span { font-size: 14px; color: var(--ui-dim); white-space: nowrap; }
+  .progress button { font: inherit; font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--ui-line); background: var(--ui-panel); color: var(--ui-text); cursor: pointer; }
+
+  .card { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 16px; padding: 18px 20px; margin: 16px 0; }
+  .folder .path { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 14px; background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 8px; padding: 8px 10px; word-break: break-all; }
+  .status { margin-top: 10px; padding: 10px 12px; border-radius: 10px; font-size: 15px; }
+  .status.ok { background: rgba(61,220,132,.12); border: 1px solid rgba(61,220,132,.35); }
+  .status.warn { background: rgba(255,184,77,.12); border: 1px solid rgba(255,184,77,.4); }
+  .status.bad { background: rgba(255,92,108,.12); border: 1px solid rgba(255,92,108,.45); }
+  details.override { margin-top: 12px; }
+  details summary { cursor: pointer; color: var(--ui-dim); font-size: 14px; }
+  .orow { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-top: 8px; }
+
+  .step { position: relative; }
+  .step > header { display: flex; align-items: flex-start; gap: 14px; }
+  .num { flex: none; width: 40px; height: 40px; border-radius: 12px; background: var(--primary); color: var(--dark); display: flex; align-items: center; justify-content: center; font-family: var(--font-heading, Impact, sans-serif); font-size: 22px; }
+  .step.done .num { background: var(--ok); }
+  .step > header h2 { margin: 4px 0 0; font-size: 21px; flex: 1; }
+  .step > header h2 small { display: block; font-size: 14px; font-weight: 500; color: var(--ui-dim); margin-top: 2px; }
+  .donebox { flex: none; display: flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ui-dim); cursor: pointer; margin-top: 8px; user-select: none; }
+  .donebox input { width: 20px; height: 20px; accent-color: var(--ok); }
+  .step.done > .body { opacity: .55; }
+  .step .body { margin-left: 54px; }
+  @media (max-width: 640px) { .step .body { margin-left: 0; } }
+  ol.how, ul.how { margin: 10px 0; padding-left: 22px; }
+  ol.how li, ul.how li { margin: 4px 0; }
+  kbd { font-family: inherit; font-size: 13px; font-weight: 700; background: var(--ui-bg); border: 1px solid var(--ui-line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 6px; }
+  .menu { font-weight: 700; color: var(--ui-text); }
+
+  .padlay { --k: 64px; display: grid; grid-template-columns: repeat(var(--cols, 5), var(--k)); gap: 8px; background: #0d0d10; padding: 12px; border-radius: 14px; width: max-content; max-width: 100%; box-sizing: border-box; overflow-x: auto; }
+  .padlay.wide { --k: 52px; gap: 6px; }
+  .padlay img, .padlay .emptykey, .padlay .navkey { width: var(--k) !important; height: var(--k) !important; }
+  .padlay .navkey { border-radius: 10px; display: flex; align-items: center; justify-content: center; background: #2a2a33; color: #ddd; font-size: 12px; font-weight: 700; text-align: center; line-height: 1.1; box-sizing: border-box; }
+  .deckpage h4 { margin: 12px 0 4px; font-size: 13px; font-weight: 700; }
+  .decks { display: grid; gap: 8px; }
+  .decks > * { min-width: 0; }
+  details.deck { background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 14px; overflow-wrap: anywhere; min-width: 0; }
+  details.deck > summary { font-weight: 700; color: var(--ui-text); font-size: 15px; }
+  details.deck > summary .tag { font-weight: 400; color: var(--ui-dim); font-size: 13px; margin-left: 6px; }
+  details.deck[open] > summary { margin-bottom: 6px; }
+  details.deck .files { font-size: 14px; }
+  .padlay img, .padbtns img { width: 64px; height: 64px; border-radius: 10px; display: block; }
+  .padlay .emptykey { width: 64px; height: 64px; border-radius: 10px; display: block; border: 1px dashed rgba(255,255,255,.18); box-sizing: border-box; }
+  .padbtns { display: flex; gap: 8px; margin-top: 8px; align-items: center; color: var(--ui-dim); font-size: 13px; flex-wrap: wrap; }
+  .padbtns span.b { display: inline-flex; align-items: center; gap: 6px; background: #0d0d10; border-radius: 99px; padding: 4px 10px 4px 4px; }
+  .padbtns span.b img { width: 30px; height: 30px; border-radius: 99px; }
+  .hktable { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 14px; }
+  .hk { display: grid; grid-template-columns: 40px 1fr; gap: 10px; align-items: center; font-size: 14px; }
+  .hk img { width: 40px; height: 40px; border-radius: 8px; }
+  .hk small { display: block; color: var(--ui-dim); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  .hkgroup { grid-column: 1 / -1; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--ui-dim); margin-top: 10px; }
+  .addr { background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 12px; margin: 10px 0; }
+  .addr .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .addr .top b { font-size: 16px; }
+  .chip { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 99px; background: var(--ui-panel); border: 1px solid var(--ui-line); color: var(--ui-dim); white-space: nowrap; }
+  .chip.kind { color: var(--dark); background: var(--accent); border-color: transparent; }
+  .line { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; margin-top: 8px; }
+  .line input { min-width: 0; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; color: var(--ui-text); background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 8px; padding: 7px 9px; }
+  .copy, .open, .btn { font: inherit; font-size: 14px; font-weight: 700; padding: 7px 14px; border-radius: 8px; border: 0; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+  .copy { background: var(--primary); color: var(--dark); }
+  .copy.did { background: var(--ok); }
+  .open, .btn { background: var(--ui-panel); color: var(--ui-text); border: 1px solid var(--ui-line); }
+  .settings { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .settings .chip { color: var(--ui-text); }
+  .settings .chip.tick::before { content: "☑ Tick: "; color: var(--ok); }
+  .settings .chip.off::before { content: "☐ "; color: var(--warn); }
+  .addr .note { font-size: 13px; color: var(--ui-dim); margin-top: 6px; }
+
+  .form { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 4px; }
+  .form label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ui-dim); display: block; }
+  .form input, .form select, .orow input, .calc input, .calc select { width: 100%; font: inherit; font-size: 15px; color: var(--ui-text); background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 8px; padding: 6px 8px; }
+  input:focus, select:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .person { border-top: 1px dashed var(--ui-line); padding-top: 10px; margin-top: 12px; }
+  .person:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+  .ptitle { font-weight: 800; color: var(--primary); }
+
+  h3.sub { margin: 22px 0 6px; font-size: 17px; color: var(--primary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  h3.sub:first-child { margin-top: 10px; }
+  .checklist { display: grid; gap: 6px; margin: 6px 0 10px; }
+  .checklist label { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+  .checklist input { width: 18px; height: 18px; accent-color: var(--ok); align-self: center; }
+  .checklist span { font-size: 14px; color: var(--ui-dim); }
+  .checklist label:has(input:checked) b { text-decoration: line-through; opacity: .6; }
+  .btn.big { background: var(--primary); color: var(--dark); border: 0; font-size: 16px; padding: 10px 18px; }
+  ol.how ul { margin: 4px 0; padding-left: 20px; }
+  details.shortcut { margin-top: 12px; background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 14px; }
+  details.shortcut summary { font-weight: 700; color: var(--ui-text); }
+  .layer { margin: 16px 0 4px; }
+  .layer-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .layer-h .ln { flex: none; width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--dark); display: flex; align-items: center; justify-content: center; font-weight: 800; }
+  .layer-h b { font-size: 16px; }
+  .layer-h a { font-size: 13px; margin-left: auto; }
+  .layer .note2 { font-size: 14px; color: var(--ui-dim); margin: 4px 0 0 38px; }
+  .layer .addr { margin-left: 38px; }
+  @media (max-width: 640px) { .layer .addr, .layer .note2 { margin-left: 0; } }
+  .card.fast { border: 2px solid var(--primary); }
+  .scenes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 10px 0; }
+  .scenebox { background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 12px; }
+  .scenebox b { display: block; }
+  .scenebox ol { margin: 6px 0 0; padding-left: 18px; font-size: 14px; color: var(--ui-dim); }
+  .layers { font-size: 14px; color: var(--ui-dim); }
+
+  .calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .calc label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--ui-dim); }
+  .result { margin-top: 10px; background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 14px; }
+  .result table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  .result td { padding: 4px 8px; border-top: 1px solid var(--ui-line); vertical-align: top; }
+  .result tr:first-child td { border-top: 0; }
+  .result td:first-child { color: var(--ui-dim); width: 46%; }
+  .result td b { font-family: ui-monospace, Menlo, Consolas, monospace; }
+
+  .trouble details { background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 12px; padding: 10px 14px; margin: 8px 0; }
+  .trouble summary { color: var(--ui-text); font-weight: 700; font-size: 15px; }
+  .trouble p, .trouble ul { margin: 8px 0 2px; color: var(--ui-dim); font-size: 15px; }
+  .toast { position: fixed; left: 50%; bottom: 24px; translate: -50% 0; background: var(--ok); color: #062; font-weight: 800; padding: 10px 18px; border-radius: 99px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Start Here: OBS Setup</h1>
+  <p class="lede">Follow these steps in order. Every box below has the exact address for your computer, so just click <b>Copy</b> and paste it into OBS. Tick each step when it's done; this page remembers your progress.</p>
+
+  <div class="progress"><div class="bar"><i id="pbar"></i></div><span id="ptext"></span><button id="copyAll" title="Copy every address as a list you can save">Copy all addresses</button></div>
+
+  <!-- ===================== FOLDER ===================== -->
+  <div class="card folder">
+    <h2 style="margin:0 0 8px;font-size:18px">Your overlay folder</h2>
+    <div class="path" id="folderShow"></div>
+    <div class="status" id="folderStatus"></div>
+    <details class="override" id="overrideBox">
+      <summary>Moved the folder, or setting up OBS on a different computer? Enter its location here.</summary>
+      <p style="font-size:14px;color:var(--ui-dim);margin:8px 0 0">Paste the folder's location, e.g. <code>C:\Users\You\Documents\awym-obs</code> (Windows: open the folder, click the address bar, copy) or <code>/Users/roger/Documents/awym-obs</code> (Mac: right-click the folder while holding <kbd>Option</kbd> → Copy as Pathname).</p>
+      <div class="orow"><input type="text" id="folderIn" placeholder="Folder location" spellcheck="false"><button class="btn" id="folderUse">Use this</button><button class="btn" id="folderReset">Reset</button></div>
+    </details>
+  </div>
+
+  <!-- ===================== FAST WAY ===================== -->
+  <div class="card fast">
+    <h2 style="margin:0 0 6px;font-size:20px">⚡ The fast way: let OBS build it for you <span class="chip kind">recommended</span></h2>
+    <p style="margin:0 0 8px">The kit includes an OBS script, <b>awym-obs-setup.lua</b>, that creates all the scenes and overlays in one click, with the right addresses, sizes and positions. It uses OBS's built-in Scripts feature, so there's nothing extra to install.</p>
+    <ol class="how">
+      <li>Do <b>step 1</b> below first (folder in a permanent place, OBS installed).</li>
+      <li>In OBS, open <span class="menu">Tools → Scripts</span>.</li>
+      <li>Click <kbd>+</kbd> (bottom left of the Scripts window) and choose <b>awym-obs-setup.lua</b> from this folder:
+        <div class="addr" style="margin-top:6px"><div class="line"><input readonly id="luaPath" aria-label="Script location"><button class="copy" id="luaCopy">Copy</button></div>
+        <div class="note">Paste this into the file picker's name box to jump straight to it.</div></div></li>
+      <li>On the right, choose how many people are on the show and what to include.</li>
+      <li>Click <b>Build my scenes</b>. You'll see "Done!" and the new scenes appear in your Scenes list.</li>
+      <li>Still in the Scripts window, copy the five dock addresses it shows and add them as in <b>step 2</b>. (OBS doesn't let scripts add docks.)</li>
+      <li>Close the Scripts window, but <b>leave the script in the list</b>: it also provides the AWYM hotkeys (step 10).</li>
+    </ol>
+    <p class="layers"><b>What's left to do by hand:</b> step 2 (the five docks), step 5 (put your cameras behind the frames, with the crop and mask), and your own words on the stream screens with the Screen Maker if you want them. Names go in the Control Panel dock. The script skips scenes that already exist, so it won't touch your current setup.</p>
+    <p class="layers"><b>Already built your scenes with an older version?</b> Run the script again with <b>"If Main Show already exists, add the overlays it's missing"</b> ticked. It adds only the new overlays (Debate overlay, Sound Effects, Instant Replay, On-Screen Text) to Main Show and leaves everything else as it is.</p>
+    <p><button class="btn" id="markAuto">I used the fast way: tick off steps 3, 4, 6, 7 and 8</button></p>
+  </div>
+
+  <!-- ===================== 1 ===================== -->
+  <section class="card step" data-step="1">
+    <header><div class="num">1</div><h2>Get OBS and put this folder somewhere permanent<small>Two minutes, and it saves headaches later</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <ol class="how">
+        <li>Install <b>OBS Studio</b> (free) from <a href="https://obsproject.com" target="_blank">obsproject.com</a> if you haven't already, and open it once.</li>
+        <li>Make sure this folder is <b>unzipped</b> (not opened inside the zip) and sitting somewhere you won't clean out, like <b>Documents</b>. OBS remembers these exact locations, so if the folder moves later, the overlays go blank. (If that happens, use the box above to get new addresses.)</li>
+        <li>Check the folder location above. Once it shows green, you're set.</li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- ===================== 2 ===================== -->
+  <section class="card step" data-step="2">
+    <header><div class="num">2</div><h2>Add the control docks<small>Your remote controls, docked inside the OBS window</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <ol class="how">
+        <li>In OBS's top menu, click <span class="menu">Docks → Custom Browser Docks…</span></li>
+        <li>In the first empty row, type a <b>Dock Name</b> and paste the <b>URL</b> from below. Do the same for the other docks, one per row.</li>
+        <li>Click <b>Apply</b>, then <b>Close</b>. The docks appear as panels you can drag anywhere, e.g. next to your Scenes.</li>
+      </ol>
+      <div id="rows-docks"></div>
+    </div>
+  </section>
+
+  <!-- ===================== 3 ===================== -->
+  <section class="card step" data-step="3">
+    <header><div class="num">3</div><h2>Make your scenes and stream screens<small>Create the scenes, then build the Starting Soon, Be Right Back, etc. screens with the Screen Maker</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+
+      <h3 class="sub">3a. Create the empty scenes</h3>
+      <p>A <b>scene</b> is one "page" of your show that you switch between. Make these now; you'll fill them in next.</p>
+      <ol class="how">
+        <li>Find the <b>Scenes</b> panel (bottom left of OBS).</li>
+        <li>Click <kbd>+</kbd> under it, type the scene name exactly as below, and click <b>OK</b>.</li>
+        <li>Repeat for each scene. Tick them off here as you go:</li>
+      </ol>
+      <div class="checklist" id="sceneList">
+        <label><input type="checkbox" data-sc="starting"> <b>Starting Soon</b> <span>filled in 3c with the Screen Maker</span></label>
+        <label><input type="checkbox" data-sc="main"> <b>Main Show</b> <span>filled in steps 4–8 (background, cameras, lower thirds, clock, stats)</span></label>
+        <label><input type="checkbox" data-sc="brb"> <b>Be Right Back</b> <span>3c, Screen Maker</span></label>
+        <label><input type="checkbox" data-sc="technical"> <b>Technical Difficulties</b> <span>3c, Screen Maker</span></label>
+        <label><input type="checkbox" data-sc="halftime"> <b>Halftime</b> <span class="chip">optional</span> <span>3c, Screen Maker</span></label>
+        <label><input type="checkbox" data-sc="ending"> <b>Thanks for Watching</b> <span>3c, Screen Maker</span></label>
+      </div>
+      <p class="layers">Use the up/down arrows under the Scenes panel to put them in show order. You switch scenes during the show by clicking them.</p>
+
+      <h3 class="sub">3b. How to add a Browser source <span class="chip">you'll do this a lot</span></h3>
+      <p>Every overlay in this kit goes into OBS the same way:</p>
+      <ol class="how">
+        <li>Click the scene in the <b>Scenes</b> panel so it's highlighted.</li>
+        <li>In the <b>Sources</b> panel next to it, click <kbd>+</kbd> → <b>Browser</b>.</li>
+        <li>Leave <b>Create new</b> selected, type a name you'll recognise (e.g. "Starting Soon screen"), and click <b>OK</b>. A Properties window opens.</li>
+        <li><b>Untick "Local file"</b>. This matters: the docks can only control overlays added by address.</li>
+        <li>Paste the address into the <b>URL</b> box.</li>
+        <li>Type the <b>Width</b> and <b>Height</b> shown with the address (most are 1920 and 1080).</li>
+        <li>Tick any extra boxes listed with the address, then click <b>OK</b>.</li>
+        <li>If it doesn't fill the screen, right-click it → <b>Transform</b> → <b>Fit to screen</b>.</li>
+      </ol>
+      <p class="layers">To change one later, double-click it in Sources to reopen Properties.</p>
+
+      <h3 class="sub">3c. Build each stream screen with the Screen Maker</h3>
+      <p>The Screen Maker is <b>screen-maker.html</b>, in this same folder. You use it to write each screen's words and get its OBS address. Keep this page open too; you'll switch between them.</p>
+      <p><a class="btn big" href="screen-maker.html" target="_blank">Open the Screen Maker ↗</a> <span class="layers">(or double-click <b>screen-maker.html</b> in the folder)</span></p>
+      <p class="layers">Open it on the <b>same computer</b> as OBS, from this folder, so the address it gives you points to the right place.</p>
+      <p><b>For each screen scene, do this:</b></p>
+      <ol class="how">
+        <li>In the Screen Maker, under <b>Screen</b> (top left), click the screen you're making, e.g. <b>Starting Soon</b>.</li>
+        <li>Under <b>Your words</b>, change the <b>Headline</b> and <b>Message</b> if you like (or keep the defaults). Optional extras:
+          <ul>
+            <li><b>Rotating lines</b>: one per line; they fade in one after another, e.g. "Chat is open, say hi!".</li>
+            <li><b>Socials</b>: one per line, e.g. "YouTube @yourshow". They show as badges.</li>
+            <li><b>Bottom line</b>: e.g. "Next show: Friday 8pm".</li>
+          </ul></li>
+        <li>Under <b>Countdown</b>, pick one (see the table below for each screen):
+          <ul>
+            <li><b>None</b>: no clock.</li>
+            <li><b>Minutes</b>: counts down that many minutes from the moment the screen appears.</li>
+            <li><b>Until a time</b>: counts down to a clock time, e.g. 8:00 PM ("we go live at 8").</li>
+          </ul></li>
+        <li>Under <b>Background</b>, leave <b>Theme default</b> to match the rest of your show, or pick another scene.</li>
+        <li>Check the preview on the right. It shows exactly what viewers will see.</li>
+        <li>Click <b>Copy OBS address</b> (under the preview).</li>
+        <li>Switch to OBS, click the <b>matching scene</b> (e.g. Starting Soon), and add a Browser source as in 3b. Paste the address, size <b>1920 × 1080</b>. If you chose <b>Minutes</b>, also tick <b>Refresh browser when scene becomes active</b>, so the countdown starts fresh every time you switch to it.</li>
+        <li>Go back to the Screen Maker and repeat for the next screen.</li>
+      </ol>
+      <div class="result"><table>
+        <tr><td><b style="font-family:inherit">Starting Soon</b></td><td>Countdown: <b style="font-family:inherit">Until a time</b> (your go-live time) or <b style="font-family:inherit">Minutes</b> (5). Add rotating lines to keep chat busy.</td></tr>
+        <tr><td><b style="font-family:inherit">Be Right Back</b></td><td>Countdown: <b style="font-family:inherit">Minutes</b> (5) · tick Refresh browser when scene becomes active</td></tr>
+        <tr><td><b style="font-family:inherit">Technical Difficulties</b></td><td>Countdown: <b style="font-family:inherit">None</b>. You won't know how long a fix takes.</td></tr>
+        <tr><td><b style="font-family:inherit">Halftime</b></td><td>Countdown: <b style="font-family:inherit">Minutes</b> (10) · tick Refresh browser when scene becomes active</td></tr>
+        <tr><td><b style="font-family:inherit">Thanks for Watching</b></td><td>Countdown: <b style="font-family:inherit">None</b>. Add your <b style="font-family:inherit">Socials</b> and a <b style="font-family:inherit">Bottom line</b> with the next show time.</td></tr>
+        <tr><td><b style="font-family:inherit">Custom Message</b> <span class="chip">optional</span></td><td>Anything else, e.g. a birthday shout-out or "Q&amp;A next". Make a new scene for it (e.g. "Announcement").</td></tr>
+      </table></div>
+      <p class="layers" style="margin-top:10px"><b>Changing the words later:</b> make a new version in the Screen Maker and paste the new address into the source's Properties. Or, while you're live, use the <b>Stream screens</b> section of the Control Panel dock to change the words or start a "back in 5 minutes" countdown without touching OBS.</p>
+      <details class="shortcut"><summary>In a hurry? Default screens you can paste without the Screen Maker</summary>
+        <p class="layers">These use the standard wording ("Starting Soon", "Be Right Back", …). You can still change the words live from the Control Panel.</p>
+        <div id="rows-screens"></div>
+      </details>
+
+      <h3 class="sub">3d. Main Show comes next</h3>
+      <p>Steps 4–8 fill the <b>Main Show</b> scene, with more detail for each piece. <b>Layer order matters:</b> in the Sources list, things at the <b>top</b> appear <b>in front</b>. When you're done, Main Show's Sources list should read, top to bottom, as below.</p>
+      <p class="layers">Every address is here too, so you can copy them all from one place. They update as you fill in steps 5–7 (names, clock label, cutout shape). Tip: add them <b>bottom first</b> (Background, then Cameras, and so on). Each new source lands at the top of the list, so they end up in the right order without dragging.</p>
+      <div id="mainShow"></div>
+      <p class="layers">If something ends up in the wrong place, drag it up or down in the Sources list.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 4 ===================== -->
+  <section class="card step" data-step="4">
+    <header><div class="num">4</div><h2>Add the background<small>Main Show scene, at the bottom of the Sources list</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <p>This uses the scene and colors from your theme. Want a different scene or extra effects? Open <a href="background-gallery.html" target="_blank">the Background Picker</a> and use its <b>Copy OBS address</b> button instead.</p>
+      <div id="rows-bg"></div>
+      <p class="layers">Then <b>right-click</b> the Background source → <b>Lock</b>, so you can't drag it by accident.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 5 ===================== -->
+  <section class="card step" data-step="5">
+    <header><div class="num">5</div><h2>Cameras: circle cutouts and frames<small>Optional, but it looks great. Do this once per camera or guest feed.</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <p><b>a) Add your camera</b> to Main Show if it isn't there yet (Sources → <kbd>+</kbd> → <b>Video Capture Device</b>, or your call/guest source).</p>
+      <p><b>b) Fill this in</b> and the numbers update:</p>
+      <div class="calc">
+        <div><label>Camera resolution</label><select id="cRes"><option value="1920x1080">1920 × 1080 (1080p)</option><option value="1280x720">1280 × 720 (720p)</option><option value="3840x2160">3840 × 2160 (4K)</option><option value="1080x1080">1080 × 1080 (square)</option><option value="640x480">640 × 480 (4:3)</option><option value="1440x1080">1440 × 1080 (4:3)</option></select></div>
+        <div><label>Cutout shape</label><select id="cShape"><option value="circle">Circle</option><option value="rounded">Rounded square</option><option value="hexagon">Hexagon</option></select></div>
+        <div><label>Frame width on screen (px)</label><input type="number" id="cFW" value="460" min="100" max="1080"></div>
+        <div><label>Frame left (X)</label><input type="number" id="cFX" value="120" min="0" max="1920"></div>
+        <div><label>Frame top (Y)</label><input type="number" id="cFY" value="200" min="0" max="1080"></div>
+        <div><label>Camera slot</label><select id="cSlot"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option></select></div>
+      </div>
+      <div class="result" id="cResult"></div>
+      <p style="margin-top:14px"><b>c) Crop it square and cut it out.</b> Right-click the camera → <b>Filters</b>. Under <b>Effect Filters</b>, click <kbd>+</kbd>:</p>
+      <ol class="how">
+        <li>Add <b>Crop/Pad</b>. Set Left and Right to the crop numbers above (Top and Bottom 0). This makes the camera square.</li>
+        <li>Add <b>Image Mask/Blend</b>, set <b>Type</b> to <b>Alpha Mask (Alpha Channel)</b>, click <b>Browse</b> next to Path, and choose the mask file below. (Or paste the path straight into the box.) Keep this filter <i>below</i> Crop/Pad in the list.</li>
+      </ol>
+      <div id="rows-mask"></div>
+      <p style="margin-top:14px"><b>d) Add the themed frame</b> on top of the camera, as a Browser source with this address:</p>
+      <div id="rows-frame"></div>
+      <p style="margin-top:14px"><b>e) Optional: frame effects</b> (🔥 fire, 🧊 ice, ⚡ lightning, 💨 smoke, ✨ sparks, 💥 shake from the Show Runner). Add this Browser source <i>above</i> the frame. The middle stays clear, so it never covers the camera. If the setup script is loaded, it lines this up with its frame for you and keeps it there.</p>
+      <div id="rows-fx"></div>
+      <p><b>f) Line them up exactly:</b> select a source, press <kbd>Ctrl</kbd>+<kbd>E</kbd> (Mac: <kbd>⌘</kbd>+<kbd>E</kbd>) for <b>Edit Transform</b>, and type in the Position and Size from the table above. Then select them, right-click → <b>Group Selected Items</b>, so they move together.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 6 ===================== -->
+  <section class="card step" data-step="6">
+    <header><div class="num">6</div><h2>Add the lower thirds<small>One Browser source per person, in Main Show</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <p>Type each person's details and copy their address. You can also change names later in the Control Panel dock, and it updates live.</p>
+      <div id="people"></div>
+    </div>
+  </section>
+
+  <!-- ===================== 7 ===================== -->
+  <section class="card step" data-step="7">
+    <header><div class="num">7</div><h2>Add the shot clock<small>Main Show; drag it to a corner afterwards</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <div class="form">
+        <div><label>Starting time</label><input type="text" id="clkTime" value="3:00"></div>
+        <div><label>Label on top</label><input type="text" id="clkLabel" value="Hot Take"></div>
+      </div>
+      <div id="rows-clock"></div>
+      <p class="layers">Then resize it by dragging its red corner handles in the preview (hold <kbd>Shift</kbd> to resize freely). Start, pause and set times from the Control Panel dock.</p>
+    </div>
+  </section>
+
+  <!-- ===================== 8 ===================== -->
+  <section class="card step" data-step="8">
+    <header><div class="num">8</div><h2>Add the stats, on-screen text and Show Runner overlays<small>Main Show, at the top of the Sources list</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <div id="rows-stats"></div>
+      <p class="layers">They all stay invisible until you use their docks: stats cards come from the <b>Stats Desk</b>, your own text, lists, emojis and photos from the <b>Content Panel</b>, and the scoreboard, receipts, segment intros and sounds from the <b>Show Runner</b>.</p>
+      <div class="addr"><div class="top"><b>Instant replay</b><span class="chip kind">Media Source</span></div>
+        <div class="note">For the Show Runner's <b>Instant replay</b> button: Sources → <b>+</b> → <b>Media Source</b> → name it exactly <b>AWYM Instant Replay</b> → OK → leave the file empty → OK. Then click its 👁 eye in the Sources list to hide it; the Show Runner shows it while a replay plays.</div></div>
+      <div class="addr"><div class="top"><b>OBS WebSocket</b><span class="chip kind">One-time setting</span></div>
+        <div class="note">Clips, instant replays, recording, moments and the rundown's scene switching talk to OBS through its built-in WebSocket server: <b>Tools → WebSocket Server Settings</b> → tick <b>Enable WebSocket server</b> → <b>Show Connect Info</b> → copy the <b>Server Password</b> into the Show Runner's <b>Clips &amp; replays</b> section. For clips, also turn on <b>Settings → Output → Replay Buffer</b>.</div></div>
+    </div>
+  </section>
+
+  <!-- ===================== 9 ===================== -->
+  <section class="card step" data-step="9">
+    <header><div class="num">9</div><h2>Test run<small>Five minutes before your first show</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <ul class="how">
+        <li>In the <b>Control Panel</b> dock, the light at the top right should be <b style="color:var(--ok)">green</b> ("Overlays connected").</li>
+        <li>Click <b>Start</b> on the shot clock, then <b>Buzzer</b>. You should see it count and hear the buzzer in OBS's audio mixer.</li>
+        <li>Type a name into slot 1 and click <b>Show</b>. The lower third slides in. Click <b>★</b> and the camera frame glows.</li>
+        <li>In the <b>Stats Desk</b>, pick a game and click <b>Score</b>.</li>
+        <li>In the <b>Content Panel</b>, type a line, click <b>Show</b>, then <b>Hide</b>.</li>
+        <li>In the <b>Show Runner</b>, the Graphics and Sounds lights should be green. Click <b>Air horn</b> and watch the Sound Effects meter move in OBS's Audio Mixer. Then try <b>🚨 Clear</b>.</li>
+        <li>Click through each scene and check every screen looks right.</li>
+        <li>Do a short <b>test recording</b> (Controls → Start Recording) and watch it back.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ===================== 10 ===================== -->
+  <section class="card step" data-step="10">
+    <header><div class="num">10</div><h2>Hotkeys and your stream controller<small>Optional: run the show from a keyboard, VSD M18, Stream Deck, Loupedeck, Touch Portal or any macro pad</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <ol class="how">
+        <li><b>Keep the setup script loaded</b> (Tools → Scripts: <b>awym-obs-setup.lua</b> stays in the list). It adds 51 actions to <span class="menu">Settings → Hotkeys</span>, all starting with <b>AWYM:</b>, and fills in the keys below the first time (always <b>Ctrl + Alt + Shift</b> plus one key, so they won't clash with anything). Change any of them there if you like. If you built your scenes before hotkeys existed, click <b>Build my scenes</b> once more: it adds the invisible <b>AWYM Hotkeys</b> source that carries them out.</li>
+        <li>So they work while you're clicked into another window: <span class="menu">Settings → Advanced → Hotkeys → Hotkey Focus Behavior → Never disable hotkeys</span>.</li>
+        <li>Keep the <b>Show Runner</b> dock open: it does the rundown, scoreboard, sound volume and clip actions. (Sounds still play without it, at 80%.)</li>
+        <li><b>Set up your controller:</b> open the one you use below. Each has its own steps (a ready-made file to import where there is one). The others stay folded out of the way.</li>
+        <li>Test: press the key for <b>Air horn</b> and watch the Sound Effects meter move in OBS's Audio Mixer.</li>
+      </ol>
+      <p><a class="btn" href="hotkey-icons.html" target="_blank">Make the key pictures in your show colors ↗</a> <span class="layers">(any size, saved as a .zip)</span></p>
+
+      <h3 style="margin:18px 0 6px">Your controller</h3>
+      <div class="decks">
+        <details class="deck" data-deck="m18">
+          <summary>VSD M18 <span class="tag">ready-made scenes · VSD Craft</span></summary>
+          <ol class="how">
+            <li>In <b>VSD Craft</b>, click the import button next to the scene list and pick <b>stream-controller/VSD-M18/AWYM-Show.SDProfile</b>. A scene called <b>AWYM Show</b> appears with all 51 actions on the 5 pages below.</li>
+            <li>The 3 plain buttons under the screen keys are the same on every page: ◀ previous page, 🚨 Clear screen, next page ▶. The bottom row of page 1 mutes each person (seats 1–4) and unmutes everyone.</li>
+            <li>Optional one-page scenes in the same folder: <b>AWYM-Run-of-Show</b> (segments, shot clock, clips, graphics), <b>AWYM-Scoreboard</b> (debate score, names, reaction sounds), <b>AWYM-Frame-FX</b> and <b>AWYM-Sound-Board</b>. Their plain buttons are previous segment, Clear, next segment.</li>
+          </ol>
+          <div class="deckpages" data-layout="m18"></div>
+        </details>
+
+        <details class="deck" data-deck="sd15">
+          <summary>Elgato Stream Deck, 15 keys <span class="tag">MK.2, original, Scissor Keys · ready-made profile</span></summary>
+          <div data-elgato="sd15"></div>
+        </details>
+        <details class="deck" data-deck="xl">
+          <summary>Elgato Stream Deck XL <span class="tag">32 keys · ready-made profile</span></summary>
+          <div data-elgato="xl"></div>
+        </details>
+        <details class="deck" data-deck="mini">
+          <summary>Elgato Stream Deck Mini <span class="tag">6 keys · ready-made profile</span></summary>
+          <div data-elgato="mini"></div>
+        </details>
+        <details class="deck" data-deck="neo">
+          <summary>Elgato Stream Deck Neo <span class="tag">8 keys · ready-made profile</span></summary>
+          <div data-elgato="neo"></div>
+        </details>
+        <details class="deck" data-deck="plus">
+          <summary>Elgato Stream Deck + <span class="tag">8 keys + dials · ready-made profile</span></summary>
+          <div data-elgato="plus"></div>
+        </details>
+
+        <details class="deck" data-deck="mobile">
+          <summary>Elgato Stream Deck Mobile <span class="tag">phone or tablet</span></summary>
+          <ol class="how">
+            <li>Stream Deck Mobile shows up in the Stream Deck app on your computer like any other Stream Deck. Try importing <b>stream-controller/Elgato-Stream-Deck/AWYM-Stream-Deck-15-key.streamDeckProfile</b> (or the XL one if your phone shows 32 keys) and choose your phone when the app asks which device it's for.</li>
+            <li>If it doesn't appear for the phone, set the keys up by hand: in the Stream Deck app, select the phone, drag <b>System → Hotkey</b> onto a key, click in the Hotkey box and press the action's keys from <b>Every action</b> below, then click the key's picture → <b>Set from File</b> → pick the matching file in <b>icons/hotkeys/</b>.</li>
+          </ol>
+        </details>
+
+        <details class="deck" data-deck="streamdock">
+          <summary>Mirabox / Ajazz Stream Dock <span class="tag">293, 293S, N3, N4… · set up by hand</span></summary>
+          <ol class="how">
+            <li>These use the <b>Stream Dock</b> app, the same family as VSD Craft. You can try importing <b>stream-controller/VSD-M18/AWYM-Show.SDProfile</b>, but it's made for the M18, so it may not show up for a different model.</li>
+            <li>By hand: drag the <b>Hotkey</b> action onto a key, press the action's keys from <b>Every action</b> below (e.g. <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd>), then set the key's icon to the matching file in <b>icons/hotkeys/</b>. Use the M18 pages as a guide for what goes where.</li>
+          </ol>
+        </details>
+
+        <details class="deck" data-deck="loupedeck">
+          <summary>Loupedeck / Logitech MX Creative Console / Razer Stream Controller <span class="tag">set up by hand</span></summary>
+          <ol class="how">
+            <li>In the Loupedeck (or Logi Options+ / Razer) software, add a <b>Keyboard shortcut</b> action (under <b>Custom</b>), press the action's keys from <b>Every action</b> below, and give it the matching picture from <b>icons/hotkeys/</b>.</li>
+            <li>Dials work nicely for the sound board volume: set a dial to OBS's <b>Sound Effects</b> volume if your software has an OBS plugin.</li>
+          </ol>
+        </details>
+
+        <details class="deck" data-deck="touchportal">
+          <summary>Touch Portal (phone or tablet) <span class="tag">set up by hand</span></summary>
+          <ol class="how">
+            <li>On your computer, add a button → Action <b>Keyboard → Hotkey / Keyboard Shortcut</b>, press the action's keys from <b>Every action</b> below.</li>
+            <li>Set the button's icon to the matching file in <b>icons/hotkeys/</b>. Touch Portal's pages work like the M18 pages: copy that layout if you like.</li>
+          </ol>
+        </details>
+
+        <details class="deck" data-deck="keyboard">
+          <summary>A keyboard, numpad or macro pad <span class="tag">no software needed</span></summary>
+          <ol class="how">
+            <li>The keys already work from your keyboard: hold <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd> and press the action's key (list below).</li>
+            <li>A programmable macro pad (or a spare numpad): in its software, set each button to send one of those key combinations. Or change the key OBS listens for in <span class="menu">Settings → Hotkeys</span> (search "AWYM") to whatever your pad sends.</li>
+          </ol>
+        </details>
+      </div>
+
+      <details class="deck" data-deck="all" style="margin-top:14px">
+        <summary>Every action and its keys <span class="tag">51</span></summary>
+      <div class="hktable" id="hkTable"></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ===================== 11 ===================== -->
+  <section class="card step" data-step="11">
+    <header><div class="num">11</div><h2>Remote guests<small>Optional: bring people in over the internet with VDO.Ninja (free, nothing for them to install)</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
+    <div class="body">
+      <p><a class="btn big" href="guests.html" target="_blank">Open the Guests page ↗</a> <span class="layers">(or double-click <b>guests.html</b> in the folder)</span></p>
+      <ol class="how">
+        <li>On the Guests page, pick which seats (People slots 1–4) are <b>remote guests</b> and type everyone's names. Keep the room name and password the same each week, and the links never change.</li>
+        <li>Send each guest their <b>invite link</b> (<b>Copy invite message</b> gives you a ready-to-send text).</li>
+        <li>Put the guests into Main Show, either way:
+          <ul>
+            <li><b>Automatic:</b> Tools → Scripts → awym-obs-setup.lua → type the <b>room name</b>, <b>password</b> and <b>seats</b> from the Guests page into the three "Remote guests" boxes → make sure <b>People on the show</b> covers those seats → <b>Build my scenes</b> (with "add the overlays it's missing" ticked if Main Show exists). Each guest lands behind their camera frame, cropped and cut out, with their own audio slider.</li>
+            <li><b>By hand:</b> add each guest's <b>OBS address</b> as a Browser source (1280 × 720, tick Control audio via OBS), then crop and mask it like a camera (step 5).</li>
+          </ul></li>
+        <li>Open <b>Your link</b> in Chrome or Edge on this computer and leave it open, so the guests hear (and see) you. Wear headphones, and turn off OBS's <b>Desktop Audio</b> so guests aren't recorded twice.</li>
+        <li>Optional: add guests.html as a dock too. Then <b>Send names to the Control Panel</b> fills the lower thirds and frames for you.</li>
+      </ol>
+      <div id="rows-guests"></div>
+    </div>
+  </section>
+
+  <!-- ===================== TROUBLESHOOTING ===================== -->
+  <div class="card trouble">
+    <h2 style="margin:0 0 6px;font-size:18px">If something isn't working</h2>
+    <details><summary>The dock's light stays grey / the buttons don't do anything</summary>
+      <ul><li>Open the overlay's properties (double-click the source) and make sure <b>"Local file" is unticked</b> and the URL starts with <code>file:///</code>. Docks can't talk to overlays added with "Local file".</li>
+      <li>Check that the dock and the overlays use the same folder (all addresses on this page match).</li>
+      <li>Restart OBS. If it's still grey, use the overlay directly: right-click it → <b>Interact</b> (the shot clock takes keyboard shortcuts; see the README).</li></ul></details>
+    <details><summary>An overlay is blank or shows an error</summary>
+      <ul><li>The folder probably moved or was renamed. Enter its new location in the box at the top, then paste the new addresses into each source.</li>
+      <li>Make sure the folder is unzipped, not opened from inside the zip.</li></ul></details>
+    <details><summary>The text looks plain, not the fancy fonts</summary>
+      <p>The fonts load from Google Fonts, so the computer needs internet the first time. Right-click the source → <b>Refresh</b> once you're online.</p></details>
+    <details><summary>No buzzer sound</summary>
+      <p>Open the shot clock's properties and tick <b>Control audio via OBS</b>. It then shows in the Audio Mixer, so make sure it isn't muted there and that your stream or recording includes it.</p></details>
+    <details><summary>I changed colors, fonts or the theme, and nothing changed</summary>
+      <p>If you used the <b>Theme Panel</b> dock, changes show instantly with no refresh needed. If you edited <b>theme.css</b> or used the Theme Editor, right-click each source → <b>Refresh</b>, and restart OBS for the docks. Note that the Theme Panel's live look sits on top of theme.css; click <b>Back to theme.css</b> in it to see the file's look again.</p></details>
+    <details><summary>The countdown doesn't restart when I switch to a screen</summary>
+      <p>Open that source's properties and tick <b>Refresh browser when scene becomes active</b>. Or start a fresh countdown from the Control Panel's Stream screens section.</p></details>
+    <details><summary>The Stats Desk can't reach ESPN</summary>
+      <p>Check the internet connection. The stats come from ESPN's free public feed, which is unofficial and can change. If search can't find a player, paste their espn.com player link instead.</p></details>
+    <details><summary>OBS feels slow or my computer runs hot</summary>
+      <ul><li>Animated backgrounds use some graphics power. In the Background Picker, choose <b>Low</b> intensity or a calmer scene.</li>
+      <li>In a busy source's properties, tick <b>Use custom frame rate</b> and set <b>30</b>.</li>
+      <li>Tick <b>Shutdown source when not visible</b> on screens in scenes you're not using.</li></ul></details>
+  </div>
+</div>
+<div class="toast" id="toast">Copied!</div>
+
+<script src="shared.js"></script>
+<script src="screens.js"></script>
+<script src="hotkeys.js"></script>
+<script src="stream-controller/layouts.js"></script>
+<script>
+/* Step 10: controller sections (folded; the open ones are remembered), their layouts from
+   stream-controller/layouts.js, and the list of every action, with the key pictures from icons/hotkeys/. */
+(function () {
+  const H = window.AWYM_HOTKEYS || [], G = window.AWYM_HOTKEY_GROUPS || {}, L = window.AWYM_DECK_LAYOUTS || {};
+  const file = (id) => { const i = H.findIndex((a) => a.id === id); return `icons/hotkeys/${String(i + 1).padStart(2, "0")}-${id}.png`; };
+  const by = (id) => H.find((a) => a.id === id) || {};
+  const tip = (a) => `${a.name} — ${window.AWYM_HOTKEY_TEXT(a.key)}`;
+  const key = (id) => !id ? `<span class="emptykey"></span>`
+    : id === "@prev" ? `<span class="navkey" title="Previous page">◀<br>page</span>`
+    : id === "@next" ? `<span class="navkey" title="Next page">page<br>▶</span>`
+    : `<img src="${file(id)}" alt="${by(id).name}" title="${tip(by(id))}">`;
+  /** The pages of one layout, drawn as key grids. */
+  function pagesHTML(l) {
+    const wide = l.cols > 5 ? " wide" : "";
+    let h = l.pages.map((p, n) => `<div class="deckpage"><h4>Page ${n + 1} · ${p.name}</h4>
+      <div class="padlay${wide}" style="--cols:${l.cols}">${p.keys.map(key).join("")}</div></div>`).join("");
+    if (l.buttons) h += `<div class="padbtns">Buttons (every page): <span class="b">◀ Previous page</span><span class="b"><img src="${file("clear")}" alt="">Clear screen</span><span class="b">Next page ▶</span></div>`;
+    return h;
+  }
+  document.querySelectorAll("[data-layout]").forEach((el) => { const l = L[el.dataset.layout]; if (l) el.innerHTML = pagesHTML(l); });
+  // Elgato models: import steps + layout
+  document.querySelectorAll("[data-elgato]").forEach((el) => {
+    const id = el.dataset.elgato, l = L[id]; if (!l) return;
+    const fname = l.file.split("/").pop();
+    const nav = id === "neo" ? "Change pages with the Neo's two touch points under the keys." : "The ◀ / ▶ page keys in the bottom corners flip between the pages.";
+    const extra = id === "plus" ? " The dials and touch strip are left free for you (a dial on OBS's Sound Effects volume works well)." : "";
+    el.innerHTML = `<ol class="how">
+        <li>Double-click <b>stream-controller/Elgato-Stream-Deck/${fname}</b> (or in the Stream Deck app: the profile list → <b>Import</b>). A profile called <b>AWYM Show</b> appears with all 51 actions on ${l.pages.length} pages: ${nav}${extra}</li>
+        <li>Needs the Stream Deck app 6.0 or newer (made for 7.3+). If it won't import, set the keys up by hand: drag <b>System → Hotkey</b> onto a key, press the action's keys (list below) and set its picture from <b>icons/hotkeys/</b>.</li>
+      </ol>` + pagesHTML(l);
+  });
+  // remember which sections are open
+  let open = {}; try { open = JSON.parse(localStorage.getItem("awym-setup-decks") || "{}"); } catch (e) {}
+  document.querySelectorAll("details.deck").forEach((d) => {
+    if (open[d.dataset.deck]) d.open = true;
+    d.addEventListener("toggle", () => { open[d.dataset.deck] = d.open; try { localStorage.setItem("awym-setup-decks", JSON.stringify(open)); } catch (e) {} });
+  });
+  const table = document.getElementById("hkTable"); if (!table) return;
+  let g = "";
+  table.innerHTML = H.map((a) => {
+    const head = a.group !== g ? `<div class="hkgroup">${(G[a.group] || {}).name || a.group}</div>` : ""; g = a.group;
+    return head + `<div class="hk"><img src="${file(a.id)}" alt=""><div>${a.name}<small>${window.AWYM_HOTKEY_TEXT(a.key)}</small></div></div>`;
+  }).join("");
+})();
+</script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const STORE = "awym-setup-v1";
+  let store = {};
+  try { store = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(store)); } catch (e) {} };
+
+  /* ---------------- folder location ---------------- */
+  const detected = location.protocol === "file:" ? location.href.split(/[?#]/)[0].replace(/[^/]*$/, "") : "";
+  let base = store.base || detected || "file:///C:/Users/YOU/Documents/awym-obs/";
+
+  // "C:\Users\Me\My Folder" or "/Users/me/x" or "file:///..." → file:///…/ with spaces etc. encoded
+  /** A folder path typed by the user → file:///…/ address (handles Windows, Mac, spaces, quotes). */
+  function toFileURL(p) {
+    p = String(p || "").trim().replace(/^["']|["']$/g, "");
+    if (!p) return "";
+    if (/^file:\/\//i.test(p)) return p.endsWith("/") ? p : p + "/";
+    let s = p.replace(/\\/g, "/").replace(/\/+$/, "");
+    if (/^~\//.test(s)) return "";                                   // needs a full path
+    const segs = s.split("/");
+    const out = segs.map((seg, i) => (i === 0 && /^[A-Za-z]:$/.test(seg)) ? seg.toUpperCase() : encodeURIComponent(seg)).join("/");
+    return "file://" + (out.startsWith("/") ? "" : "/") + out + "/";
+  }
+  // file:///C:/Users/… → C:\Users\…   ·   file:///Users/… → /Users/…
+  /** file:///C:/… → C:\… (Windows) or file:///Users/… → /Users/… (Mac). */
+  function toDiskPath(fileURL) {
+    let p = decodeURIComponent(fileURL.replace(/^file:\/\//i, ""));
+    if (/^\/[A-Za-z]:\//.test(p)) return p.slice(1).replace(/\//g, "\\");
+    return p;
+  }
+  const isWindows = () => /^file:\/\/\/[A-Za-z]:\//i.test(base);
+
+  /** Show the folder and warn about risky places (inside the zip, Temp, Downloads, Desktop, # in the path). */
+  function folderCheck() {
+    const disk = toDiskPath(base);
+    $("folderShow").textContent = disk.replace(/[\\/]$/, "");
+    const lower = disk.toLowerCase();
+    let cls = "ok", msg = "<b>Looks good.</b> All the addresses on this page point to this folder.";
+    if (!detected && !store.base) { cls = "bad"; msg = "<b>Open this page from the folder on your computer</b> (double-click START-HERE.html inside the unzipped folder). Until then, the addresses below use a placeholder."; }
+    else if (/\.zip[\\/]/.test(lower) || /\\temp\\|\/temp\/|appdata[\\/]local[\\/]temp/.test(lower)) { cls = "bad"; msg = "<b>This looks like it's running from inside the zip or a temporary folder.</b> Unzip the whole folder first (right-click the zip → Extract All), move it to Documents, and open START-HERE.html from there."; }
+    else if (/[#?]/.test(disk)) { cls = "bad"; msg = "<b>The folder path has a # or ? in it</b>, which breaks web addresses. Rename that folder (remove the # or ?) and reopen this page."; }
+    else if (/[\\/]downloads[\\/]/.test(lower)) { cls = "warn"; msg = "<b>This works</b>, but it's in your <b>Downloads</b> folder. If you ever clean that out, OBS loses the overlays. Moving it to Documents first is safer (then reopen this page from there)."; }
+    else if (/[\\/]desktop[\\/]/.test(lower)) { cls = "warn"; msg = "<b>This works.</b> Just remember OBS needs the folder to stay right here on your Desktop. If you move it, come back and get new addresses."; }
+    if (store.base) msg += ` <i>(Using the location you entered. <a href="#" id="resetLink">Use the detected one</a>)</i>`;
+    $("folderStatus").className = "status " + cls;
+    $("folderStatus").innerHTML = msg;
+    const rl = $("resetLink"); if (rl) rl.onclick = (e) => { e.preventDefault(); resetFolder(); };
+  }
+  $("folderUse").onclick = () => {
+    const u = toFileURL($("folderIn").value);
+    if (!u) { alertBox("Please paste the folder's full location (it should start with a drive letter like C:\\ or with /Users/)."); return; }
+    store.base = u; base = u; save(); renderAll();
+  };
+  function resetFolder() { delete store.base; base = detected || "file:///C:/Users/YOU/Documents/awym-obs/"; $("folderIn").value = ""; save(); renderAll(); }
+  $("folderReset").onclick = resetFolder;
+  function alertBox(t) { $("folderStatus").className = "status bad"; $("folderStatus").textContent = t; }
+
+  /* ---------------- address rows ---------------- */
+  /** Address settings from an object, skipping empty values; spaces as %20. */
+  const q = (o) => { const p = new URLSearchParams(); Object.entries(o).forEach(([k, v]) => { if (v !== "" && v != null) p.set(k, v); }); const s = p.toString().replace(/\+/g, "%20"); return s ? "?" + s : ""; };
+  const url = (file, params) => base + file + q(params || {});
+  const all = [];   // for "copy all"
+
+  /**
+   * Add an address box: title, kind chip, the address with Copy/Open, size and OBS boxes to tick.
+   * @param {Object} o  {title, kind, value, w, h, ticks[], notes, path (no Open button), noAll (skip "Copy all")}
+   */
+  function row(container, o) {
+    // o: { title, kind, value, w, h, ticks[], notes, open (bool), path (bool) }
+    if (!o.noAll) all.push([o.title, o.value]);
+    const el = document.createElement("div");
+    el.className = "addr";
+    const settings = [];
+    if (o.w) settings.push(`<span class="chip">Width ${o.w}</span><span class="chip">Height ${o.h}</span>`);
+    (o.ticks || []).forEach((t) => settings.push(t === "Untick Local file"
+      ? `<span class="chip off">Local file: leave unticked</span>`
+      : `<span class="chip tick">${esc(t)}</span>`));
+    el.innerHTML = `<div class="top"><b>${esc(o.title)}</b><span class="chip kind">${esc(o.kind)}</span></div>
+      <div class="line"><input readonly value="${esc(o.value)}" aria-label="${esc(o.title)}"><button class="copy">Copy</button>${o.path ? "" : `<a class="open" href="${esc(o.value)}" target="_blank" title="Preview it in your browser">Open</a>`}</div>
+      ${settings.length ? `<div class="settings">${settings.join("")}</div>` : ""}
+      ${o.notes ? `<div class="note">${o.notes}</div>` : ""}`;
+    el.querySelector(".copy").onclick = (e) => copy(o.value, e.target);
+    el.querySelector("input").onfocus = (e) => e.target.select();
+    container.appendChild(el);
+  }
+  /** Copy text to the clipboard (with a fallback for pages where the clipboard API is blocked). */
+  async function copy(text, btn) {
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); } catch (e2) {} ta.remove(); }
+    if (btn) { btn.classList.add("did"); btn.textContent = "Copied"; setTimeout(() => { btn.classList.remove("did"); btn.textContent = "Copy"; }, 1500); }
+    $("toast").classList.add("show"); setTimeout(() => $("toast").classList.remove("show"), 1200);
+  }
+
+  /* ---------------- people (lower thirds) ---------------- */
+  const ROLE = { 1: "Moderator", 2: "Host", 3: "Host", 4: "Guest" };
+  store.people = store.people || {};
+  /** Step 6: four people with their own lower-third address, updated as you type. */
+  function renderPeople() {
+    const box = $("people"); box.innerHTML = "";
+    [1, 2, 3, 4].forEach((id) => {
+      const p = Object.assign({ name: "", role: ROLE[id], handle: "", number: "", side: id % 2 ? "left" : "right" }, store.people[id] || {});
+      const wrap = document.createElement("div"); wrap.className = "person";
+      wrap.innerHTML = `<div class="ptitle">Person ${id}${id === 1 ? " (you)" : ""}</div>
+        <div class="form">
+          <div><label>Name</label><input data-k="name" value="${esc(p.name)}" placeholder="Name"></div>
+          <div><label>Role</label><input data-k="role" value="${esc(p.role)}"></div>
+          <div><label>Handle</label><input data-k="handle" value="${esc(p.handle)}" placeholder="@handle"></div>
+          <div><label>Jersey # (optional)</label><input data-k="number" value="${esc(p.number)}" maxlength="2"></div>
+          <div><label>Side</label><select data-k="side"><option value="left">Left</option><option value="right">Right</option></select></div>
+        </div><div class="rowslot"></div>`;
+      wrap.querySelector('select[data-k="side"]').value = p.side;
+      const slot = wrap.querySelector(".rowslot");
+      const draw = () => {
+        slot.innerHTML = "";
+        const idx = all.findIndex((a) => a[0].startsWith(`Lower third ${id}`)); if (idx >= 0) all.splice(idx, 1);
+        row(slot, { title: `Lower third ${id}${p.name ? " — " + p.name : ""}`, kind: "Browser source",
+          value: url("lower-third.html", { id, name: p.name, role: p.role, handle: p.handle, number: p.number, side: p.side === "right" ? "right" : "", hidden: "1" }),
+          w: 1920, h: 1080, ticks: ["Untick Local file"], notes: "Starts hidden. Slide it in with <b>Show</b> in the Control Panel. Only add as many people as you have." });
+      };
+      wrap.querySelectorAll("[data-k]").forEach((inp) => inp.addEventListener("input", () => { p[inp.dataset.k] = inp.value; store.people[id] = p; save(); draw(); renderMainShow(); }));
+      draw();
+      box.appendChild(wrap);
+    });
+  }
+
+  /* ---------------- camera calculator ---------------- */
+  ["cRes", "cShape", "cFW", "cFX", "cFY", "cSlot"].forEach((id) => {
+    if (store[id] != null) $(id).value = store[id];
+    $(id).addEventListener("input", () => { store[id] = $(id).value; save(); renderCamera(); });
+  });
+  /** Step 5: crop numbers, camera/frame position and size, mask path and frame address. */
+  function renderCamera() {
+    const [cw, ch] = $("cRes").value.split("x").map(Number);
+    const side = Math.min(cw, ch), cropLR = Math.max(0, Math.round((cw - side) / 2)), cropTB = Math.max(0, Math.round((ch - side) / 2));
+    const F = Math.max(100, Number($("cFW").value) || 460), X = Number($("cFX").value) || 0, Y = Number($("cFY").value) || 0;
+    const S = Math.round(F * 0.93), off = Math.round(F * 0.035);
+    $("cResult").innerHTML = `<table>
+      <tr><td>Crop/Pad filter</td><td>Left <b>${cropLR}</b> · Right <b>${cropLR}</b> · Top <b>${cropTB}</b> · Bottom <b>${cropTB}</b></td></tr>
+      <tr><td>Camera (Edit Transform)</td><td>Position <b>${X + off}, ${Y + off}</b> · Size <b>${S} × ${S}</b></td></tr>
+      <tr><td>Frame (Edit Transform)</td><td>Position <b>${X}, ${Y}</b> · Size <b>${F} × ${Math.round(F * 1.1)}</b></td></tr>
+      <tr><td>Frame Browser source size</td><td>Width <b>600</b> · Height <b>660</b> (keep these; resize it on screen instead)</td></tr>
+      <tr><td>Frame effects (Edit Transform)</td><td>Position <b>${Math.round(X - F / 3)}, ${Math.round(Y - F / 3)}</b> · Size <b>${Math.round(F * 5 / 3)} × ${Math.round(F * 1.1 * 5 / 3)}</b> (source size <b>1000 × 1100</b>)</td></tr></table>`;
+    const maskBox = $("rows-mask"), frameBox = $("rows-frame"), fxBox = $("rows-fx");
+    maskBox.innerHTML = ""; frameBox.innerHTML = ""; fxBox.innerHTML = "";
+    const shape = $("cShape").value, file = { circle: "circle", rounded: "rounded-square", hexagon: "hexagon" }[shape];
+    const maskURL = base + "masks/" + file + "-1x1.png";
+    ["Mask image"].forEach((k) => { const i = all.findIndex((a) => a[0].startsWith(k)); if (i >= 0) all.splice(i, 1); });
+    ["Camera frame", "Frame effects"].forEach((k) => { const i = all.findIndex((a) => a[0].startsWith(k)); if (i >= 0) all.splice(i, 1); });
+    row(maskBox, { title: `Mask image (${shape})`, kind: "File path for Image Mask", value: toDiskPath(maskURL), path: true,
+      notes: "Paste into the Image Mask/Blend <b>Path</b> box, or click Browse and pick it from the <b>masks</b> folder." });
+    row(frameBox, { title: `Camera frame ${$("cSlot").value}`, kind: "Browser source",
+      value: url("frame.html", { id: $("cSlot").value, shape: shape === "circle" ? "" : shape }), w: 600, h: 660, ticks: ["Untick Local file"],
+      notes: "The name plate uses the same name as lower third " + $("cSlot").value + ". Add <b>&amp;plate=0</b> to the end to hide it." });
+    row(fxBox, { title: `Frame effects ${$("cSlot").value}`, kind: "Browser source",
+      value: url("frame-fx.html", { id: $("cSlot").value }), w: 1000, h: 1100, ticks: ["Untick Local file"],
+      notes: "Put it in the same group as its frame (if you grouped them), just above the frame. While the setup script is loaded it keeps it lined up with the frame that has the same id, whatever they're called." });
+    renderMainShow();
+  }
+
+  /* ---------------- 3d: Main Show, all addresses in layer order ---------------- */
+  const personOf = (id) => Object.assign({ name: "", role: ROLE[id], handle: "", number: "", side: id % 2 ? "left" : "right" }, (store.people || {})[id] || {});
+  const ltURL = (id, p) => url("lower-third.html", { id, name: p.name, role: p.role, handle: p.handle, number: p.number, side: p.side === "right" ? "right" : "", hidden: "1" });
+  const frameURL = (id) => { const sh = $("cShape").value; return url("frame.html", { id, shape: sh === "circle" ? "" : sh }); };
+  /** Step 3d: every Main Show address in layer order (top of the Sources list first). */
+  function renderMainShow() {
+    const box = $("mainShow"); if (!box) return;
+    box.innerHTML = "";
+    const named = [1, 2, 3, 4].filter((id) => personOf(id).name.trim());
+    const people = named.length ? named : [1];
+    const peopleNote = named.length ? "" : "Showing person 1. Type names in step 6 and a box appears here for each person.";
+    const shape = $("cShape").value, file = { circle: "circle", rounded: "rounded-square", hexagon: "hexagon" }[shape];
+    const layers = [
+      { n: 1, name: "Sound effects", where: "top of the list", step: 8, rows: [{ title: "Sound effects", kind: "Browser source", value: url("sfx.html"), w: 100, h: 100, ticks: ["Untick Local file", "Control audio via OBS"] }] },
+      { n: 2, name: "Debate overlay", step: 8, rows: [{ title: "Debate overlay", kind: "Browser source", value: url("debate.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }] },
+      { n: 3, name: "Instant replay", step: 8, note: "A <b>Media Source</b> named <b>AWYM Instant Replay</b>, with no file, hidden (eye off). Step 8 has the details.", rows: [] },
+      { n: 4, name: "Stats overlay", step: 8, rows: [{ title: "Stats overlay", kind: "Browser source", value: url("stats-card.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }] },
+      { n: 5, name: "On-screen text", step: 8, rows: [{ title: "On-screen text", kind: "Browser source", value: url("content.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }] },
+      { n: 6, name: "Shot clock", step: 7, rows: [{ title: "Shot clock", kind: "Browser source", value: url("shot-clock.html", { time: $("clkTime").value.trim(), label: $("clkLabel").value.trim() }), w: 640, h: 320, ticks: ["Untick Local file", "Control audio via OBS"] }] },
+      { n: 7, name: "Lower thirds", step: 6, note: peopleNote, rows: people.map((id) => { const p = personOf(id);
+          return { title: `Lower third ${id}${p.name ? " — " + p.name : ""}`, kind: "Browser source", value: ltURL(id, p), w: 1920, h: 1080, ticks: ["Untick Local file"] }; }) },
+      { n: 8, name: "Frame effects", step: 5, note: "Optional. Fire, ice, lightning… around each camera frame (the camera stays clear). One per frame, just above it.", rows: people.map((id) => {
+          return { title: `Frame effects ${id}`, kind: "Browser source", value: url("frame-fx.html", { id }), w: 1000, h: 1100, ticks: ["Untick Local file"] }; }) },
+      { n: 9, name: "Camera frames", step: 5, note: "Optional. One per camera, sized and positioned with the calculator in step 5.", rows: people.map((id) => {
+          const p = personOf(id); return { title: `Camera frame ${id}${p.name ? " — " + p.name : ""}`, kind: "Browser source", value: frameURL(id), w: 600, h: 660, ticks: ["Untick Local file"] }; }) },
+      { n: 10, name: "Cameras (masked)", step: 5, note: "Add each camera with Sources → <b>+</b> → <b>Video Capture Device</b> (no address needed). For the cutout, add Crop/Pad then Image Mask/Blend with this file (step 5 has the crop numbers):",
+        rows: [{ title: `Mask image (${shape})`, kind: "File path for Image Mask", value: toDiskPath(base + "masks/" + file + "-1x1.png"), path: true }] },
+      { n: 11, name: "Background", where: "bottom of the list", step: 4, rows: [{ title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }],
+        after: "Then right-click it → <b>Lock</b>, so you can't drag it by accident." }
+    ];
+    layers.forEach((L) => {
+      const el = document.createElement("div"); el.className = "layer";
+      el.innerHTML = `<div class="layer-h"><span class="ln">${L.n}</span><b>${L.name}</b>${L.where ? `<span class="chip">${L.where}</span>` : ""}<a href="#step-${L.step}">More detail: step ${L.step} ↓</a></div>
+        ${L.note ? `<div class="note2">${L.note}</div>` : ""}`;
+      L.rows.forEach((r) => row(el, Object.assign({ noAll: true }, r)));
+      if (L.after) el.insertAdjacentHTML("beforeend", `<div class="note2">${L.after}</div>`);
+      box.appendChild(el);
+    });
+  }
+
+  /* ---------------- everything else ---------------- */
+  /** Rebuild every address on the page (after the folder changes). */
+  function renderAll() {
+    all.length = 0;
+    if ($("luaPath")) $("luaPath").value = toDiskPath(base + "awym-obs-setup.lua");
+    folderCheck();
+    ["rows-docks", "rows-bg", "rows-clock", "rows-stats", "rows-screens"].forEach((id) => $(id).innerHTML = "");
+    row($("rows-docks"), { title: "Control Panel", kind: "Dock", value: url("control-panel.html"), notes: "Dock name: <b>AWYM Control</b>. Runs the shot clock, lower thirds, camera spotlight and stream screens." });
+    row($("rows-docks"), { title: "Stats Desk", kind: "Dock", value: url("stats-desk.html"), notes: "Dock name: <b>Stats Desk</b>. Looks up NBA games, players and standings." });
+    row($("rows-docks"), { title: "Theme Panel", kind: "Dock", value: url("theme-dock.html"), notes: "Dock name: <b>Theme Panel</b>. Change colors, fonts, background scene, badge, show name and glow on every overlay, live." });
+    row($("rows-docks"), { title: "Content Panel", kind: "Dock", value: url("content-panel.html"), notes: "Dock name: <b>Content Panel</b>. Type text (bold, lists, emojis, photos) and show it on screen, or import a whole show script from Google Docs / Word (template in <b>templates/</b>)." });
+    if ($("rows-guests")) { $("rows-guests").innerHTML = ""; row($("rows-guests"), { title: "Guests (optional dock)", kind: "Dock", value: url("guests.html"), notes: "Dock name: <b>Guests</b>. Only needed if you want <b>Send names to the Control Panel</b>; the links work from your normal browser too." }); }
+    row($("rows-docks"), { title: "Show Runner", kind: "Dock", value: url("show-runner.html"), notes: "Dock name: <b>Show Runner</b>. Rundown, debate scoreboard, hot-take receipts, sound board, frame effects, talk time (speaking light), clips &amp; replays, and Backup." });
+    row($("rows-bg"), { title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
+    renderClock();
+    row($("rows-stats"), { title: "Stats overlay", kind: "Browser source", value: url("stats-card.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
+    row($("rows-stats"), { title: "On-screen text", kind: "Browser source", value: url("content.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
+    row($("rows-stats"), { title: "Debate overlay", kind: "Browser source", value: url("debate.html"), w: 1920, h: 1080, ticks: ["Untick Local file"], notes: "Scoreboard, winner, receipts, segment intros and the REPLAY tag, from the Show Runner." });
+    row($("rows-stats"), { title: "Sound effects", kind: "Browser source", value: url("sfx.html"), w: 100, h: 100, ticks: ["Untick Local file", "Control audio via OBS"], notes: "Invisible. Plays the Show Runner's sound board into your stream and recording." });
+    const SCR = window.AWYM_SCREENS || {};
+    const extra = { starting: { minutes: 5 }, brb: { minutes: 5 }, intermission: { minutes: 10 }, halftime: { minutes: 10 } };
+    Object.entries(SCR).forEach(([k, s]) => {
+      if (k === "custom") return;
+      row($("rows-screens"), { title: s.name + " screen", kind: "Browser source", value: url("screen.html", Object.assign({ type: k }, extra[k] || {})),
+        w: 1920, h: 1080, ticks: ["Untick Local file"].concat(extra[k] ? ["Refresh browser when scene becomes active"] : []),
+        notes: extra[k] ? `Counts down ${extra[k].minutes} minutes each time you switch to it. Change the number at the end of the address, or use the Screen Maker.` : "" });
+    });
+    row($("rows-screens"), { title: "Custom message screen", kind: "Browser source", value: url("screen.html", { type: "custom", title: "Your Message Here", message: "Type anything you like" }),
+      w: 1920, h: 1080, ticks: ["Untick Local file"], notes: "Make your own words in the <a href='screen-maker.html' target='_blank'>Screen Maker</a>, or change them live from the Control Panel." });
+    renderPeople();
+    renderCamera();
+  }
+  function renderClock() {
+    const box = $("rows-clock"); box.innerHTML = "";
+    const i = all.findIndex((a) => a[0] === "Shot clock"); if (i >= 0) all.splice(i, 1);
+    row(box, { title: "Shot clock", kind: "Browser source", value: url("shot-clock.html", { time: $("clkTime").value.trim(), label: $("clkLabel").value.trim() }),
+      w: 640, h: 320, ticks: ["Untick Local file", "Control audio via OBS"] });
+    renderMainShow();
+  }
+  ["clkTime", "clkLabel"].forEach((id) => { if (store[id] != null) $(id).value = store[id]; $(id).addEventListener("input", () => { store[id] = $(id).value; save(); renderClock(); }); });
+
+  document.querySelectorAll(".step").forEach((s) => s.id = "step-" + s.dataset.step);
+  $("luaCopy").onclick = (e) => copy($("luaPath").value, e.target);
+  $("luaPath").onfocus = (e) => e.target.select();
+
+  /* ---------------- step checkboxes + progress ---------------- */
+  store.done = store.done || {};
+  const steps = [...document.querySelectorAll(".step")];
+  /** Tick marks, progress bar and "x of 9 steps done". */
+  function paintProgress() {
+    const n = steps.filter((s) => store.done[s.dataset.step]).length;
+    steps.forEach((s) => { s.classList.toggle("done", !!store.done[s.dataset.step]); s.querySelector(".donebox input").checked = !!store.done[s.dataset.step]; });
+    $("pbar").style.width = (100 * n / steps.length) + "%";
+    $("ptext").textContent = `${n} of ${steps.length} steps done`;
+  }
+  steps.forEach((s) => s.querySelector(".donebox input").addEventListener("change", (e) => { store.done[s.dataset.step] = e.target.checked; save(); paintProgress(); }));
+
+  $("copyAll").onclick = (e) => {
+    const lines = ["OBS addresses for " + AWYM.showName(), "Folder: " + toDiskPath(base), ""];
+    const seen = new Set();
+    const extra = [...document.querySelectorAll("#mainShow .addr")].map((a) => [a.querySelector(".top b").textContent, a.querySelector("input").value]);
+    all.concat(extra).forEach(([t, v]) => { if (seen.has(t)) return; seen.add(t); lines.push(t + ":", v, ""); });
+    copy(lines.join("\n"));
+    e.target.textContent = "Copied all"; setTimeout(() => e.target.textContent = "Copy all addresses", 1500);
+  };
+
+  store.scenes = store.scenes || {};
+  document.querySelectorAll("#sceneList input").forEach((i) => {
+    i.checked = !!store.scenes[i.dataset.sc];
+    i.addEventListener("change", () => { store.scenes[i.dataset.sc] = i.checked; save(); });
+  });
+
+  renderAll();
+  $("markAuto").onclick = () => { ["3", "4", "6", "7", "8"].forEach((k) => store.done[k] = true); save(); paintProgress(); };
+  paintProgress();
+  if (store.base) $("folderIn").value = toDiskPath(store.base);
+  if (!detected) $("overrideBox").open = true;
+})();
+</script>
+</body>
+</html>

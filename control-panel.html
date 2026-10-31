@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Control Panel</title>
+<!--
+  CONTROL PANEL — add this as an OBS Custom Browser Dock
+  (Docks → Custom Browser Docks…, paste this file's address, e.g.
+   file:///C:/Users/you/Documents/awym-obs/control-panel.html)
+  It controls the shot clock and lower thirds running in OBS.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS Custom Browser Dock (any width ≥ 280px).
+  Uses:      theme.css, shared.js, screens.js.
+  Sections (one script each, all talking through shared.js — see its message reference):
+    Shot clock        → to:"clock"       (reads from:"clock" for the readout)
+    People            → to:"lower" / to:"frame"  (name details, Show/Hide, ★ spotlight)
+    Background title  → to:"background"
+    Stream screens    → to:"screen"
+  Saved in browser storage (survives OBS restarts):
+    awym-control-v1   people's details      awym-bgtitle-v1   background title
+    awym-screens-v1   stream screen words   awym-control-fold-v1  folded sections
+  Folding:   click a section header to fold it (AWYM.collapsible in shared.js;
+             each <section data-fold="…"> is remembered by that name).
+  When an overlay says "hello" (it just loaded), the matching section re-sends
+  what's saved, so overlays come back exactly as they were.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Control Panel dock styles: compact, readable at dock widths from about 280px. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--dark); color: var(--light); }
+  body { font-family: var(--font-body); font-size: 16px; padding: 12px; min-width: 280px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  header h1 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 400; color: var(--primary); line-height: 1.1; }
+  header .tools { display: flex; align-items: center; gap: 8px; }
+  .foldall { padding: 2px 8px; font-size: 15px; line-height: 1.2; opacity: .8; }
+  header h1::before { content: var(--show-name); }
+  .conn { font-size: 13px; display: flex; align-items: center; gap: 6px; opacity: .85; white-space: nowrap; }
+  .conn i { width: 9px; height: 9px; border-radius: 50%; background: #777; display: inline-block; }
+  .conn.ok i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+
+  section { background: var(--secondary); border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.08); }
+  h2 { margin: 0 0 10px; font-family: var(--font-heading); font-weight: 400; font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+
+  .readout { display: flex; align-items: baseline; justify-content: space-between; background: var(--dark); border-radius: 8px; padding: 6px 12px; margin-bottom: 10px; }
+  .readout .t { font-family: var(--font-heading); font-size: 40px; color: var(--clock-digit); letter-spacing: 2px; font-variant-numeric: tabular-nums; }
+  .readout .t.warn { color: var(--warning); }
+  .readout .s { font-size: 14px; text-transform: uppercase; letter-spacing: 1px; opacity: .8; text-align: right; }
+
+  .grid { display: grid; gap: 6px; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .g2 { grid-template-columns: 1fr 1fr; }
+  .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  h2 .live { width: 10px; height: 10px; border-radius: 50%; border: 1px solid rgba(255,255,255,.3); display: inline-block; }
+  h2 .live.on { background: #3DDC84; border-color: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+
+  button {
+    font: inherit; font-weight: 700; font-size: 15px; letter-spacing: .5px;
+    background: rgba(255,255,255,.08); color: var(--light);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+    padding: 8px 6px; cursor: pointer; text-transform: uppercase;
+  }
+  button:hover { background: rgba(255,255,255,.16); }
+  button:active { transform: translateY(1px); }
+  button.primary { background: var(--primary); color: var(--dark); border-color: transparent; font-size: 18px; }
+  button.accent { background: var(--accent); color: var(--dark); border-color: transparent; }
+  button.on { outline: 2px solid var(--accent); }
+  #clockVis.off { background: var(--warning); color: #fff; border-color: transparent; }
+  .foilbtn { white-space: nowrap; font-size: 14px; padding-left: 4px; padding-right: 4px; background: linear-gradient(110deg, #8f97a4, #eef1f5 35%, #9ea6b2 55%, #f7f9fb 75%, #a7afba); color: #1b1e24; border-color: #c9ced6; text-shadow: 0 1px 0 rgba(255,255,255,.6); }
+  .foilbtn:hover { filter: brightness(1.08); background: linear-gradient(110deg, #8f97a4, #eef1f5 35%, #9ea6b2 55%, #f7f9fb 75%, #a7afba); }
+  .foilbtn.on { outline: 3px solid #9fe8ff; box-shadow: 0 0 12px #9fe8ff; }
+
+  label { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 8px 0 3px; }
+  input[type=text] {
+    width: 100%; font: inherit; font-size: 16px; color: var(--light);
+    background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 7px 9px;
+  }
+  input[type=text]:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .inline { display: flex; gap: 6px; }
+  .inline input { flex: 1; }
+  #presets button { display: flex; flex-direction: column; align-items: center; line-height: 1.1; }
+  #presets small { font-size: 11px; font-weight: 600; opacity: .55; letter-spacing: .5px; text-transform: none; }
+  .keyhint { text-transform: none; letter-spacing: 0; opacity: .8; }
+  .custom { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 6px; align-items: center; }
+  .custom span { font-size: 14px; opacity: .75; }
+  .custom input { width: 100%; min-width: 0; font: inherit; font-size: 20px; font-weight: 700; text-align: center; color: var(--light); background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 6px 4px; }
+  .custom input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+  .chips button { font-size: 12px; padding: 4px 8px; border-radius: 999px; text-transform: none; font-weight: 600; }
+
+  details.slot { background: var(--dark); border-radius: 9px; margin-bottom: 8px; border: 1px solid rgba(255,255,255,.08); }
+  details.slot > summary { list-style: none; display: flex; align-items: center; gap: 8px; padding: 8px 10px; cursor: pointer; }
+  details.slot > summary::-webkit-details-marker { display: none; }
+  .badge { flex: none; width: 30px; height: 30px; border-radius: 7px; background: var(--primary); color: var(--dark); font-family: var(--font-heading); font-size: 18px; display: flex; align-items: center; justify-content: center; }
+  .who { flex: 1; min-width: 0; font-weight: 700; font-size: 17px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .who small { display: block; font-weight: 500; font-size: 13px; opacity: .7; }
+  .live { width: 9px; height: 9px; border-radius: 50%; background: transparent; border: 1px solid rgba(255,255,255,.3); flex: none; }
+  .live.on { background: #3DDC84; border-color: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+  summary button { padding: 6px 10px; font-size: 13px; }
+  .spotbtn { padding: 6px 9px; font-size: 14px; }
+  .spotbtn.on { background: var(--accent); color: var(--dark); border-color: transparent; }
+  .slot-body { padding: 0 10px 10px; }
+  .sel, textarea { width: 100%; font: inherit; font-size: 15px; color: var(--light); background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 7px 9px; }
+  textarea { resize: vertical; }
+  .hint { font-size: 13px; opacity: .7; margin: 8px 0 0; line-height: 1.35; }
+</style>
+</head>
+<body>
+  <header>
+    <h1></h1>
+    <div class="tools"><div class="conn" id="conn"><i></i><span>Waiting for overlays</span></div>
+      <button class="foldall" id="foldAll" title="Fold or unfold every section">⊟</button></div>
+  </header>
+
+  <section data-fold="clock">
+    <h2><span class="ttl">Shot Clock</span> <span style="display:flex;gap:6px"><button id="clockVis" title="Hide the shot clock from the screen (it keeps counting)">Hide clock</button><button id="sound" class="on" title="Buzzer and countdown ticks">Sound on</button></span></h2>
+    <div class="readout"><span class="t" id="readout">--:--</span><span class="s" id="clockState">Not connected</span></div>
+
+    <div class="grid g3" style="margin-bottom:6px">
+      <button id="minus">−5s</button>
+      <button id="toggle" class="primary">Start</button>
+      <button id="plus">+5s</button>
+    </div>
+    <div class="grid g3">
+      <button id="reset">Reset</button>
+      <button id="buzz" class="accent">Buzzer</button>
+      <button id="foil" class="foilbtn" title="Call out a conspiracy-theory take: tin-foil hat + spooky sound on the shot clock. Click again to turn off.">🛸 Tin Foil</button>
+    </div>
+
+    <label>Quick times <span class="keyhint">(same as keys 0–5 on the clock)</span></label>
+    <div class="grid g3" id="presets">
+      <button data-s="30">0:30<small>key 0</small></button><button data-s="60">1:00<small>key 1</small></button><button data-s="120">2:00<small>key 2</small></button>
+      <button data-s="180">3:00<small>key 3</small></button><button data-s="240">4:00<small>key 4</small></button><button data-s="300">5:00<small>key 5</small></button>
+    </div>
+
+    <label for="cmin">Custom time</label>
+    <div class="custom">
+      <input type="number" id="cmin" min="0" max="99" placeholder="0" inputmode="numeric"><span>min</span>
+      <input type="number" id="csec" min="0" max="59" placeholder="45" inputmode="numeric"><span>sec</span>
+    </div>
+    <div class="grid g2" style="margin-top:6px"><button id="setCustom">Set</button><button class="primary" id="setStart">Set &amp; start</button></div>
+
+    <label for="seg">Segment label</label>
+    <div class="inline"><input type="text" id="seg" placeholder="Shot Clock"><button id="setSeg">Set</button></div>
+    <div class="chips" id="segChips">
+      <button>Hot Take</button><button>Rebuttal</button><button>Fast Break</button>
+      <button>Buy or Sell</button><button>Starting Five</button><button>Closing Argument</button><button>Yo Momma Says</button><button>Tin Foil</button>
+    </div>
+  </section>
+
+  <section data-fold="people">
+    <h2><span class="ttl">People</span> <span style="display:flex;gap:6px"><button id="spotOff" title="Turn off every spotlight">★ Off</button><button id="hideAll">Hide all</button></span></h2>
+    <div id="slots"></div>
+    <p class="hint"><b>Show</b> slides that person's lower third in. <b>★</b> lights up their camera frame ("has the floor"). Lower thirds and frames use <b>?id=1</b> to <b>?id=4</b> in their address to match a slot here. Changes save automatically and update live.</p>
+  </section>
+
+  <section data-fold="bgtitle">
+    <h2><span class="ttl">Background title</span> <span class="live" id="bgLive" title="Background connected"></span></h2>
+    <label for="bgTitle">Title</label><input type="text" id="bgTitle" placeholder="Show name">
+    <label for="bgTag">Tagline</label><input type="text" id="bgTag" placeholder="Optional line under the title">
+    <label>Position</label>
+    <div class="grid g4" id="bgPos"><button data-v="top">Top</button><button data-v="center">Center</button><button data-v="bottom">Bottom</button><button data-v="none">Hide</button></div>
+    <div class="grid g2" style="margin-top:8px"><button class="primary" id="bgSend">Update title</button><button id="bgReset">Back to default</button></div>
+    <p class="hint">Changes the title on the full-screen background (Main Show). Leave Title empty to use the show name. Your changes are remembered next time OBS starts; <b>Back to default</b> undoes them.</p>
+  </section>
+
+  <section data-fold="screens">
+    <h2><span class="ttl">Stream screens</span></h2>
+    <label for="scrType">Screen</label>
+    <select id="scrType" class="sel"></select>
+    <label for="scrTitle">Headline</label><input type="text" id="scrTitle">
+    <label for="scrMsg">Message</label><input type="text" id="scrMsg">
+    <label for="scrLines">Rotating lines (one per line)</label><textarea id="scrLines" rows="3"></textarea>
+    <label for="scrNext">Bottom line</label><input type="text" id="scrNext" placeholder="e.g. Next show: Friday 8pm">
+    <div class="grid g2" style="margin-top:8px"><button class="primary" id="scrSend">Update screen</button><button id="scrForget" title="Stop sending your saved words to this screen">Forget changes</button></div>
+    <label for="scrMin">Countdown</label>
+    <div class="custom" style="grid-template-columns: 1fr auto auto auto">
+      <input type="number" id="scrMin" min="1" max="600" value="5"><span>min</span>
+      <button id="scrStart">Start</button><button id="scrStop">Stop</button>
+    </div>
+    <p class="hint" id="scrHint">Changes go to every screen source of this type. Make the screens in <b>screen-maker.html</b>.</p>
+  </section>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const STORE = "awym-control-v1";
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) {} };
+
+  /** Send a command to the shot clock, e.g. clock("set", {seconds: 90}). */
+  const clock = (cmd, extra) => AWYM.send(Object.assign({ to: "clock", cmd }, extra || {}));
+
+  /* ---------- connection light ---------- */
+  let lastHeard = 0;
+  setInterval(() => {
+    const ok = Date.now() - lastHeard < 2500;
+    $("conn").classList.toggle("ok", ok);
+    $("conn").querySelector("span").textContent = ok ? "Overlays connected" : "Waiting for overlays";
+    if (Date.now() - lastClock > 2500) { $("readout").textContent = "--:--"; $("clockState").textContent = "Clock not connected"; }
+  }, 1000);
+
+  /* ---------- shot clock ---------- */
+  let lastClock = 0, clockRunning = false;
+  /** Readout text: tenths under 10 s ("7.6"), otherwise m:ss. */
+  function fmt(ms) {
+    if (ms < 10000 && ms > 0) return (Math.floor(ms / 100) / 10).toFixed(1);
+    const s = Math.ceil(ms / 1000);
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  }
+  $("toggle").onclick = () => clock("toggle");
+  $("reset").onclick = () => clock("reset");
+  $("minus").onclick = () => clock("add", { seconds: -5 });
+  $("plus").onclick = () => clock("add", { seconds: 5 });
+  $("buzz").onclick = () => clock("buzz");
+  let foilOn = false;
+  $("foil").onclick = () => clock("foil", { on: !foilOn });
+  function paintFoil() { $("foil").classList.toggle("on", foilOn); $("foil").textContent = foilOn ? "🛸 Foil off" : "🛸 Tin Foil"; }
+  let soundOn = true;
+  $("sound").onclick = () => { soundOn = !soundOn; clock("sound", { on: soundOn }); paintSound(); };
+  /* Hide / show the whole clock on screen (it keeps counting while hidden) */
+  let clockHidden = false;
+  $("clockVis").onclick = () => { clockHidden = !clockHidden; clock("visible", { on: !clockHidden }); paintVis(); };
+  function paintVis() { $("clockVis").textContent = clockHidden ? "Show clock" : "Hide clock"; $("clockVis").classList.toggle("off", clockHidden); }
+  function paintSound() { $("sound").textContent = soundOn ? "Sound on" : "Sound off"; $("sound").classList.toggle("on", soundOn); }
+
+  $("presets").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-s]");
+    if (b) clock("set", { seconds: Number(b.dataset.s) });
+  });
+  /** Set the clock from the minutes + seconds boxes (90 s is fine: becomes 1:30). */
+  function setCustom(autostart) {
+    const m = Math.max(0, Math.min(99, parseInt($("cmin").value, 10) || 0));
+    const s = Math.max(0, parseInt($("csec").value, 10) || 0);   // 90 sec is fine: becomes 1:30
+    const secs = m * 60 + s;
+    if (secs > 0) clock("set", { seconds: secs, autostart: !!autostart });
+  }
+  $("setCustom").onclick = () => setCustom(false);
+  $("setStart").onclick = () => setCustom(true);
+  ["cmin", "csec"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") setCustom(false); }));
+
+  /** Set the clock's segment label (e.g. "Hot Take"). */
+  function setSeg(text) { $("seg").value = text; clock("label", { label: text }); }
+  $("setSeg").onclick = () => setSeg($("seg").value.trim());
+  $("seg").addEventListener("keydown", (e) => { if (e.key === "Enter") setSeg($("seg").value.trim()); });
+  $("segChips").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") setSeg(e.target.textContent); });
+
+  /* ---------- lower thirds ---------- */
+  /* ---------- people: lower thirds + camera frames, slots 1–4 ---------- */
+  const SLOTS = ["1", "2", "3", "4"];
+  const ROLE_HINT = { "1": "Moderator", "2": "Host", "3": "Host", "4": "Guest" };
+  const EMPTY = { name: "", role: "", handle: "", number: "" };
+  saved.slots = saved.slots || {};
+  const visibleState = {}, spotState = {};
+
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  /** A slot's saved details with blanks filled in. */
+  function slotData(id) { return Object.assign({}, EMPTY, saved.slots[id] || {}); }
+  // Only send details the user actually typed, so overlays keep their own URL settings otherwise.
+  /** Only the details actually typed in (so overlays keep their own address settings otherwise). */
+  function typedData(id) {
+    const s = saved.slots[id] || {}, out = {};
+    for (const k of ["name", "role", "handle", "number"]) if (s[k]) out[k] = s[k];
+    return out;
+  }
+
+  /** Draw the four people slots and wire up their inputs, Show/Hide and ★ buttons. */
+  function buildSlots() {
+    $("slots").innerHTML = SLOTS.map((id) => {
+      const d = slotData(id);
+      return `<details class="slot" data-id="${id}" ${id === "1" ? "open" : ""}>
+        <summary>
+          <span class="badge">${id}</span>
+          <span class="who"><span class="nm">${esc(d.name || "Slot " + id)}</span><small class="rl">${esc(d.role || "Set details below")}</small></span>
+          <span class="live" title="On screen"></span>
+          <button class="spotbtn" title="Spotlight this person's camera frame (turns the others off)">★</button>
+          <button class="primary showbtn">Show</button>
+        </summary>
+        <div class="slot-body">
+          <div class="grid g2">
+            <div><label>Name</label><input type="text" data-k="name" value="${esc(d.name)}" placeholder="Name"></div>
+            <div><label>Role</label><input type="text" data-k="role" value="${esc(d.role)}" placeholder="${ROLE_HINT[id]}"></div>
+            <div><label>Handle</label><input type="text" data-k="handle" value="${esc(d.handle)}" placeholder="@handle"></div>
+            <div><label>Jersey #</label><input type="text" data-k="number" value="${esc(d.number)}" placeholder="23" maxlength="2"></div>
+          </div>
+        </div>
+      </details>`;
+    }).join("");
+
+    document.querySelectorAll(".slot").forEach((el) => {
+      const id = el.dataset.id;
+      el.querySelector(".showbtn").addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        AWYM.send({ to: "lower", id, cmd: visibleState[id] ? "hide" : "show", data: typedData(id) });
+      });
+      el.querySelector(".spotbtn").addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const turnOn = !spotState[id];
+        SLOTS.forEach((other) => { if (other !== id && spotState[other]) AWYM.send({ to: "frame", id: other, cmd: "spotlight", on: false }); });
+        AWYM.send({ to: "frame", id, cmd: "spotlight", on: turnOn });
+      });
+      el.querySelectorAll("input").forEach((inp) => {
+        inp.addEventListener("input", () => {
+          saved.slots[id] = Object.assign({}, saved.slots[id] || {}, { [inp.dataset.k]: inp.value });
+          save();
+          const d = slotData(id);
+          el.querySelector(".nm").textContent = d.name || "Slot " + id;
+          el.querySelector(".rl").textContent = d.role || "Set details below";
+          AWYM.send({ to: "lower", id, cmd: "update", data: { [inp.dataset.k]: inp.value } });
+        });
+      });
+    });
+  }
+  /** Update a slot's on-screen light, Show/Hide label and ★ state. */
+  function paintSlot(id) {
+    const el = document.querySelector(`.slot[data-id="${id}"]`);
+    if (!el) return;
+    el.querySelector(".live").classList.toggle("on", !!visibleState[id]);
+    el.querySelector(".showbtn").textContent = visibleState[id] ? "Hide" : "Show";
+    el.querySelector(".spotbtn").classList.toggle("on", !!spotState[id]);
+  }
+  $("spotOff").onclick = () => AWYM.send({ to: "frame", id: "*", cmd: "spotlight", on: false });
+  $("hideAll").onclick = () => AWYM.send({ to: "lower", id: "*", cmd: "hide" });
+
+  /* ---------- names sent from the Guests page (guests.html) ----------
+     {to:"control", cmd:"person", id:"2", data:{name, role}, nonce} → fill that slot,
+     update its lower third and frame, and answer {from:"control", ack: nonce}. */
+  AWYM.listen((m) => {
+    if (m.to !== "control" || m.cmd !== "person" || !SLOTS.includes(String(m.id))) return;
+    const id = String(m.id), d = {};
+    ["name", "role", "handle", "number"].forEach((k) => { if (m.data && typeof m.data[k] === "string") d[k] = m.data[k].slice(0, 80); });
+    saved.slots[id] = Object.assign({}, saved.slots[id] || {}, d); save();
+    buildSlots(); SLOTS.forEach(paintSlot);
+    AWYM.send({ to: "lower", id, cmd: "update", data: d });
+    AWYM.send({ from: "control", ack: m.nonce });
+  });
+
+  /* ---------- messages from overlays ---------- */
+  AWYM.listen((m) => {
+    if (m.from === "clock") {
+      lastHeard = lastClock = Date.now();
+      clockRunning = m.running;
+      $("readout").textContent = fmt(m.remaining);
+      $("readout").classList.toggle("warn", m.expired || (m.remaining <= 10000 && m.total > 10));
+      $("clockState").innerHTML = esc(m.label) + "<br>" + (m.expired ? "Time!" : m.running ? "Live" : "Stopped") + (m.hidden ? " · hidden" : "");
+      $("toggle").textContent = m.running ? "Pause" : "Start";
+      if (m.sound !== soundOn) { soundOn = m.sound; paintSound(); }
+      if (!!m.hidden !== clockHidden) { clockHidden = !!m.hidden; paintVis(); }
+      if (!!m.foil !== foilOn) { foilOn = !!m.foil; paintFoil(); }
+    } else if (m.from === "frame") {
+      lastHeard = Date.now();
+      if (m.cmd === "hello") {
+        const d = typedData(m.id);
+        if (Object.keys(d).length) AWYM.send({ to: "lower", id: m.id, cmd: "update", data: d });
+      } else { spotState[m.id] = m.spot; paintSlot(m.id); }
+    } else if (m.from === "lower") {
+      lastHeard = Date.now();
+      if (m.cmd === "hello") {
+        const d = typedData(m.id);
+        if (Object.keys(d).length) AWYM.send({ to: "lower", id: m.id, cmd: "update", data: d });
+      } else {
+        visibleState[m.id] = m.visible; paintSlot(m.id);
+      }
+    }
+  });
+
+  buildSlots();
+  AWYM.send({ to: "lower", id: "*", cmd: "ping" });
+  AWYM.send({ to: "frame", id: "*", cmd: "ping" });
+})();
+</script>
+<script>
+/* ---------- background title: edit it live ---------- */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const STORE = "awym-bgtitle-v1";
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "null"); } catch (e) {}
+  const save = () => { try { saved ? localStorage.setItem(STORE, JSON.stringify(saved)) : localStorage.removeItem(STORE); } catch (e) {} };
+  let posSel = (saved && saved.position) || "top", heard = 0, filled = !!saved;
+  function paintPos() { $("bgPos").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === posSel)); }
+  if (saved) { $("bgTitle").value = saved.title || ""; $("bgTag").value = saved.tagline || ""; }
+  paintPos();
+  $("bgPos").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; posSel = b.dataset.v; paintPos(); send(); });
+  /** Send the title, tagline and position to the background (and remember them). */
+  function send() {
+    saved = { title: $("bgTitle").value.trim(), tagline: $("bgTag").value.trim(), position: posSel }; save(); filled = true;
+    AWYM.send({ to: "background", cmd: "update", data: saved });
+  }
+  $("bgSend").onclick = send;
+  ["bgTitle", "bgTag"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") send(); }));
+  $("bgReset").onclick = () => { saved = null; save(); filled = false; AWYM.send({ to: "background", cmd: "reset" }); };
+  AWYM.listen((m) => {
+    if (m.from !== "background") return;
+    heard = Date.now();
+    if (m.cmd === "hello" && saved) { AWYM.send({ to: "background", cmd: "update", data: saved }); return; }
+    if (!filled) {   // show what the background currently says
+      $("bgTitle").value = m.original && m.title === m.original.title ? "" : (m.title || "");
+      $("bgTitle").placeholder = (m.original && m.original.title) || "Show name";
+      $("bgTag").value = m.tagline || ""; posSel = m.position || "top"; paintPos();
+    }
+  });
+  setInterval(() => { AWYM.send({ to: "background", cmd: "ping" }); $("bgLive").classList.toggle("on", Date.now() - heard < 4000); }, 1500);
+  AWYM.send({ to: "background", cmd: "ping" });
+})();
+</script>
+<script src="screens.js"></script>
+<script>
+/* ---------- stream screens: change the words and countdown live ---------- */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const TYPES = window.AWYM_SCREENS || {};
+  const STORE = "awym-screens-v1";
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(STORE) || "{}"); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(saved)); } catch (e) {} };
+  $("scrType").innerHTML = Object.entries(TYPES).map(([k, t]) => `<option value="${k}">${t.name}</option>`).join("");
+  const seen = {};
+  /** Fill the boxes with the selected screen's saved words (or its defaults). */
+  function fill() {
+    const k = $("scrType").value, d = TYPES[k], v = saved[k] || {};
+    $("scrTitle").value = v.title ?? d.title; $("scrMsg").value = v.message ?? d.message;
+    $("scrLines").value = String(v.lines ?? d.lines ?? "").split("|").filter(Boolean).join("\n");
+    $("scrNext").value = v.next ?? "";
+    $("scrHint").innerHTML = (seen[k] ? "<b>Connected</b> to this screen. " : "") + "Changes go to every screen source of this type. Make the screens in <b>screen-maker.html</b>.";
+  }
+  /** The words currently typed in, as a screen update. */
+  function current() {
+    return { title: $("scrTitle").value, message: $("scrMsg").value,
+             lines: $("scrLines").value.split("\n").map((x) => x.trim()).filter(Boolean).join("|"), next: $("scrNext").value };
+  }
+  $("scrType").onchange = fill;
+  $("scrSend").onclick = () => { const k = $("scrType").value; saved[k] = current(); save(); AWYM.send({ to: "screen", type: k, cmd: "update", data: saved[k] }); };
+  $("scrForget").onclick = () => { delete saved[$("scrType").value]; save(); fill(); };
+  $("scrStart").onclick = () => AWYM.send({ to: "screen", type: $("scrType").value, cmd: "update", data: { minutes: String(Math.max(1, Number($("scrMin").value) || 5)), at: "" } });
+  $("scrStop").onclick = () => AWYM.send({ to: "screen", type: $("scrType").value, cmd: "update", data: { minutes: "", at: "" } });
+  AWYM.listen((m) => {
+    if (m.from !== "screen") return;
+    seen[m.type] = true; if (m.type === $("scrType").value) fill();
+    if (m.cmd === "hello" && saved[m.type]) AWYM.send({ to: "screen", type: m.type, cmd: "update", data: saved[m.type] });
+  });
+  fill();
+})();
+</script>
+<script>
+/* Control dock: adds the 🚨 Clear button to the top bar (see AWYM.dock in shared.js).
+   Lower thirds and frames report back when they hide, so the buttons below update themselves. */
+AWYM.dock("control");
+</script>
+<script>
+/* Collapsible sections: click a section's header to fold it away (remembered).
+   The ⊟ button in the top bar folds or unfolds everything. See AWYM.collapsible in shared.js. */
+(function () {
+  const foldAll = AWYM.collapsible("awym-control-fold-v1");
+  const btn = document.getElementById("foldAll");
+  if (btn) btn.onclick = () => {
+    const open = document.querySelectorAll("section:not(.folded) > h2.fold").length;
+    foldAll(open > 0);
+  };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# OS and editor clutter
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.vscode/
+.idea/
+
+# Your own backups (Show Runner → Backup & restore). They hold your show's
+# settings, so they stay on your computer.
+backups/*
+!backups/README.txt
+
+# Your own replacement sounds (sounds/<name>.mp3 …); the kit's recordings in
+# sounds/kit/ are part of the project.
+sounds/*
+!sounds/README.txt
+!sounds/kit/
+
+# Build scratch for tools/
+tools/.build/
+__pycache__/

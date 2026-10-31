@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Theme Panel</title>
+<!--
+  THEME PANEL — add as an OBS Custom Browser Dock (Docks → Custom Browser Docks…).
+  Changes colors, fonts, background scene, lower-third badge and show name
+  on every overlay instantly, while OBS is running. OBS remembers it.
+  "Copy as theme.css" lets you save the look into the theme file too.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS Custom Browser Dock.
+  Uses:      theme.css, shared.js, backgrounds.js (scene list), packs.js, presets.js.
+  How it works: the panel keeps one theme object (same keys as AWYM.applyTheme in
+             shared.js) and sends it as JSON with AWYM.setLiveTheme(), which applies
+             it here and sends to:"theme" set {json} to every page. Pages keep it in
+             browser storage; when one loads it says "hello" and gets the current theme.
+             "Back to theme.css" sends to:"theme" reset.
+  Keys only appear in the theme once changed (e.g. bg-anim, title-size, glow), so
+  untouched settings keep following the address / theme.css.
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Theme Panel dock styles: collapsible sections (<details>), compact for dock widths from about 280px. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--dark); color: var(--light); }
+  body { font-family: var(--font-body); font-size: 16px; padding: 12px; min-width: 280px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  header h1 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 400; color: var(--primary); }
+  .conn { font-size: 13px; display: flex; align-items: center; gap: 6px; opacity: .85; white-space: nowrap; }
+  .conn i { width: 9px; height: 9px; border-radius: 50%; background: #777; display: inline-block; }
+  .conn.ok i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+  details { background: var(--secondary); border-radius: 12px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,.08); }
+  summary { cursor: pointer; list-style: none; padding: 11px 12px; font-family: var(--font-heading); font-size: 17px; letter-spacing: 1.5px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+  summary::-webkit-details-marker { display: none; }
+  summary::after { content: "▸"; opacity: .6; transition: transform .2s; }
+  details[open] summary::after { transform: rotate(90deg); }
+  summary small { font-family: var(--font-body); font-size: 13px; letter-spacing: 0; text-transform: none; opacity: .7; margin-left: 6px; flex: 1; }
+  .in { padding: 0 12px 12px; }
+  button { font: inherit; font-weight: 700; font-size: 14px; color: var(--light); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 8px 6px; cursor: pointer; }
+  button:hover { background: rgba(255,255,255,.16); }
+  .primary { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .grid { display: grid; gap: 6px; } .g2 { grid-template-columns: 1fr 1fr; }
+  .tile { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px; text-align: left; padding: 6px; background: var(--dark); min-width: 0; }
+  .tile b { font-size: 13px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; }
+  .tile.on { outline: 2px solid var(--accent); }
+  .sw { display: flex; }
+  .sw i { width: 9px; height: 22px; display: block; }
+  .sw i:first-child { border-radius: 4px 0 0 4px; } .sw i:last-child { border-radius: 0 4px 4px 0; }
+  .scroll { max-height: 260px; overflow-y: auto; padding-right: 2px; }
+  #presets.scroll { max-height: 380px; }
+  .pcat { grid-column: 1 / -1; font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; opacity: .7; margin: 8px 2px 0; font-weight: 700; }
+  .pcat:first-child { margin-top: 0; }
+  .color { display: grid; grid-template-columns: 40px 1fr 84px; gap: 8px; align-items: center; padding: 4px 0; }
+  .color input[type=color] { width: 40px; height: 30px; padding: 0; border: 0; background: none; cursor: pointer; }
+  .color input[type=color]::-webkit-color-swatch-wrapper { padding: 0; }
+  .color input[type=color]::-webkit-color-swatch { border: 2px solid rgba(255,255,255,.2); border-radius: 7px; }
+  .color span { font-size: 14px; line-height: 1.2; }
+  .color span small { display: block; opacity: .65; font-size: 12px; }
+  label.l { display: block; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 10px 0 4px; }
+  label.l:first-child { margin-top: 0; }
+  input[type=text], select { width: 100%; min-width: 0; font: inherit; font-size: 15px; color: var(--light); background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 6px 8px; }
+  input.hex { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; text-transform: uppercase; }
+  input:focus, select:focus { outline: 2px solid var(--primary); border-color: transparent; }
+  .sample { margin-top: 4px; padding: 6px 8px; border-radius: 7px; background: var(--dark); font-size: 22px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .other { display: none; margin-top: 6px; }
+  .other.show { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+  .hint { font-size: 13px; opacity: .72; line-height: 1.4; margin: 8px 0 0; }
+  .actions { display: grid; gap: 6px; margin-top: 4px; }
+  .g3 { grid-template-columns: repeat(3, 1fr); }
+  .seg-on { background: var(--primary) !important; color: var(--dark) !important; border-color: transparent !important; }
+  .fx { display: grid; grid-template-columns: 20px 1fr; gap: 6px; align-items: start; padding: 4px 0; font-size: 14px; line-height: 1.25; cursor: pointer; }
+  .fx input, .chk input { width: 17px; height: 17px; accent-color: var(--primary); margin: 1px 0 0; }
+  .fx small { display: block; opacity: .65; font-size: 12px; }
+  .fx.off { opacity: .4; cursor: default; }
+  .chk { display: flex; gap: 8px; align-items: center; margin-top: 10px; font-size: 14px; cursor: pointer; }
+  input[type=range] { width: 100%; accent-color: var(--primary); }
+  .toast { font-size: 13px; color: #3DDC84; font-weight: 700; min-height: 1em; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <header><h1>Theme Panel</h1><div class="tools" style="display:flex;align-items:center;gap:8px"><div class="conn" id="conn"><i></i><span>Looking for overlays</span></div></div></header>
+
+  <details open>
+    <summary>Show packs <small>everything at once</small></summary>
+    <div class="in"><div class="grid g2" id="packs"></div>
+      <p class="hint">Sets the colors, fonts, background scene and badge together. Your show name stays.</p></div>
+  </details>
+
+  <details>
+    <summary>Color presets <small id="presetCount"></small></summary>
+    <div class="in"><div class="grid g2 scroll" id="presets"></div></div>
+  </details>
+
+  <details>
+    <summary>Colors <small>fine-tune</small></summary>
+    <div class="in" id="colors"></div>
+  </details>
+
+  <details>
+    <summary>Fonts <small>Google Fonts</small></summary>
+    <div class="in" id="fonts"></div>
+  </details>
+
+  <details>
+    <summary>Background &amp; badge</summary>
+    <div class="in">
+      <label class="l" for="scene">Background scene</label><select id="scene"></select>
+      <label class="l" for="badge">Lower-third badge (when there's no jersey number)</label><select id="badge"></select>
+      <label class="l" for="showName">Show name</label><input type="text" id="showName" placeholder="(blank: no show name)">
+      <label class="l" for="titleSize">Title size <b id="titleSizeVal" style="float:right">100%</b></label>
+      <input type="range" id="titleSize" min="50" max="200" step="5" value="100">
+      <div class="grid g2" style="margin-top:4px"><button id="titleSizeReset">Normal size</button></div>
+      <p class="hint">The show name appears on the background and the stream screens. Leave it blank to show no name at all. To change only the title on the Main Show background, use the Control Panel's "Background title".</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Animation <small>background motion</small></summary>
+    <div class="in">
+      <label class="l">Quick picks</label>
+      <div class="grid g3" id="animPresets"><button data-p="arena">Arena</button><button data-p="chill">Chill</button><button data-p="hoops">Hoops</button><button data-p="hype">Hype</button><button data-p="none">None</button><button data-p="default">Default</button></div>
+      <label class="l">Extra effects</label>
+      <div id="fxList"></div>
+      <label class="l">Speed <b id="spdVal" style="float:right">1×</b></label>
+      <input type="range" id="spd" min="0.25" max="2" step="0.25" value="1">
+      <label class="l">Intensity</label>
+      <div class="grid g3" id="amt"><button data-v="low">Low</button><button data-v="medium">Medium</button><button data-v="high">High</button></div>
+      <label class="chk" id="courtRow"><input type="checkbox" id="court"> Show court lines</label>
+      <p class="hint">Applies to the Main Show background. Every scene already has its own motion; these effects layer on top. "Default" goes back to the scene's normal look. Stream screens keep any animation chosen in the Screen Maker.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>Glow <small>neon &amp; light effects</small></summary>
+    <div class="in">
+      <label class="l" for="glow">Glow strength <b id="glowVal" style="float:right">100%</b></label>
+      <input type="range" id="glow" min="0" max="200" step="10" value="100">
+      <div class="grid g3" style="margin-top:4px"><button id="glowOff">No glow</button><button id="glowSoft">Soft</button><button id="glowReset">Normal</button></div>
+      <p class="hint">Turns the glow up or down everywhere: shot clock digits, neon titles (e.g. Synthwave), glowing court lines, crystal, torch and candle light in the scenes, the camera-frame spotlight and the stats LIVE dot. 0% = no glow, 200% = double. The spotlight never fully disappears, so viewers can still see who has the floor.</p>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Save &amp; reset</summary>
+    <div class="in">
+      <div class="actions">
+        <button class="primary" id="copyFile">Copy as theme.css</button>
+        <button id="reset">Back to theme.css</button>
+      </div>
+      <div class="toast" id="toast"></div>
+      <p class="hint">Changes show up on every overlay right away, and OBS remembers them. To keep this look in the theme file too (e.g. for another computer), click <b>Copy as theme.css</b>, open <b>theme.css</b> in the overlay folder, replace everything in it, and save. <b>Back to theme.css</b> undoes all changes made here.</p>
+    </div>
+  </details>
+
+<script src="shared.js"></script>
+<script src="backgrounds.js"></script>
+<script src="packs.js"></script>
+<script src="presets.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const COLORS = [["primary", "Primary", "numbers, borders, highlights"], ["secondary", "Secondary", "panel backgrounds"], ["accent", "Accent", "roles, tags"],
+                  ["dark", "Dark", "darkest areas"], ["light", "Light", "main text"], ["clock-digit", "Clock digits", "shot clock numbers"], ["warning", "Warning", "last 10 seconds"]];
+  const FONT_ROLES = [["display", "Title", () => theme["show-name"] || "Show Title"], ["heading", "Headings & numbers", () => "BIG MIKE · 112–104"], ["body", "Body text", () => "Moderator · @bigmike · 7 assists"]];
+  const ICONS = [["ball", "Basketball"], ["star", "Star"], ["controller", "Game controller"], ["note", "Music note"], ["dice", "Die"], ["card", "Card suit"],
+                 ["d20", "d20"], ["sword", "Sword"], ["mic", "Microphone"], ["bolt", "Lightning bolt"], ["crystal", "Crystal"], ["vinyl", "Vinyl record"], ["none", "No badge"]];
+  const PRESETS = window.AWYM_COLOR_PRESETS || {}, PACKS = window.AWYM_PACKS || [], FONTS = window.AWYM_FONT_LISTS || {}, SCENES = window.AWYM_SCENES || {};
+  const strip = (v) => String(v || "").trim().replace(/^["']|["']$/g, "");
+  const firstFamily = (v) => { const m = String(v || "").match(/["']([^"']+)["']/) || String(v || "").match(/^\s*([^,]+)/); return m ? m[1].trim() : ""; };
+  const hex = (v) => { v = String(v || "").trim(); if (/^#[0-9a-f]{3}$/i.test(v)) v = "#" + v.slice(1).split("").map((c) => c + c).join(""); return /^#[0-9a-f]{6}$/i.test(v) ? v.toUpperCase() : ""; };
+
+  /* current look = theme.css + any live theme already applied to this page */
+  /** The look in effect right now (theme.css + any live theme) as a theme object. */
+  function readCurrent() {
+    const css = getComputedStyle(document.documentElement), t = {};
+    COLORS.forEach(([k]) => t[k] = hex(css.getPropertyValue("--" + k)) || "#888888");
+    ["display", "heading", "body"].forEach((r) => t["font-" + r] = firstFamily(css.getPropertyValue("--font-" + r)) || "Anton");
+    t["show-name"] = AWYM.showName();
+    ["bg-anim", "bg-speed", "bg-intensity", "bg-court", "title-size", "glow"].forEach((k) => { const v = AWYM.themeValue(k, ""); if (v) t[k] = v; });
+    t.scene = strip(css.getPropertyValue("--scene")) || "court";
+    t["badge-icon"] = strip(css.getPropertyValue("--badge-icon")) || "ball";
+    return t;
+  }
+  let theme = readCurrent();
+  const json = () => JSON.stringify(Object.keys(theme).sort().reduce((o, k) => (o[k] = theme[k], o), {}));
+
+  /* ---------- build the controls ---------- */
+  const swatch = (c) => `<span class="sw">${["primary", "secondary", "accent", "light"].map((k) => `<i style="background:${c[k]}"></i>`).join("")}</span>`;
+  $("packs").innerHTML = PACKS.map((p) => `<button class="tile" data-pack="${p.key}" title="${esc(p.desc)}">${swatch(p.colors)}<b>${esc(p.name)}</b></button>`).join("");
+  // presets by category (headings), A–Z inside each category — see presets.js
+  const CATS = window.AWYM_PRESET_CATEGORIES || [{ name: "", presets: PRESETS }];
+  $("presets").innerHTML = CATS.map((cat) => (cat.name ? `<div class="pcat">${esc(cat.name)}</div>` : "") +
+    Object.entries(cat.presets).map(([n, c]) => `<button class="tile" data-preset="${esc(n)}">${swatch(c)}<b>${esc(n)}</b></button>`).join("")).join("");
+  $("presetCount").textContent = Object.keys(PRESETS).length + " to choose from";
+  $("colors").innerHTML = COLORS.map(([k, n, d]) => `<div class="color"><input type="color" data-c="${k}"><span>${n}<small>${d}</small></span><input type="text" class="hex" data-h="${k}" maxlength="7" spellcheck="false"></div>`).join("");
+  $("fonts").innerHTML = FONT_ROLES.map(([r, n]) => `<label class="l" for="f-${r}">${n}</label>
+    <select id="f-${r}" data-f="${r}"></select>
+    <div class="other" id="o-${r}"><input type="text" placeholder="Exact Google Font name, e.g. Kanit"><button data-use="${r}">Use</button></div>
+    <div class="sample" id="s-${r}"></div>`).join("");
+  const groups = {};
+  Object.entries(SCENES).forEach(([k, sc]) => (groups[sc.group] = groups[sc.group] || []).push([k, sc]));
+  $("scene").innerHTML = Object.entries(groups).map(([g, list]) => `<optgroup label="${g}">${list.map(([k, sc]) => `<option value="${k}">${esc(sc.name)}</option>`).join("")}</optgroup>`).join("");
+  $("badge").innerHTML = ICONS.map(([k, n]) => `<option value="${k}">${n}</option>`).join("");
+  // preview every suggested font in the dropdowns' samples
+  Object.entries(FONTS).forEach(([r, list]) => list.forEach((f) => AWYM.loadFont(f, false)));
+
+  /** Make every control match the theme object (and highlight matching packs/presets). */
+  function paint() {
+    COLORS.forEach(([k]) => { document.querySelector(`[data-c="${k}"]`).value = theme[k].toLowerCase(); document.querySelector(`[data-h="${k}"]`).value = theme[k]; });
+    FONT_ROLES.forEach(([r, , sample]) => {
+      const sel = $("f-" + r), list = FONTS[r] || [], cur = theme["font-" + r];
+      const opts = (list.includes(cur) ? list : [cur].concat(list));
+      sel.innerHTML = opts.map((f) => `<option value="${esc(f)}">${esc(f)}</option>`).join("") + `<option value="__other">Other Google Font…</option>`;
+      sel.value = cur;
+      const s = $("s-" + r); s.textContent = sample(); s.style.fontFamily = `"${cur}", sans-serif`;
+    });
+    $("scene").value = SCENES[theme.scene] ? theme.scene : "court";
+    $("badge").value = theme["badge-icon"];
+    if (document.activeElement !== $("showName")) $("showName").value = theme["show-name"];
+    document.querySelectorAll("[data-pack]").forEach((b) => {
+      const p = PACKS.find((x) => x.key === b.dataset.pack);
+      b.classList.toggle("on", p.scene === theme.scene && p.icon === theme["badge-icon"] && COLORS.every(([k]) => p.colors[k].toUpperCase() === theme[k]) &&
+        p.fonts.display === theme["font-display"] && p.fonts.heading === theme["font-heading"] && p.fonts.body === theme["font-body"]);
+    });
+    document.querySelectorAll("[data-preset]").forEach((b) => { const c = PRESETS[b.dataset.preset]; b.classList.toggle("on", COLORS.every(([k]) => c[k].toUpperCase() === theme[k])); });
+    if (typeof paintAnim === "function") paintAnim();
+    if (typeof paintTitleSize === "function") paintTitleSize();
+    if (typeof paintGlow === "function") paintGlow();
+  }
+
+  /* ---------- sending ---------- */
+  let timer = null;
+  /** Send the theme to every overlay (now, or 350 ms after the last change while dragging). */
+  function push(now) {
+    paint();
+    clearTimeout(timer);
+    timer = setTimeout(() => { AWYM.setLiveTheme(json()); try { localStorage.setItem("awym-theme-dock-active", "1"); } catch (e) {} }, now ? 0 : 350);
+  }
+
+  $("packs").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-pack]"); if (!b) return;
+    const p = PACKS.find((x) => x.key === b.dataset.pack);
+    COLORS.forEach(([k]) => theme[k] = p.colors[k].toUpperCase());
+    theme["font-display"] = p.fonts.display; theme["font-heading"] = p.fonts.heading; theme["font-body"] = p.fonts.body;
+    theme.scene = p.scene; theme["badge-icon"] = p.icon;
+    push(true);
+  });
+  $("presets").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-preset]"); if (!b) return;
+    const c = PRESETS[b.dataset.preset]; COLORS.forEach(([k]) => theme[k] = c[k].toUpperCase()); push(true);
+  });
+  $("colors").addEventListener("input", (e) => {
+    const k = e.target.dataset.c || e.target.dataset.h; if (!k) return;
+    const v = hex(e.target.value); if (!v) return;
+    theme[k] = v; push(false);
+  });
+  $("fonts").addEventListener("change", (e) => {
+    const r = e.target.dataset.f; if (!r) return;
+    if (e.target.value === "__other") { $("o-" + r).classList.add("show"); $("o-" + r).querySelector("input").focus(); e.target.value = theme["font-" + r]; return; }
+    $("o-" + r).classList.remove("show"); theme["font-" + r] = e.target.value; push(true);
+  });
+  $("fonts").addEventListener("click", (e) => {
+    const r = e.target.dataset.use; if (!r) return;
+    const v = $("o-" + r).querySelector("input").value.trim().replace(/\s+/g, " ");
+    if (!/^[A-Za-z0-9 ]{2,60}$/.test(v)) return;
+    theme["font-" + r] = v === v.toLowerCase() ? v.replace(/\b\w/g, (c) => c.toUpperCase()) : v;
+    AWYM.loadFont(theme["font-" + r], false);
+    $("o-" + r).classList.remove("show"); push(true);
+  });
+  $("scene").onchange = () => { theme.scene = $("scene").value; push(true); };
+  $("badge").onchange = () => { theme["badge-icon"] = $("badge").value; push(true); };
+  $("showName").addEventListener("input", () => { theme["show-name"] = $("showName").value.trim(); push(false); });
+  /** Title size slider ↔ theme["title-size"] (percent, 100 = normal). */
+  function paintTitleSize() { const v = Number(theme["title-size"] || 100); $("titleSize").value = v; $("titleSizeVal").textContent = v + "%"; }
+  $("titleSize").addEventListener("input", () => { theme["title-size"] = String($("titleSize").value); $("titleSizeVal").textContent = $("titleSize").value + "%"; push(false); });
+  $("titleSizeReset").onclick = () => { delete theme["title-size"]; paintTitleSize(); push(true); };
+
+  /** Glow slider ↔ theme.glow (percent, 100 = normal; overlays read it as --glow-k). */
+  function paintGlow() { const v = Number(theme.glow ?? 100); $("glow").value = v; $("glowVal").textContent = v + "%"; }
+  $("glow").addEventListener("input", () => { theme.glow = String($("glow").value); $("glowVal").textContent = $("glow").value + "%"; push(false); });
+  $("glowOff").onclick = () => { theme.glow = "0"; paintGlow(); push(true); };
+  $("glowSoft").onclick = () => { theme.glow = "50"; paintGlow(); push(true); };
+  $("glowReset").onclick = () => { delete theme.glow; paintGlow(); push(true); };
+
+  /* ---------- animation ---------- */
+  const FX = [["spotlights", "Spotlights", "sweeping arena lights"], ["sheen", "Floor sheen", "a glint of light gliding across"],
+              ["drift", "Drift", "glowing particles floating up"], ["flashes", "Camera flashes", "photo flashes in the crowd"],
+              ["pulse", "Center pulse", "court only"], ["lines", "Court lines glow", "court only"], ["bounce", "Bouncing balls", "court only"]];
+  const FX_PRESETS = { arena: ["spotlights", "sheen", "flashes"], chill: ["drift", "pulse"], hoops: ["bounce", "lines"], hype: ["spotlights", "flashes", "pulse", "lines"], none: [] };
+  const COURT_ONLY = ["pulse", "lines", "bounce"];
+  $("fxList").innerHTML = FX.map(([k, n, d]) => `<label class="fx" data-k="${k}"><input type="checkbox" data-fx="${k}"><span>${n}<small>${d}</small></span></label>`).join("");
+  const animList = () => {        // what's in effect now (the scene's default if never changed)
+    const v = theme["bg-anim"] != null ? theme["bg-anim"] : (theme.scene === "court" ? "arena" : "none");
+    const out = new Set();
+    v.split(/[,+ ]+/).filter(Boolean).forEach((w) => (FX_PRESETS[w] || [w]).forEach((e) => out.add(e)));
+    return out;
+  };
+  /** Animation controls ↔ theme bg-anim / bg-speed / bg-intensity / bg-court. */
+  function paintAnim() {
+    const on = animList(), court = theme.scene === "court";
+    document.querySelectorAll("#fxList .fx").forEach((row) => {
+      const k = row.dataset.k, off = !court && COURT_ONLY.includes(k);
+      row.classList.toggle("off", off); const i = row.querySelector("input"); i.disabled = off; i.checked = on.has(k) && !off;
+    });
+    const sp = Number(theme["bg-speed"] || 1); $("spd").value = sp; $("spdVal").textContent = sp + "×";
+    $("amt").querySelectorAll("button").forEach((b) => b.classList.toggle("seg-on", b.dataset.v === (theme["bg-intensity"] || "medium")));
+    $("court").checked = theme["bg-court"] !== "0"; $("courtRow").style.display = court ? "" : "none";
+    const list = [...on].sort().join(","), match = Object.entries(FX_PRESETS).find(([, v]) => v.slice().sort().join(",") === list);
+    $("animPresets").querySelectorAll("button").forEach((b) => b.classList.toggle("seg-on",
+      b.dataset.p === "default" ? theme["bg-anim"] == null : (theme["bg-anim"] != null && match && match[0] === b.dataset.p)));
+  }
+  $("animPresets").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.p === "default") ["bg-anim", "bg-speed", "bg-intensity", "bg-court"].forEach((k) => delete theme[k]);
+    else theme["bg-anim"] = b.dataset.p;
+    push(true);
+  });
+  $("fxList").addEventListener("change", (e) => {
+    const k = e.target.dataset.fx; if (!k) return;
+    const on = animList(); e.target.checked ? on.add(k) : on.delete(k);
+    theme["bg-anim"] = on.size ? [...on].join(",") : "none"; push(true);
+  });
+  $("spd").addEventListener("input", () => { theme["bg-speed"] = String($("spd").value); $("spdVal").textContent = $("spd").value + "×"; push(false); });
+  $("amt").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; theme["bg-intensity"] = b.dataset.v; push(true); });
+  $("court").onchange = () => { theme["bg-court"] = $("court").checked ? "1" : "0"; push(true); };
+
+  function flash(t) { $("toast").textContent = t; setTimeout(() => { if ($("toast").textContent === t) $("toast").textContent = ""; }, 2600); }
+  $("copyFile").onclick = async () => {
+    const text = window.AWYM_THEME_FILE(theme);
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {}
+    if (!ok) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { ok = document.execCommand("copy"); } catch (e2) {} ta.remove(); }
+    flash(ok ? "Copied! Paste it into theme.css (replace everything) and save." : "Couldn't copy here. Use the Theme Editor's Download instead.");
+  };
+  $("reset").onclick = () => {
+    AWYM.setLiveTheme(null);
+    try { localStorage.removeItem("awym-theme-dock-active"); } catch (e) {}
+    theme = readCurrent(); paint(); flash("Back to theme.css.");
+  };
+
+  /* ---------- overlays checking in ---------- */
+  const seen = {};
+  AWYM.listen((m) => {
+    if (m.from !== "theme-client") return;
+    seen[m.id] = Date.now();
+    if (m.cmd === "hello") {
+      // an overlay just started: make sure it has the current look
+      if (AWYM.liveTheme && m.has !== AWYM.liveTheme) AWYM.send({ to: "theme", cmd: "set", json: AWYM.liveTheme });
+      else if (!AWYM.liveTheme && m.has) AWYM.send({ to: "theme", cmd: "reset" });
+    }
+  });
+  setInterval(() => {
+    AWYM.send({ to: "theme", cmd: "ping" });
+    const n = Object.values(seen).filter((t) => Date.now() - t < 5000).length;
+    $("conn").classList.toggle("ok", n > 0);
+    $("conn").querySelector("span").textContent = n ? `Live on ${n} overlay${n === 1 ? "" : "s"}` : "Looking for overlays";
+  }, 2000);
+  AWYM.send({ to: "theme", cmd: "ping" });
+
+  paint();
+})();
+</script>
+<script>
+/* Lets Backup → Restore (Show Runner) reload this dock, and adds the 🚨 Clear button. */
+AWYM.dock("theme");
+</script>
+</body>
+</html>

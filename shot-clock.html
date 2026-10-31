@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Shot Clock</title>
+<!--
+  SHOT CLOCK — OBS browser source
+  Recommended source size: 640 x 320 (it scales to whatever size you set).
+
+  Optional URL settings (add after .html, joined with &):
+    ?time=3:00        starting time (or ?seconds=180)
+    &label=Hot%20Take segment name shown on top (%20 = space)
+    &autostart=1      start counting as soon as the source loads
+    &sound=0          turn the buzzer off
+    &ticks=0          turn off the ticking in the last 5 seconds
+
+  Keyboard (OBS: right-click the source → Interact):
+    Space = start/pause   R = reset   ← / → = minus/plus 5 seconds
+    1 = 1:00   2 = 2:00   3 = 3:00   4 = 4:00   5 = 5:00   0 = 0:30
+    T or Enter = type a custom time, like a microwave:
+                 T, then 1 3 0, then Enter  →  1:30
+                 (Backspace fixes a digit, Esc cancels)
+    S = sound on/off      F = Tin Foil alert on/off    H = hide/show the clock
+    Click = start/pause   Double-click = reset
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source (overlay), designed at 640 × 320 and scaled to fit.
+  Uses:      theme.css (colors/fonts), shared.js (messages, sounds, live theme).
+  Messages:  listens  to:"clock"  start | pause | toggle | reset | set | add | label | sound | buzz | foil |
+                               visible {on} (on missing = flip; hidden keeps counting)
+             sends    from:"clock" state every 300 ms (see shared.js for fields)
+  Layout:    .housing > .topbar (hat icon, label, status pill) · .digits (SVG seven-segment
+             digits built in code) · .progress bar.
+  States (classes on <body>): running · warn (last 10 s, or 3 s for clocks ≤ 10 s) ·
+             expired (buzzer moment) · entering (typing a custom time) · foil (Tin Foil alert) ·
+             offscreen (hidden with the Control Panel's Hide button; remembered after a reload)
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* hidden from the Control Panel: fades away, but keeps counting */
+  .stage { transition: opacity .35s ease, translate .35s ease; }
+  body.offscreen .stage { opacity: 0; translate: 0 -24px; }
+  /* Shot clock styles. Design size 640×320 (.stage), scaled by fit(). Colors/fonts come from theme.css variables. */
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    background: transparent; overflow: hidden;
+  }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-body);
+    user-select: none; cursor: pointer;
+  }
+
+  /* Fixed design canvas, scaled to fit the browser source */
+  .stage { width: 640px; height: 320px; position: relative; transform-origin: center; flex: none; }
+
+  .housing {
+    position: absolute; inset: 8px;
+    background: var(--dark);
+    border: 6px solid var(--primary);
+    border-radius: 26px;
+    box-shadow: inset 0 0 0 3px var(--secondary), 0 10px 0 -2px var(--secondary);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  /* faint hardwood stripes inside the housing */
+  .housing::before {
+    content: ""; position: absolute; inset: 0; opacity: .07; pointer-events: none;
+    background: repeating-linear-gradient(90deg, var(--light) 0 2px, transparent 2px 46px);
+  }
+
+  .topbar {
+    position: relative; z-index: 1;
+    display: flex; align-items: center; justify-content: space-between;
+    height: 54px; padding: 0 20px 0 22px;
+    background: var(--secondary);
+    border-bottom: 3px solid var(--primary);
+  }
+  .label {
+    font-family: var(--font-display);
+    font-size: 26px; letter-spacing: 1px; color: var(--light);
+    text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    max-width: 470px;
+  }
+  .status {
+    font-family: var(--font-heading); font-size: 18px; letter-spacing: 2px;
+    color: var(--secondary); background: var(--accent);
+    padding: 3px 10px 2px; border-radius: 6px; text-transform: uppercase;
+  }
+  .status.paused { background: var(--light); }
+  .status.entry { background: var(--primary); }
+
+  /* ---------- Tin Foil alert (for conspiracy-theory takes) ---------- */
+  .hat { display: none; flex: none; width: 58px; height: 48px; margin: -6px 10px 0 -8px; overflow: visible; transform-origin: 50% 90%; }
+  .foil .hat { display: block; animation: hatIn .6s cubic-bezier(.2,1.6,.4,1) both, wobble 1.8s ease-in-out .6s infinite; }
+  @keyframes hatIn { from { transform: translateY(-40px) rotate(-30deg) scale(.4); opacity: 0; } to { transform: none; opacity: 1; } }
+  @keyframes wobble { 0%, 100% { rotate: -6deg; } 50% { rotate: 6deg; } }
+  .topbar { justify-content: flex-start; }
+  .topbar .status { margin-left: auto; }
+  .foil .topbar {
+    background: linear-gradient(110deg, #7f8794 0%, #e9edf2 18%, #9ea6b2 30%, #ffffff 42%, #8f97a4 55%, #dfe4ea 70%, #a7afba 84%, #f3f5f8 100%);
+    background-size: 260% 100%; animation: foilSheen 3s linear infinite; border-bottom-color: #c9ced6;
+  }
+  .foil .topbar::after { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .35;
+    background: repeating-linear-gradient(63deg, transparent 0 17px, rgba(0,0,0,.18) 17px 18px, transparent 18px 31px),
+                repeating-linear-gradient(-41deg, transparent 0 23px, rgba(255,255,255,.5) 23px 24px, transparent 24px 37px); }
+  .foil .label { color: #1b1e24; text-shadow: 0 1px 0 rgba(255,255,255,.6); position: relative; z-index: 1; }
+  .foil .status { background: #1b1e24 !important; color: #e9edf2; position: relative; z-index: 1; }
+  .foil .housing { border-color: #c9ced6; box-shadow: inset 0 0 0 3px #7f8794, 0 10px 0 -2px #5d6470, 0 0 26px rgba(220,228,240,.45); }
+  .foil .seg.lit { fill: #dfe5ee; }
+  .foil .lit { filter: drop-shadow(0 0 calc(6px * var(--glow-k, 1)) #ffffff) drop-shadow(0 0 calc(14px * var(--glow-k, 1)) #9fe8ff); }
+  .foil.warn .seg.lit { fill: var(--warning); }
+  .foil .digits::after { content: ""; position: absolute; inset: 0; pointer-events: none; mix-blend-mode: overlay;
+    background: linear-gradient(110deg, transparent 35%, rgba(255,255,255,.75) 48%, transparent 60%); background-size: 260% 100%; animation: foilSheen 2.2s linear infinite; }
+  .foil .progress > i { background: linear-gradient(90deg, #9ea6b2, #ffffff, #9ea6b2); }
+  @keyframes foilSheen { from { background-position: 130% 0; } to { background-position: -130% 0; } }
+  .entering .digits { animation: entryBlink 1s steps(2, jump-none) infinite; }
+  @keyframes entryBlink { 50% { opacity: .55; } }
+
+  .digits {
+    position: relative; z-index: 1; flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 6px 0 0;
+  }
+  .digits svg { width: 470px; height: auto; overflow: visible; }
+  .seg { fill: var(--clock-digit); transition: opacity .06s; }
+  .seg.off { opacity: .08; }
+  /* digit glow scales with the Theme Panel's Glow slider (--glow-k) */
+  .lit { filter: drop-shadow(0 0 calc(6px * var(--glow-k, 1)) var(--clock-digit)); }
+
+  .warn .seg { fill: var(--warning); }
+  .warn .lit { filter: drop-shadow(0 0 calc(10px * var(--glow-k, 1)) var(--warning)); }
+  .warn.running .digits { animation: pulse 1s steps(2, jump-none) infinite; }
+  @keyframes pulse { 50% { opacity: .55; } }
+
+  .bottombar {
+    position: relative; z-index: 1;
+    height: 34px; display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-heading); font-size: 17px; letter-spacing: 3px;
+    color: var(--light); opacity: .85; text-transform: uppercase;
+  }
+
+  .progress { position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: var(--secondary); z-index: 2; }
+  .progress > i { display: block; height: 100%; width: 100%; background: var(--primary); transition: width .25s linear; }
+  .warn .progress > i { background: var(--warning); }
+
+  /* Buzzer moment */
+  .expired .housing { animation: shake .5s cubic-bezier(.36,.07,.19,.97) 2; border-color: var(--warning); }
+  .expired .digits { animation: flash .35s steps(2, jump-none) 6; }
+  @keyframes shake {
+    10%, 90% { transform: translateX(-2px); }
+    20%, 80% { transform: translateX(4px); }
+    30%, 50%, 70% { transform: translateX(-7px); }
+    40%, 60% { transform: translateX(7px); }
+  }
+  @keyframes flash { 50% { opacity: .15; } }
+</style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="housing">
+      <div class="topbar">
+        <svg class="hat" id="hat" viewBox="0 0 120 100" aria-hidden="true">
+          <defs><linearGradient id="foilg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#f4f6f9"/><stop offset=".3" stop-color="#9aa3af"/><stop offset=".5" stop-color="#ffffff"/>
+            <stop offset=".7" stop-color="#8b93a0"/><stop offset="1" stop-color="#dfe3e9"/></linearGradient></defs>
+          <path d="M60 4 L104 84 Q60 98 16 84 Z" fill="url(#foilg)" stroke="#5d6470" stroke-width="3" stroke-linejoin="round"/>
+          <path d="M60 4 L48 40 L66 52 L54 84 M60 4 L76 36 L62 60 L78 88 M38 46 L52 58 M84 50 L70 66" fill="none" stroke="#6d7581" stroke-width="2" opacity=".7"/>
+          <path d="M8 86 Q60 104 112 86 L108 94 Q60 112 12 94 Z" fill="url(#foilg)" stroke="#5d6470" stroke-width="3" stroke-linejoin="round"/>
+        </svg>
+        <div class="label" id="label">Shot Clock</div>
+        <div class="status paused" id="status">Ready</div>
+      </div>
+      <div class="digits"><svg id="svg" viewBox="-6 -4 506 196" aria-label="time"></svg></div>
+      <div class="progress"><i id="bar"></i></div>
+    </div>
+  </div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById("stage");
+  const svg = document.getElementById("svg");
+  const labelEl = document.getElementById("label");
+  const statusEl = document.getElementById("status");
+  const bar = document.getElementById("bar");
+
+  /* ---------- scale the 640x320 design to the source size ---------- */
+  /** Scale the fixed 640×320 design to whatever size the OBS source is. */
+  function fit() {
+    const s = Math.min(innerWidth / 640, innerHeight / 320);
+    stage.style.transform = "scale(" + s + ")";
+  }
+  addEventListener("resize", fit); fit();
+
+  /* ---------- seven-segment digits ---------- */
+  const NS = "http://www.w3.org/2000/svg";
+  const W = 100, T = 16, G = 3;
+  /* ---- seven-segment digits: each digit is 7 polygons (a–g) that light up per number ---- */
+  /** Points for a horizontal segment from x1 to x2 at height y. */
+  function hseg(x1, x2, y) {
+    const h = T / 2;
+    return [[x1, y], [x1 + h, y - h], [x2 - h, y - h], [x2, y], [x2 - h, y + h], [x1 + h, y + h]];
+  }
+  /** Points for a vertical segment at x from y1 to y2. */
+  function vseg(x, y1, y2) {
+    const h = T / 2;
+    return [[x, y1], [x + h, y1 + h], [x + h, y2 - h], [x, y2], [x - h, y2 - h], [x - h, y1 + h]];
+  }
+  const L = T / 2 + 2, R = W - T / 2 - 2, TOP = T / 2 + 2, MID = 90, BOT = 180 - T / 2 - 2;
+  const SEGS = {
+    a: hseg(L + G, R - G, TOP), g: hseg(L + G, R - G, MID), d: hseg(L + G, R - G, BOT),
+    f: vseg(L, TOP + G, MID - G), b: vseg(R, TOP + G, MID - G),
+    e: vseg(L, MID + G, BOT - G), c: vseg(R, MID + G, BOT - G)
+  };
+  const MAP = { "0": "abcdef", "1": "bc", "2": "abged", "3": "abgcd", "4": "fgbc",
+                "5": "afgcd", "6": "afgedc", "7": "abc", "8": "abcdefg", "9": "abcdfg", " ": "" };
+
+  /** Add one digit at x; returns a function that shows a character ("0"–"9" or " "). */
+  function makeDigit(x) {
+    const g = document.createElementNS(NS, "g");
+    g.setAttribute("transform", "translate(" + x + ",0) skewX(-6)");
+    const parts = {};
+    for (const [k, pts] of Object.entries(SEGS)) {
+      const p = document.createElementNS(NS, "polygon");
+      p.setAttribute("points", pts.map((q) => q.join(",")).join(" "));
+      p.setAttribute("class", "seg off");
+      g.appendChild(p); parts[k] = p;
+    }
+    svg.appendChild(g);
+    return (ch) => { const on = MAP[ch] || ""; for (const k in parts) parts[k].setAttribute("class", on.includes(k) ? "seg lit" : "seg off"); };
+  }
+  /** Add a dot (colon/decimal point); returns a function(on) to light it. */
+  function makeDot(cx, cy, r) {
+    const c = document.createElementNS(NS, "circle");
+    c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", r);
+    c.setAttribute("class", "seg off"); svg.appendChild(c);
+    return (on) => c.setAttribute("class", on ? "seg lit" : "seg off");
+  }
+  const d1 = makeDigit(0), d2 = makeDigit(112);
+  const colonTop = makeDot(239, 58, 10), colonBot = makeDot(231, 124, 10);
+  const d3 = makeDigit(270), d4 = makeDigit(388);
+  const decimal = makeDot(372, 172, 9);
+
+  /* ---------- timer state ---------- */
+  /** "3:00" → 180, "45" → 45, anything else → null. */
+  function parseTime(str) {
+    if (!str) return null;
+    if (/^\d+:\d{1,2}$/.test(str)) { const [m, s] = str.split(":").map(Number); return m * 60 + s; }
+    const n = Number(str); return isFinite(n) ? n : null;
+  }
+  let total = parseTime(AWYM.param("time")) ?? parseTime(AWYM.param("seconds")) ?? 24;
+  total = Math.max(1, Math.min(total, 99 * 60 + 59));
+  let remaining = total * 1000;
+  let running = false, deadline = 0, expired = false;
+  let soundOn = AWYM.param("sound", "1") !== "0";
+  const ticksOn = AWYM.param("ticks", "1") !== "0";
+  let lastTickSecond = null;
+  labelEl.textContent = AWYM.param("label", "Shot Clock");
+
+  let entry = null;   // digits typed for a custom time, or null when not typing
+
+  /** Draw the current time (m:ss, or tenths under 10 s) and update states/progress/status. */
+  function render() {
+    const ms = Math.max(0, remaining);
+    document.body.classList.toggle("entering", entry !== null);
+    if (entry !== null) {
+      // show typed digits right-aligned, microwave style: "130" →  1:30
+      const t = entry.padStart(4, " ");
+      d1(t[0]); d2(t[1]); d3(t[2]); d4(t[3]);
+      colonTop(true); colonBot(true); decimal(false);
+      document.body.classList.remove("warn", "expired");
+      statusEl.textContent = "Set time"; statusEl.className = "status entry";
+      return;
+    }
+    statusEl.className = "status";
+    if (ms < 10000 && ms > 0 && total > 10) {
+      // under 10 seconds: show tenths like a real shot clock, e.g. 9.4
+      const tenths = Math.floor(ms / 100);
+      d1(" "); d2(" "); colonTop(false); colonBot(false);
+      d3(String(Math.floor(tenths / 10))); decimal(true); d4(String(tenths % 10));
+    } else {
+      const secs = Math.ceil(ms / 1000);
+      const m = Math.floor(secs / 60), s = secs % 60;
+      const mm = String(m).padStart(2, " ");   // e.g. " 3" → blank, 3
+      d1(mm[0]); d2(mm[1]);
+      colonTop(true); colonBot(true); decimal(false);
+      const ss = String(s).padStart(2, "0");
+      d3(ss[0]); d4(ss[1]);
+    }
+    const warnAt = total > 10 ? 10000 : 3000;
+    document.body.classList.toggle("warn", expired || ms <= warnAt);
+    document.body.classList.toggle("running", running);
+    document.body.classList.toggle("expired", expired);
+    bar.style.width = (100 * ms / (total * 1000)) + "%";
+    statusEl.textContent = expired ? "Time!" : running ? "Live" : (ms === total * 1000 ? "Ready" : "Paused");
+    statusEl.classList.toggle("paused", !running && !expired);
+  }
+
+  /* Tin Foil alert: swap the label, add the hat and foil shine, play the warble */
+  let foil = false, labelBeforeFoil = null;
+  /** Turn the Tin Foil alert on/off: swaps the label, adds the hat + foil shine, plays the warble. */
+  function setFoil(on) {
+    if (on === foil) return;
+    foil = on;
+    if (on) { labelBeforeFoil = labelEl.textContent; labelEl.textContent = AWYM.param("foillabel", "Tin Foil Alert"); if (soundOn) AWYM.tinfoil(); }
+    else if (labelBeforeFoil !== null) { labelEl.textContent = labelBeforeFoil; labelBeforeFoil = null; }
+    document.body.classList.toggle("foil", on);
+    broadcast();
+  }
+
+  /** Tell the Control Panel the clock's current state. */
+  function broadcast() {
+    AWYM.send({ from: "clock", remaining, total, running, expired, label: labelEl.textContent, sound: soundOn, foil, hidden: offscreen });
+  }
+
+  /* ---- timer controls (also driven by Control Panel messages and the keyboard) ---- */
+  function start() {
+    if (expired || remaining <= 0) reset();
+    if (running) return;
+    running = true; deadline = performance.now() + remaining;
+    render(); broadcast();
+  }
+  function pause() {
+    if (!running) return;
+    remaining = Math.max(0, deadline - performance.now());
+    running = false; render(); broadcast();
+  }
+  function toggle() { running ? pause() : start(); }
+  function reset() {
+    running = false; expired = false; remaining = total * 1000; lastTickSecond = null;
+    render(); broadcast();
+  }
+  /** Set a new total time (1 s – 99:59), reset, and optionally start. */
+  function setTime(seconds, autostart) {
+    total = Math.max(1, Math.min(Math.round(seconds), 99 * 60 + 59));
+    reset();
+    if (autostart) start();
+  }
+  /** Add (or with a negative number, remove) seconds, even while running. */
+  function add(seconds) {
+    if (running) deadline += seconds * 1000;
+    remaining = Math.max(0, remaining + seconds * 1000);
+    if (remaining > total * 1000) total = Math.ceil(remaining / 1000);
+    expired = false;
+    render(); broadcast();
+  }
+
+  /** Animation frame loop: counts down, ticks in the last 5 s, buzzes at zero. */
+  function loop() {
+    if (running) {
+      remaining = deadline - performance.now();
+      const secLeft = Math.ceil(remaining / 1000);
+      if (ticksOn && soundOn && secLeft <= 5 && secLeft > 0 && secLeft !== lastTickSecond) {
+        lastTickSecond = secLeft; AWYM.tick();
+      }
+      if (remaining <= 0) {
+        remaining = 0; running = false; expired = true;
+        if (soundOn) AWYM.buzzer();
+        broadcast();
+      }
+      render();
+    }
+    requestAnimationFrame(loop);
+  }
+
+  /* ---------- controls ---------- */
+  /* Hide / show (the clock keeps running while hidden). Remembered across reloads. */
+  var offscreen = false;   // var: broadcast() may run before this line on start-up
+  try { offscreen = localStorage.getItem("awym-clock-hidden") === "1"; } catch (e) {}
+  document.body.classList.toggle("offscreen", offscreen);
+  /** Hide (true) or show (false) the whole clock. */
+  function setOffscreen(on) {
+    offscreen = !!on; document.body.classList.toggle("offscreen", offscreen);
+    try { localStorage.setItem("awym-clock-hidden", offscreen ? "1" : "0"); } catch (e) {}
+    broadcast();
+  }
+  setInterval(broadcast, 300);
+  AWYM.listen((m) => {
+    if (m.to !== "clock") return;
+    if (m.cmd === "start") start();
+    else if (m.cmd === "pause") pause();
+    else if (m.cmd === "toggle") toggle();
+    else if (m.cmd === "reset") reset();
+    else if (m.cmd === "set") setTime(m.seconds, m.autostart);
+    else if (m.cmd === "add") add(m.seconds || 0);
+    else if (m.cmd === "label") { if (foil) labelBeforeFoil = m.label || "Shot Clock"; else labelEl.textContent = m.label || "Shot Clock"; broadcast(); }
+    else if (m.cmd === "sound") { soundOn = !!m.on; broadcast(); }
+    else if (m.cmd === "buzz") AWYM.buzzer();
+    else if (m.cmd === "foil") setFoil(m.on === undefined ? !foil : !!m.on);
+    else if (m.cmd === "visible") setOffscreen(m.on === undefined ? !offscreen : !m.on);
+  });
+
+  let clickTimer = null;
+  document.addEventListener("click", () => {
+    if (entry !== null) return;
+    clearTimeout(clickTimer);
+    clickTimer = setTimeout(toggle, 220);
+  });
+  document.addEventListener("dblclick", () => { if (entry !== null) return; clearTimeout(clickTimer); reset(); });
+  // 1–5 = that many minutes, 0 = 30 seconds
+  const PRESETS = { "1": 60, "2": 120, "3": 180, "4": 240, "5": 300, "0": 30 };
+
+  /** Microwave-style entry: last two digits are seconds, the rest minutes ("130" → 90 s). */
+  function entrySeconds(digits) {
+    // last two digits are seconds, the rest minutes: "130" = 1:30, "45" = 0:45, "90" = 1:30
+    if (!digits) return 0;
+    const n = digits.padStart(3, "0");
+    return Number(n.slice(0, -2)) * 60 + Number(n.slice(-2));
+  }
+  function startEntry() { pause(); entry = ""; render(); }
+  function endEntry(apply) {
+    const secs = entrySeconds(entry || "");
+    entry = null;
+    if (apply && secs > 0) setTime(secs); else render();
+  }
+
+  document.addEventListener("keydown", (e) => {
+    if (entry !== null) {                       // typing a custom time
+      e.preventDefault();
+      if (/^[0-9]$/.test(e.key)) { if (entry.length < 4) entry = (entry + e.key).replace(/^0+/, ""); render(); }
+      else if (e.key === "Backspace") { entry = entry.slice(0, -1); render(); }
+      else if (e.key === "Enter" || e.key === "t" || e.key === "T") endEntry(true);
+      else if (e.key === "Escape") endEntry(false);
+      return;
+    }
+    if (e.key === "Enter" || e.key === "t" || e.key === "T") { e.preventDefault(); startEntry(); }
+    else if (e.code === "Space") { e.preventDefault(); toggle(); }
+    else if (e.key === "r" || e.key === "R") reset();
+    else if (e.key === "ArrowRight" || e.key === "ArrowUp") add(5);
+    else if (e.key === "ArrowLeft" || e.key === "ArrowDown") add(-5);
+    else if (e.key === "s" || e.key === "S") { soundOn = !soundOn; broadcast(); }
+    else if (e.key === "f" || e.key === "F") setFoil(!foil);
+    else if (e.key === "h" || e.key === "H") setOffscreen(!offscreen);
+    else if (PRESETS[e.key]) setTime(PRESETS[e.key]);
+  });
+
+  render();
+  if (AWYM.param("autostart") === "1") start();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

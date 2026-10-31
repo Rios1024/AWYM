@@ -1,0 +1,732 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Stats Desk</title>
+<!--
+  STATS DESK — add as an OBS Custom Browser Dock.
+  Looks up NBA games, box scores, standings and players (current season,
+  career and season-by-season history), and sends the cards you pick
+  to stats-card.html in your scene.
+
+  Data comes from ESPN's public (unofficial, no-key) JSON feed. It isn't a
+  documented API, so ESPN can change or limit it without notice. If you ever
+  need to point this at another source or a proxy, change the URLs just below.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS Custom Browser Dock.
+  Uses:      theme.css, shared.js, player-lookup.js (Player lookup section).
+  Sends:     to:"stats" show / update / hide / ticker (see shared.js) to stats-card.html.
+  Data flow: ESPN JSON → normEvent / parseBox / buildStandings → card objects (BUILD.*)
+             → stats-card.html renders them (R.* there). Card fields are listed in
+             stats-card.html and player-lookup.js.
+  Saved:     awym-stats-v1 (options: position, auto-hide, team colors, live refresh,
+             conference/top-10, keep clear of lower thirds) · awym-stats-fold-v1
+             (folded sections: click a header to fold it, see AWYM.collapsible).
+  Box score: BUILD.boxaway / BUILD.boxhome → one team's full box score (type "box"),
+             starters then bench; "Starters only" makes a shorter card.
+  Toggle:    each card has a key (what + which game/player/season + header); pressing a
+             button whose key is on screen hides it instead (see markShown / isShowing).
+-->
+<script>
+  /* ESPN's public JSON addresses. Change these if you ever need a different source or a proxy. */
+  window.AWYM_STATS_API = {
+    scoreboard: (yyyymmdd) => `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${yyyymmdd}`,
+    summary:    (gameId)   => `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event=${gameId}`,
+    standings:  ()         => `https://site.api.espn.com/apis/v2/sports/basketball/nba/standings`,
+    // player lookup
+    search: [   // tried in order until one returns NBA players
+      (q) => `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(q)}&limit=15&type=player`,
+      (q) => `https://site.web.api.espn.com/apis/search/v2?query=${encodeURIComponent(q)}&limit=15`
+    ],
+    athlete:    (id) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}`,
+    athleteStats: (id) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/stats`,
+    gamelog:    (id) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/gamelog`
+  };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Stats Desk dock styles: compact, readable at dock widths from about 280px. */
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--dark); color: var(--light); }
+  body { font-family: var(--font-body); font-size: 16px; padding: 12px; min-width: 280px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
+  header h1 { margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 400; color: var(--primary); line-height: 1.1; }
+  header .tools { display: flex; align-items: center; gap: 8px; }
+  .foldall { padding: 2px 8px; font-size: 15px; line-height: 1.2; opacity: .8; }
+  .conn { font-size: 13px; display: flex; align-items: center; gap: 6px; opacity: .85; white-space: nowrap; }
+  .conn i { width: 9px; height: 9px; border-radius: 50%; background: #777; display: inline-block; }
+  .conn.ok i { background: #3DDC84; box-shadow: 0 0 6px #3DDC84; }
+
+  section { background: var(--secondary); border-radius: 12px; padding: 12px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,.08); }
+  h2 { margin: 0 0 10px; font-family: var(--font-heading); font-weight: 400; font-size: 18px; letter-spacing: 1.5px; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  h2 small { font-family: var(--font-body); font-size: 13px; letter-spacing: .5px; opacity: .7; text-transform: none; }
+
+  button {
+    font: inherit; font-weight: 700; font-size: 15px; letter-spacing: .5px;
+    background: rgba(255,255,255,.08); color: var(--light);
+    border: 1px solid rgba(255,255,255,.14); border-radius: 8px;
+    padding: 8px 6px; cursor: pointer; text-transform: uppercase;
+  }
+  button:hover { background: rgba(255,255,255,.16); }
+  button:disabled { opacity: .35; cursor: default; }
+  button.primary { background: var(--primary); color: var(--dark); border-color: transparent; }
+  button.accent { background: var(--accent); color: var(--dark); border-color: transparent; }
+  button.on { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .grid { display: grid; gap: 6px; }
+  .g2 { grid-template-columns: 1fr 1fr; } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .grid > button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  label { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 10px 0 4px; }
+  input[type=text], input[type=date], select {
+    width: 100%; font: inherit; font-size: 16px; color: var(--light);
+    background: var(--dark); border: 1px solid rgba(255,255,255,.18); border-radius: 7px; padding: 7px 9px;
+  }
+  input[type=date] { color-scheme: dark; }
+  .daterow { display: grid; grid-template-columns: 34px minmax(0, 1fr) 34px auto; gap: 6px; }
+  .daterow input { min-width: 0; padding: 7px 6px; }
+
+  .games { display: grid; gap: 6px; max-height: 340px; overflow: auto; }
+  .game { display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; text-align: left; text-transform: none; padding: 8px 10px; background: var(--dark); }
+  .game.sel { outline: 2px solid var(--primary); }
+  .game .m { font-weight: 700; font-size: 17px; letter-spacing: .3px; font-variant-numeric: tabular-nums; }
+  .game .s { font-size: 13px; opacity: .75; text-align: right; align-self: center; }
+  .game .s.live { color: var(--warning); opacity: 1; }
+  .empty { opacity: .7; font-size: 15px; padding: 6px 2px; }
+
+  .msg { font-size: 14px; line-height: 1.35; padding: 8px 10px; border-radius: 8px; background: rgba(0,0,0,.25); margin-top: 8px; }
+  .msg.err { background: rgba(255, 60, 60, .18); }
+  .msg:empty { display: none; }
+  .row2 { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 15px; margin-top: 10px; text-transform: none; opacity: 1; letter-spacing: 0; }
+  .check input { width: 18px; height: 18px; accent-color: var(--primary); }
+  button.showing { outline: 2px solid #3DDC84; outline-offset: 1px; }
+  button.showing::after { content: " ●"; color: #3DDC84; font-size: 12px; }
+  .hidebtn { width: 100%; font-size: 18px; padding: 10px; margin-top: 2px; }
+  .pslot { background: var(--dark); border-radius: 9px; padding: 8px; margin-top: 8px; border: 1px solid rgba(255,255,255,.08); }
+  .pslot.empty select, .pslot.empty button { display: none; }
+  .phead { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-weight: 700; font-size: 17px; }
+  .phead .pnm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pslot.empty .pnm { font-weight: 500; opacity: .7; font-size: 15px; }
+  .ptag { flex: none; width: 26px; height: 26px; border-radius: 6px; background: var(--primary); color: var(--dark); display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); }
+  .ptag.b { background: var(--accent); }
+  .presult { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; background: var(--dark); border-radius: 8px; padding: 6px 6px 6px 10px; }
+  .presult .n { font-weight: 700; font-size: 16px; }
+  .presult .n small { display: block; font-weight: 500; font-size: 13px; opacity: .7; }
+  .presult button { padding: 5px 10px; font-size: 13px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Stats Desk</h1>
+    <div class="tools"><div class="conn" id="conn"><i></i><span>Overlay not found</span></div>
+      <button class="foldall" id="foldAll" title="Fold or unfold every section">⊟</button></div>
+  </header>
+
+  <section data-fold="onscreen">
+    <h2><span class="ttl">On screen</span></h2>
+    <button class="accent hidebtn" id="hide">Hide card</button>
+    <div class="grid g2" style="margin-top:6px">
+      <button id="tickerBtn">Score ticker: off</button>
+      <button id="refreshNow">Refresh data</button>
+    </div>
+    <label for="title">Card header (optional)</label>
+    <input type="text" id="title" placeholder="e.g. Who's the real MVP?">
+  </section>
+
+  <section data-fold="games">
+    <h2><span class="ttl">Games</span> <small id="dateLabel"></small></h2>
+    <div class="daterow">
+      <button id="prev" title="Previous day">◀</button>
+      <input type="date" id="date">
+      <button id="next" title="Next day">▶</button>
+      <button id="today">Today</button>
+    </div>
+    <div class="games" id="games" style="margin-top:8px"></div>
+    <div class="msg" id="gamesMsg"></div>
+  </section>
+
+  <section id="gameSec" style="display:none">
+    <h2><span class="ttl" id="gameTitle">Game</span></h2>
+    <div class="grid g3">
+      <button class="primary" id="showScore">Score</button>
+      <button id="showLeaders">Leaders</button>
+      <button id="showCompare">Compare</button>
+    </div>
+    <label>Box score</label>
+    <div class="grid g2">
+      <button id="showBoxAway" title="Full box score for the away team">Away</button>
+      <button id="showBoxHome" title="Full box score for the home team">Home</button>
+    </div>
+    <label class="check"><input type="checkbox" id="boxStarters"> Starters only (shorter card)</label>
+    <label for="player">Player stat line</label>
+    <div class="row2"><select id="player"></select><button class="primary" id="showPlayer">Show</button></div>
+    <div class="msg" id="gameMsg"></div>
+  </section>
+
+  <section data-fold="lookup">
+    <h2><span class="ttl">Player lookup</span> <small>current &amp; history</small></h2>
+    <div class="row2"><input type="text" id="pq" placeholder="Player name, or paste an ESPN player link"><button class="primary" id="psearch">Find</button></div>
+    <div class="games" id="presults" style="margin-top:6px;max-height:220px"></div>
+
+    <div class="pslot" id="slotA">
+      <div class="phead"><span class="ptag">A</span><span class="pnm">Pick a player above</span></div>
+      <select class="pseason"></select>
+      <div class="grid g3" style="margin-top:6px">
+        <button class="primary" data-act="avg">Averages</button>
+        <button data-act="hist">History</button>
+        <button data-act="log">Last 5</button>
+      </div>
+    </div>
+    <div class="pslot" id="slotB">
+      <div class="phead"><span class="ptag b">B</span><span class="pnm">Optional: second player to compare</span></div>
+      <select class="pseason"></select>
+      <div class="grid g3" style="margin-top:6px">
+        <button class="primary" data-act="avg">Averages</button>
+        <button data-act="hist">History</button>
+        <button data-act="log">Last 5</button>
+      </div>
+    </div>
+    <label for="histMode">History shows</label>
+    <select id="histMode"><option value="last">Last 10 seasons</option><option value="first">First 10 seasons</option><option value="best">Best 10 seasons (by points)</option><option value="all">Every season (up to 15)</option></select>
+    <button class="accent" id="h2h" style="width:100%;margin-top:8px">Compare A vs B</button>
+    <div class="msg" id="playerMsg"></div>
+  </section>
+
+  <section data-fold="standings">
+    <h2><span class="ttl">Standings</span></h2>
+    <div class="grid g2">
+      <button id="east" class="on">East</button><button id="west">West</button>
+      <button id="top10" class="on">Top 10</button><button id="all15">All 15</button>
+    </div>
+    <button class="primary" id="showStandings" style="width:100%;margin-top:6px">Show standings</button>
+    <div class="msg" id="standMsg"></div>
+  </section>
+
+  <section data-fold="options">
+    <h2><span class="ttl">Options</span></h2>
+    <label>Card position</label>
+    <div class="grid g4" id="posSeg"><button data-v="left">Left</button><button data-v="center">Center</button><button data-v="right">Right</button><button data-v="full" title="Full screen: the card fills the screen on a backdrop">Full</button></div>
+    <label for="autohide">Hide card automatically</label>
+    <select id="autohide"><option value="0">Never</option><option value="10">After 10 seconds</option><option value="15">After 15 seconds</option><option value="30">After 30 seconds</option></select>
+    <label class="check"><input type="checkbox" id="teamColors"> Use team colors</label>
+    <label class="check"><input type="checkbox" id="clearLT"> Keep cards clear of lower thirds</label>
+    <label class="check"><input type="checkbox" id="live"> Keep live games updating (every 30s)</label>
+  </section>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const API = window.AWYM_STATS_API;
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* ---------- saved options ---------- */
+  const STORE = "awym-stats-v1";
+  let opts = { position: "right", autohide: 0, teamColors: true, live: true, conf: "east", top: 10, clearLT: true };
+  try { Object.assign(opts, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch (e) {}
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(opts)); } catch (e) {} };
+  const overlayOpts = () => ({ position: opts.position, autohide: Number(opts.autohide), teamColors: opts.teamColors, clearLT: opts.clearLT !== false });
+
+  /* ---------- fetching ---------- */
+  /** Fetch JSON with a 12 s timeout and friendly error messages. */
+  async function getJSON(url) {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 12000);
+    try {
+      const r = await fetch(url, { signal: ctl.signal, cache: "no-store" });
+      if (!r.ok) throw new Error("ESPN answered with error " + r.status);
+      return await r.json();
+    } catch (e) {
+      if (e.name === "AbortError") throw new Error("ESPN took too long to answer. Try again.");
+      if (e instanceof TypeError) throw new Error("Couldn't reach ESPN's stats feed. Check the internet connection. If it keeps failing, ESPN may be blocking requests from OBS (see README).");
+      throw e;
+    } finally { clearTimeout(t); }
+  }
+
+  /* ---------- parsing ESPN data into simple objects ---------- */
+  // Team primary colors (used for the color chips; no logos). ESPN's own colors replace these when available.
+  /* Team colors by abbreviation (used for chips). ESPN's own colors replace these when present. */
+  const colorCache = {
+    ATL: "#E03A3E", BKN: "#000000", BOS: "#007A33", CHA: "#1D1160", CHI: "#CE1141", CLE: "#860038",
+    DAL: "#00538C", DEN: "#0E2240", DET: "#C8102E", GS: "#1D428A", GSW: "#1D428A", HOU: "#CE1141",
+    IND: "#002D62", LAC: "#C8102E", LAL: "#552583", MEM: "#5D76A9", MIA: "#98002E", MIL: "#00471B",
+    MIN: "#0C2340", NO: "#0C2340", NOP: "#0C2340", NY: "#006BB6", NYK: "#006BB6", OKC: "#007AC1",
+    ORL: "#0077C0", PHI: "#006BB6", PHX: "#1D1160", POR: "#E03A3E", SAC: "#5A2D81", SA: "#000000",
+    SAS: "#000000", TOR: "#CE1141", UTAH: "#002B5C", UTA: "#002B5C", WSH: "#002B5C", WAS: "#002B5C"
+  };
+  const hex = (c) => (c && /^[0-9a-f]{6}$/i.test(c) ? "#" + c.toUpperCase() : c && /^#[0-9a-f]{6}$/i.test(c) ? c.toUpperCase() : "");
+
+  /** ESPN competitor → {id, abbr, name, short, color, score, record, lines[], home}. */
+  function normTeam(c) {
+    const t = c.team || {};
+    const rec = (c.records || c.record || []);
+    const overall = Array.isArray(rec) ? (rec.find((r) => r.type === "total" || r.name === "overall") || rec[0]) : null;
+    const team = {
+      id: t.id, abbr: t.abbreviation || "", name: t.displayName || t.name || "",
+      short: t.shortDisplayName || t.name || t.abbreviation || "",
+      color: hex(t.color) || colorCache[t.abbreviation] || "", score: c.score != null ? String(c.score.displayValue ?? c.score) : "",
+      record: overall ? (overall.summary || overall.displayValue || "") : "",
+      lines: (c.linescores || []).map((l) => l.displayValue ?? l.value),
+      home: c.homeAway === "home"
+    };
+    if (team.abbr && team.color) colorCache[team.abbr] = team.color;
+    return team;
+  }
+  /** Tip-off time in the viewer's local time, e.g. "7:30 PM". */
+  function tipTime(iso) {
+    const d = new Date(iso);
+    return isNaN(d) ? "" : d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  /** ESPN scoreboard event → {id, date, state: pre|in|post, status, away, home, venue}. */
+  function normEvent(ev) {
+    const comp = (ev.competitions || [])[0] || {};
+    const cs = comp.competitors || [];
+    const home = normTeam(cs.find((c) => c.homeAway === "home") || cs[0] || {});
+    const away = normTeam(cs.find((c) => c.homeAway === "away") || cs[1] || {});
+    const st = comp.status || ev.status || {};
+    const type = st.type || {};
+    const state = type.state || "pre";
+    let status = type.shortDetail || type.detail || "";
+    if (state === "pre") status = tipTime(ev.date) || status;
+    if (state === "post" && !/final/i.test(status)) status = "Final";
+    return { id: ev.id, date: ev.date, state, status, away, home, venue: (comp.venue && comp.venue.fullName) || "" };
+  }
+
+  /** ESPN game summary → {players[{id, name, jersey, pos, team, starter, dnp, stats{}}], teamStats{abbr: []}}. */
+  function parseBox(sum) {
+    const box = sum.boxscore || {};
+    const players = [], totals = {};
+    (box.players || []).forEach((tp) => {
+      const abbr = (tp.team && tp.team.abbreviation) || "";
+      (tp.statistics || []).forEach((blk) => {
+        const labels = (blk.labels || blk.names || []).map((x) => String(x).toUpperCase());
+        // ESPN usually sends the team's totals row with the player list
+        if (Array.isArray(blk.totals) && blk.totals.length) {
+          const tot = {}; labels.forEach((l, i) => { if (blk.totals[i] != null && blk.totals[i] !== "") tot[l] = blk.totals[i]; });
+          totals[abbr] = tot;
+        }
+        (blk.athletes || []).forEach((a) => {
+          const ath = a.athlete || {};
+          const vals = a.stats || [];
+          const stats = {};
+          labels.forEach((l, i) => { if (vals[i] != null) stats[l] = vals[i]; });
+          players.push({
+            id: ath.id, name: ath.displayName || ath.shortName || "Player", short: ath.shortName || ath.displayName || "",
+            jersey: ath.jersey || "", pos: (ath.position && ath.position.abbreviation) || "",
+            team: abbr, starter: !!a.starter, dnp: !!a.didNotPlay || !vals.length, stats
+          });
+        });
+      });
+    });
+    const teamStats = {};
+    (box.teams || []).forEach((t) => { teamStats[(t.team && t.team.abbreviation) || ""] = t.statistics || []; });
+    return { players, teamStats, totals };
+  }
+  const num = (v) => { const n = parseFloat(String(v).replace(/[^\d.\-]/g, "")); return isFinite(n) ? n : 0; };
+
+  /** Find a team stat by its ESPN name, or failing that by its label/abbreviation. */
+  function findStat(list, names, labels) {
+    const lower = (s) => String(s || "").toLowerCase();
+    return list.find((s) => names.includes(s.name)) ||
+           list.find((s) => labels.some((l) => lower(s.label) === lower(l) || lower(s.abbreviation) === lower(l)));
+  }
+  /* Team comparison rows: [label, ESPN stat names, fallback labels, lower is better?] */
+  const COMPARE_ROWS = [
+    ["FG%", ["fieldGoalPct"], ["FG%"]],
+    ["3P%", ["threePointFieldGoalPct"], ["3P%", "3PT%"]],
+    ["FT%", ["freeThrowPct"], ["FT%"]],
+    ["Rebounds", ["totalRebounds", "rebounds"], ["Rebounds", "REB"]],
+    ["Assists", ["assists"], ["Assists", "AST"]],
+    ["Turnovers", ["turnovers", "totalTurnovers"], ["Turnovers", "TO"], true],
+    ["Steals", ["steals"], ["Steals", "STL"]],
+    ["Blocks", ["blocks"], ["Blocks", "BLK"]],
+    ["Paint pts", ["pointsInPaint"], ["Points in Paint"]],
+    ["Fast break", ["fastBreakPoints"], ["Fast Break Points"]]
+  ];
+
+  /* ---------- state ---------- */
+  /* games: the selected date's games · selected: clicked game · box: its parsed box score
+     lastShown: the card on screen (re-sent when the overlay reloads, refreshed when live) */
+  let games = [], selected = null, box = null, lastShown = null, tickerOn = false, standingsCache = null;
+  const fmtDate = (d) => d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+  const isoDate = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  function pickedDate() { const [y, m, d] = $("date").value.split("-").map(Number); return new Date(y, m - 1, d); }
+  function setDate(d) { $("date").value = isoDate(d); $("dateLabel").textContent = d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }); loadGames(); }
+
+  /** Load the selected date's games (quiet = background refresh, no "Loading…"). */
+  async function loadGames(quiet) {
+    if (!quiet) { $("games").innerHTML = '<div class="empty">Loading games…</div>'; }
+    $("gamesMsg").textContent = ""; $("gamesMsg").className = "msg";
+    try {
+      const data = await getJSON(API.scoreboard(fmtDate(pickedDate())));
+      games = (data.events || []).map(normEvent);
+      paintGames();
+      if (selected) {
+        const again = games.find((g) => g.id === selected.id);
+        if (again) selected = again;
+      }
+      if (tickerOn) sendTicker();
+    } catch (e) {
+      if (!quiet) $("games").innerHTML = "";
+      $("gamesMsg").textContent = e.message; $("gamesMsg").className = "msg err";
+    }
+  }
+  /** Draw the list of games with scores/status. */
+  function paintGames() {
+    if (!games.length) { $("games").innerHTML = '<div class="empty">No NBA games on this date.</div>'; return; }
+    $("games").innerHTML = games.map((g) => {
+      const sc = g.state === "pre" ? `${esc(g.away.abbr)} @ ${esc(g.home.abbr)}` : `${esc(g.away.abbr)} ${esc(g.away.score)} @ ${esc(g.home.abbr)} ${esc(g.home.score)}`;
+      return `<button class="game ${selected && selected.id === g.id ? "sel" : ""}" data-id="${esc(g.id)}"><span class="m">${sc}</span><span class="s ${g.state === "in" ? "live" : ""}">${esc(g.status)}</span></button>`;
+    }).join("");
+  }
+  $("games").addEventListener("click", (e) => {
+    const b = e.target.closest(".game"); if (!b) return;
+    selectGame(games.find((g) => g.id === b.dataset.id));
+  });
+
+  /** Select a game and load its box score (not available before tip-off). */
+  async function selectGame(g, quiet) {
+    if (!g) return;
+    selected = g; paintGames();
+    $("gameSec").style.display = "";
+    $("gameTitle").textContent = `${g.away.short} @ ${g.home.short}`;
+    $("showBoxAway").textContent = g.away.abbr || "Away"; $("showBoxHome").textContent = g.home.abbr || "Home";
+    $("gameMsg").textContent = ""; $("gameMsg").className = "msg";
+    if (g.state === "pre") {
+      box = null; fillPlayers();
+      $("gameMsg").textContent = "Box score, leaders and player lines appear once the game tips off. The score card shows tip-off time.";
+      return;
+    }
+    if (!quiet) $("gameMsg").textContent = "Loading box score…";
+    try {
+      const sum = await getJSON(API.summary(g.id));
+      box = parseBox(sum);
+      fillPlayers();
+      $("gameMsg").textContent = box.players.length ? "" : "ESPN hasn't posted a box score for this game yet.";
+    } catch (e) { $("gameMsg").textContent = e.message; $("gameMsg").className = "msg err"; }
+  }
+  /** Fill the "Player stat line" dropdown with everyone who played, top scorers first. */
+  function fillPlayers() {
+    const sel = $("player"), keep = sel.value;
+    if (!box || !box.players.length) { sel.innerHTML = "<option value=''>No box score yet</option>"; return; }
+    const list = box.players.filter((p) => !p.dnp).sort((a, b) => num(b.stats.PTS) - num(a.stats.PTS));
+    const grp = (abbr) => list.filter((p) => p.team === abbr)
+      .map((p) => `<option value="${esc(p.id)}">${esc(p.name)} — ${esc(p.stats.PTS ?? 0)} pts</option>`).join("");
+    sel.innerHTML = [selected.away.abbr, selected.home.abbr].map((a) => `<optgroup label="${esc(a)}">${grp(a)}</optgroup>`).join("");
+    if (keep && list.some((p) => p.id === keep)) sel.value = keep;
+  }
+
+  /* ---------- building cards ---------- */
+  const gameLine = (g) => `${g.status} · ${g.away.abbr} ${g.away.score}, ${g.home.abbr} ${g.home.score}`;
+  const customTitle = () => $("title").value.trim();
+
+  /* Card builders for the selected game: score, leaders, compare, player. Each returns card data. */
+  const BUILD = {
+    score(g) {
+      const c = { type: "score", state: g.state, status: g.status, away: g.away, home: g.home, venue: g.venue };
+      return c;
+    },
+    leaders(g) {
+      if (!box || !box.players.length) throw new Error("No box score for this game yet.");
+      const side = (t) => {
+        const ps = box.players.filter((p) => p.team === t.abbr && !p.dnp);
+        const top = (k) => ps.slice().sort((a, b) => num(b.stats[k]) - num(a.stats[k]))[0];
+        const out = [];
+        const p = top("PTS"); if (p) out.push({ cat: "Points", value: p.stats.PTS, name: p.name, extra: [p.stats.FG && p.stats.FG + " FG", p.stats["3PT"] && p.stats["3PT"] + " 3PT"].filter(Boolean).join(" · ") });
+        const r = top("REB"); if (r) out.push({ cat: "Rebounds", value: r.stats.REB, name: r.name, extra: r.stats.OREB ? r.stats.OREB + " offensive" : "" });
+        const a = top("AST"); if (a) out.push({ cat: "Assists", value: a.stats.AST, name: a.name, extra: a.stats.TO != null ? a.stats.TO + (String(a.stats.TO) === "1" ? " turnover" : " turnovers") : "" });
+        return { team: t, leaders: out };
+      };
+      return { type: "leaders", title: customTitle(), away: side(g.away), home: side(g.home), gameLine: gameLine(g) };
+    },
+    compare(g) {
+      if (!box) throw new Error("No box score for this game yet.");
+      const as = box.teamStats[g.away.abbr] || [], hs = box.teamStats[g.home.abbr] || [];
+      const rows = [];
+      COMPARE_ROWS.forEach(([label, names, labels, lowerBetter]) => {
+        const a = findStat(as, names, labels), h = findStat(hs, names, labels);
+        if (!a || !h) return;
+        const fmt = (s) => /%/.test(label) && !/%/.test(s.displayValue) ? s.displayValue + "%" : s.displayValue;
+        rows.push({ label, away: fmt(a), home: fmt(h), awayVal: num(a.displayValue), homeVal: num(h.displayValue), lowerBetter: !!lowerBetter });
+      });
+      if (!rows.length) throw new Error("ESPN hasn't posted team stats for this game yet.");
+      return { type: "compare", title: customTitle(), away: g.away, home: g.home, rows: rows.slice(0, 8), gameLine: gameLine(g) };
+    },
+    player(g, playerId) {
+      if (!box) throw new Error("No box score for this game yet.");
+      const p = box.players.find((x) => x.id === playerId);
+      if (!p) throw new Error("Pick a player first.");
+      const mine = p.team === g.home.abbr ? g.home : g.away, opp = mine === g.home ? g.away : g.home;
+      return {
+        type: "player", title: customTitle(), name: p.name, jersey: p.jersey, position: p.pos,
+        team: { abbr: mine.abbr, color: mine.color }, opp: (mine.home ? "vs " : "@ ") + opp.abbr,
+        stats: p.stats, gameLine: gameLine(g)
+      };
+    }
+  };
+
+  /* ---------- box score ---------- */
+  /* Columns on the box score card, left to right (ESPN labels). */
+  const BOX_COLS = ["MIN", "PTS", "REB", "AST", "STL", "BLK", "TO", "FG", "3PT", "FT", "+/-"];
+  /** Add up a column when ESPN didn't send a totals row ("5-11" style columns add made and attempted). */
+  function sumCol(ps, k) {
+    if (k === "+/-" || k === "MIN") return "";
+    if (/^(FG|3PT|FT)$/.test(k)) {
+      let m = 0, a = 0;
+      ps.forEach((p) => { const [x, y] = String(p.stats[k] || "").split("-"); m += num(x); a += num(y); });
+      return m + "-" + a;
+    }
+    return String(ps.reduce((t, p) => t + num(p.stats[k]), 0));
+  }
+  /** One team's full box score: starters, then bench (did-not-play players are listed in the footer). */
+  function boxCard(g, side) {
+    if (!box || !box.players.length) throw new Error("No box score for this game yet.");
+    const t = side === "home" ? g.home : g.away, opp = side === "home" ? g.away : g.home;
+    const mine = box.players.filter((p) => p.team === t.abbr);
+    if (!mine.length) throw new Error(`ESPN hasn't posted ${t.abbr}'s box score yet.`);
+    const startersOnly = $("boxStarters").checked;
+    const played = mine.filter((p) => !p.dnp);
+    const starters = played.filter((p) => p.starter);
+    const bench = played.filter((p) => !p.starter).sort((a, b) => num(b.stats.MIN) - num(a.stats.MIN));
+    const list = startersOnly ? starters : starters.concat(bench);
+    const cols = BOX_COLS.filter((k) => played.some((p) => p.stats[k] != null && p.stats[k] !== ""));
+    const given = box.totals[t.abbr];
+    const totals = {}; cols.forEach((k) => { totals[k] = given && given[k] != null ? given[k] : sumCol(played, k); });
+    totals.MIN = ""; // team minutes (240) isn't interesting
+    const dnp = mine.filter((p) => p.dnp).map((p) => p.short || p.name);
+    return {
+      type: "box", title: customTitle(),
+      team: { abbr: t.abbr, short: t.short, name: t.name, color: t.color, score: t.score, record: t.record },
+      opp: { abbr: opp.abbr, color: opp.color, score: opp.score, home: opp.home },
+      cols, startersOnly,
+      rows: list.map((p) => ({ name: p.short || p.name, pos: p.pos, starter: p.starter, vals: p.stats })),
+      totals: startersOnly ? null : totals,
+      gameLine: gameLine(g) + (dnp.length && !startersOnly ? ` · DNP: ${dnp.join(", ")}` : "")
+    };
+  }
+  BUILD.boxaway = (g) => boxCard(g, "away");
+  BUILD.boxhome = (g) => boxCard(g, "home");
+
+  /* ---------- press a card's button again to hide it ---------- */
+  let shownKey = null, shownBtn = null, onScreen = false, showSentAt = 0;
+  /** Remember which card (key) is on screen and highlight its button. */
+  function markShown(key, btn) {
+    if (shownBtn) shownBtn.classList.remove("showing");
+    shownKey = key || null; shownBtn = btn || null;
+    if (shownBtn) shownBtn.classList.add("showing");
+    if (key) showSentAt = Date.now();
+  }
+  const isShowing = (key) => !!key && onScreen && shownKey === key;
+  /** Hide whatever card is on screen. */
+  function hideCard() { AWYM.send({ to: "stats", cmd: "hide" }); lastShown = null; onScreen = false; markShown(null); }
+
+  /** Show a card for the selected game (and remember it for refreshes). */
+  function send(cardData, kind, extra) {
+    // (the score card always uses the game status — "Final", "Q3 4:12" — as its header)
+    lastShown = Object.assign({ kind, gameId: selected && selected.id, card: cardData }, extra || {});
+    AWYM.send({ to: "stats", cmd: "show", card: cardData, options: overlayOpts() });
+    onScreen = true;
+  }
+  /** A game card button was pressed: show it, or hide it if it's already showing. */
+  function showGameCard(kind, btn) {
+    if (!selected) return;
+    const key = [kind, selected.id, kind === "player" ? $("player").value : "",
+      /^box/.test(kind) && $("boxStarters").checked ? "starters" : "", customTitle()].join("|");
+    if (isShowing(key)) { hideCard(); return; }
+    try {
+      const c = BUILD[kind](selected, $("player").value);
+      send(c, kind, { playerId: $("player").value });
+      markShown(key, btn);
+      $("gameMsg").textContent = ""; $("gameMsg").className = "msg";
+    } catch (e) { $("gameMsg").textContent = e.message; $("gameMsg").className = "msg err"; }
+  }
+  $("showScore").onclick = (e) => showGameCard("score", e.currentTarget);
+  $("showLeaders").onclick = (e) => showGameCard("leaders", e.currentTarget);
+  $("showCompare").onclick = (e) => showGameCard("compare", e.currentTarget);
+  $("showPlayer").onclick = (e) => showGameCard("player", e.currentTarget);
+  $("showBoxAway").onclick = (e) => showGameCard("boxaway", e.currentTarget);
+  $("showBoxHome").onclick = (e) => showGameCard("boxhome", e.currentTarget);
+  // ticking "Starters only" while a box score is up redraws it straight away
+  $("boxStarters").onchange = () => {
+    if (!lastShown || !/^box/.test(lastShown.kind) || !onScreen || !selected || lastShown.gameId !== selected.id) return;
+    const btn = shownBtn; shownKey = null; // forget the old key so this re-shows instead of hiding
+    showGameCard(lastShown.kind, btn);
+  };
+  $("hide").onclick = hideCard;
+
+  /* ---------- standings ---------- */
+  function seg(a, b, on) { $(a).classList.toggle("on", on); $(b).classList.toggle("on", !on); }
+  seg("east", "west", opts.conf === "east"); seg("top10", "all15", opts.top === 10);
+  $("east").onclick = () => { opts.conf = "east"; seg("east", "west", true); save(); };
+  $("west").onclick = () => { opts.conf = "west"; seg("east", "west", false); save(); };
+  $("top10").onclick = () => { opts.top = 10; seg("top10", "all15", true); save(); };
+  $("all15").onclick = () => { opts.top = 15; seg("top10", "all15", false); save(); };
+
+  /** ESPN standings → standings card for the chosen conference (gathers nested divisions, no duplicates). */
+  function buildStandings(data) {
+    const kids = data.children || [];
+    const conf = kids.find((c) => new RegExp(opts.conf, "i").test(c.name || c.abbreviation || "")) || kids[opts.conf === "east" ? 0 : 1];
+    if (!conf) throw new Error("ESPN didn't return standings.");
+    // gather every team, even if ESPN nests them in divisions, and never list a team twice
+    const collect = (node, out) => {
+      if (!node) return out;
+      ((node.standings && node.standings.entries) || []).forEach((e) => out.push(e));
+      (node.children || []).forEach((c) => collect(c, out));
+      return out;
+    };
+    const seenTeams = new Set();
+    const entries = collect(conf, []).filter((e) => {
+      const k = e.team && (e.team.id || e.team.abbreviation);
+      if (!k) return true;
+      if (seenTeams.has(k)) return false;
+      seenTeams.add(k); return true;
+    });
+    const stat = (e, n) => (e.stats || []).find((s) => s.name === n || s.type === n) || {};
+    let rows = entries.map((e) => {
+      const t = e.team || {};
+      const abbr = t.abbreviation || "";
+      return {
+        abbr, name: t.shortDisplayName || t.name || t.displayName || abbr,
+        color: colorCache[abbr] || hex(t.color) || "",
+        seedNum: Number(stat(e, "playoffSeed").value) || 99,
+        pct: Number(stat(e, "winPercent").value) || 0,
+        w: stat(e, "wins").displayValue ?? stat(e, "wins").value ?? 0,
+        l: stat(e, "losses").displayValue ?? stat(e, "losses").value ?? 0,
+        gb: stat(e, "gamesBehind").displayValue ?? "-",
+        streak: stat(e, "streak").displayValue ?? ""
+      };
+    });
+    rows.sort((a, b) => (a.seedNum - b.seedNum) || (b.pct - a.pct));
+    rows = (opts.top === 10 ? rows.slice(0, 10) : rows).map((r, i) => Object.assign(r, { seed: i + 1 }));
+    return {
+      type: "standings", title: customTitle() || (opts.conf === "east" ? "Eastern Conference" : "Western Conference"),
+      conf: conf.name, rows, cutAfter: rows.length > 6 ? 6 : 0,
+      asOf: "As of " + new Date().toLocaleDateString([], { month: "short", day: "numeric" }) + " · dashed line = top 6 (no play-in)"
+    };
+  }
+  $("showStandings").onclick = async (e) => {
+    const btn = e.currentTarget, key = ["standings", opts.conf, opts.top, customTitle()].join("|");
+    if (isShowing(key)) { hideCard(); return; }
+    $("standMsg").textContent = "Loading standings…"; $("standMsg").className = "msg";
+    try {
+      standingsCache = await getJSON(API.standings());
+      const c = buildStandings(standingsCache);
+      lastShown = { kind: "standings", card: c };
+      AWYM.send({ to: "stats", cmd: "show", card: c, options: overlayOpts() });
+      onScreen = true; markShown(key, btn);
+      $("standMsg").textContent = "";
+    } catch (e) { $("standMsg").textContent = e.message; $("standMsg").className = "msg err"; }
+  };
+
+  /* ---------- ticker ---------- */
+  /** Send the selected date's games to the score ticker (and whether it's on). */
+  function sendTicker() {
+    AWYM.send({ to: "stats", cmd: "ticker", games: games.map((g) => ({ state: g.state, status: g.status, away: g.away, home: g.home })), on: tickerOn, options: overlayOpts() });
+  }
+  function paintTicker() { $("tickerBtn").textContent = "Score ticker: " + (tickerOn ? "on" : "off"); $("tickerBtn").classList.toggle("on", tickerOn); }
+  $("tickerBtn").onclick = () => { tickerOn = !tickerOn; paintTicker(); sendTicker(); };
+  // 🚨 Clear (from any dock): the card and ticker are gone, so reset their buttons
+  AWYM.onClear(() => { tickerOn = false; paintTicker(); lastShown = null; onScreen = false; markShown(null); });
+  AWYM.dock("stats");
+
+  /* ---------- live refresh ---------- */
+  /** Reload games + box score and update the card on screen (runs every 30 s while games are live). */
+  async function refresh(quiet) {
+    await loadGames(quiet);
+    if (selected && selected.state !== "pre") await selectGame(selected, true);
+    if (lastShown && lastShown.kind !== "standings" && lastShown.gameId) {
+      const g = games.find((x) => x.id === lastShown.gameId);
+      if (g) {
+        try {
+          const c = BUILD[lastShown.kind](g, lastShown.playerId);
+          if (lastShown.card && lastShown.card.title) c.title = lastShown.card.title;
+          lastShown.card = c;
+          AWYM.send({ to: "stats", cmd: "update", card: c, options: overlayOpts() });
+        } catch (e) {}
+      }
+    }
+  }
+  $("refreshNow").onclick = () => refresh(false);
+  setInterval(() => {
+    if (opts.live && games.some((g) => g.state === "in")) refresh(true);
+  }, 30000);
+
+  /* ---------- options ---------- */
+  function paintPos() { $("posSeg").querySelectorAll("button").forEach((b) => b.classList.toggle("on", b.dataset.v === opts.position)); }
+  $("posSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    opts.position = b.dataset.v; save(); paintPos();
+    if (lastShown) AWYM.send({ to: "stats", cmd: "update", card: lastShown.card, options: overlayOpts() });
+  });
+  $("autohide").value = String(opts.autohide);
+  $("autohide").onchange = () => { opts.autohide = Number($("autohide").value); save(); };
+  $("teamColors").checked = opts.teamColors;
+  $("clearLT").checked = opts.clearLT !== false;
+  $("clearLT").onchange = () => {
+    opts.clearLT = $("clearLT").checked; save();
+    if (lastShown) AWYM.send({ to: "stats", cmd: "update", card: lastShown.card, options: overlayOpts() });
+  };
+  $("teamColors").onchange = () => {
+    opts.teamColors = $("teamColors").checked; save();
+    if (lastShown) AWYM.send({ to: "stats", cmd: "update", card: lastShown.card, options: overlayOpts() });
+    if (tickerOn) sendTicker();
+  };
+  $("live").checked = opts.live;
+  $("live").onchange = () => { opts.live = $("live").checked; save(); };
+
+  /* ---------- overlay connection ---------- */
+  let lastHeard = 0;
+  AWYM.listen((m) => {
+    if (m.from !== "stats") return;
+    lastHeard = Date.now();
+    // (ignore a "not showing" reply that was already on its way when we just sent a card)
+    if (typeof m.visible === "boolean" && !(m.visible === false && Date.now() - showSentAt < 1200)) {
+      onScreen = m.visible; if (!m.visible && m.cmd !== "hello") markShown(null);
+    }
+    if (m.cmd === "hello") {               // overlay just (re)loaded: give it what was on screen
+      if (lastShown) AWYM.send({ to: "stats", cmd: "show", card: lastShown.card, options: overlayOpts() });
+      if (tickerOn) sendTicker();
+    }
+  });
+  setInterval(() => {
+    AWYM.send({ to: "stats", cmd: "ping" });
+    const ok = Date.now() - lastHeard < 4500;
+    $("conn").classList.toggle("ok", ok);
+    $("conn").querySelector("span").textContent = ok ? "Overlay connected" : "Overlay not found";
+  }, 1500);
+
+  /* shared with player-lookup.js */
+  window.AWYM_DESK = {
+    getJSON, esc, overlayOpts, colorCache, hex, customTitle,
+    show(card, kind, key, btn) { lastShown = { kind, card }; AWYM.send({ to: "stats", cmd: "show", card, options: overlayOpts() }); onScreen = true; markShown(key, btn); },
+    isShowing, hideCard
+  };
+
+  /* ---------- start ---------- */
+  $("prev").onclick = () => { const d = pickedDate(); d.setDate(d.getDate() - 1); setDate(d); };
+  $("next").onclick = () => { const d = pickedDate(); d.setDate(d.getDate() + 1); setDate(d); };
+  $("today").onclick = () => setDate(new Date());
+  $("date").onchange = () => setDate(pickedDate());
+  paintPos(); paintTicker();
+  setDate(new Date());
+  AWYM.send({ to: "stats", cmd: "ping" });
+})();
+</script>
+<script src="player-lookup.js"></script>
+<script>
+/* Collapsible sections: click a section's header to fold it away (remembered).
+   The ⊟ button in the top bar folds or unfolds everything. See AWYM.collapsible in shared.js. */
+(function () {
+  const foldAll = AWYM.collapsible("awym-stats-fold-v1");
+  const btn = document.getElementById("foldAll");
+  if (btn) btn.onclick = () => {
+    const open = document.querySelectorAll("section:not(.folded) > h2.fold").length;
+    foldAll(open > 0);
+  };
+})();
+</script>
+</body>
+</html>

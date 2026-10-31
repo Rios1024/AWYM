@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM On-Screen Text</title>
+<!--
+  ON-SCREEN TEXT — OBS browser source, 1920 x 1080 (lay it over the whole canvas).
+  Shows whatever you write in the Content Panel dock (content-panel.html):
+  formatted text, lists, emojis and photos, on a card or as plain text.
+  Add it with a typed file:/// URL (not the "Local file" checkbox) so the
+  dock can reach it. It's invisible until you click Show in the panel.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080. Hidden until the Content Panel sends something.
+  Uses:      theme.css, rich-text.css (text formatting), shared.js (AWYM.cleanHTML, messaging).
+  Messages:  listens  to:"content" show {data, options} | update {data, options} | hide | ping
+             sends    from:"content" {visible} · {cmd:"hello"} on load
+  data:      {header, html}  — html is cleaned again here with AWYM.cleanHTML
+  options:   position "left" | "center" | "right" | "full"
+             width "narrow" | "medium" | "wide" · size (percent, 100 = 36px text)
+             style "card" | "plain" · align "top" | "middle" · clearLT (keep above lower thirds)
+             autohide (seconds, 0 = stay up)
+  Fitting:   fit() shrinks the text (down to 55%) and then the whole block until it
+             fits above the lower thirds (y = 800) or the screen bottom.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="rich-text.css">
+<style>
+  /* On-screen text styles. Design size 1920×1080. One .block at a time.
+     Classes on <body>: pos-left/center/right/full, w-narrow/medium/wide, st-card/plain, va-top/middle, showing. */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: var(--font-body), "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; color: var(--light); user-select: none; }
+  .stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+
+  /* full-screen backdrop */
+  .backdrop { position: absolute; inset: 0; opacity: 0; transition: opacity .45s;
+    background: radial-gradient(ellipse 80% 75% at 50% 45%, var(--secondary), var(--dark) 80%); }
+  .backdrop::before { content: ""; position: absolute; inset: 0; opacity: .08;
+    background: repeating-linear-gradient(135deg, var(--light) 0 2px, transparent 2px 26px); }
+  .backdrop::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 10px; background: var(--primary); }
+  .pos-full.showing .backdrop { opacity: 1; }
+
+  /* the block of text */
+  .block { position: absolute; top: 120px; box-sizing: border-box; }
+  .w-narrow .block { width: 640px; } .w-medium .block { width: 900px; } .w-wide .block { width: 1320px; }
+  .pos-left .block { left: 80px; }
+  .pos-right .block { right: 80px; }
+  .pos-center .block, .pos-full .block { left: 50%; translate: -50% 0; }
+  .pos-full .block { width: 1600px; }
+  .va-middle .block, .pos-full .block { top: 50%; translate: 0 -50%; }
+  .va-middle.pos-center .block, .pos-full .block { translate: -50% -50%; }
+
+  .head { display: none; font-family: var(--font-heading); font-size: 30px; letter-spacing: 2px; text-transform: uppercase; line-height: 1.1; }
+  .has-head .head { display: block; }
+  .body { font-size: var(--tsize, 36px); }
+
+  /* card style */
+  .st-card .block { background: var(--secondary); border-radius: 22px; overflow: hidden;
+    border-top: 8px solid var(--primary); box-shadow: 0 18px 40px rgba(0,0,0,.4); }
+  .st-card .head { background: var(--dark); padding: 14px 28px 12px; }
+  .st-card .body { padding: 22px 30px 26px; }
+  .pos-full.st-card .block { box-shadow: 0 30px 80px rgba(0,0,0,.45); }
+
+  /* plain style: just the text, with an outline so it reads over anything */
+  .st-plain .head { display: none; }
+  .st-plain.has-head .head { display: inline-block; background: var(--primary); color: var(--dark); padding: 8px 18px 6px; border-radius: 10px; margin-bottom: 14px; }
+  .st-plain .body { text-shadow: 0 2px 0 rgba(0,0,0,.65), 0 0 3px rgba(0,0,0,.9), 0 0 22px rgba(0,0,0,.7); }
+  .st-plain .rt img { box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+
+  /* in / out */
+  .block { opacity: 0; transition: opacity .35s ease, scale .45s cubic-bezier(.2,.9,.25,1.1), margin .45s cubic-bezier(.2,.9,.25,1.1); scale: .96; margin-top: 30px; }
+  .showing .block { opacity: 1; scale: 1; margin-top: 0; }
+  .block.swap .body { animation: swap .35s ease; }
+  @keyframes swap { from { opacity: .2; } to { opacity: 1; } }
+</style>
+</head>
+<body class="pos-left w-medium st-card va-top">
+  <div class="stage" id="stage">
+    <div class="backdrop"></div>
+    <div class="block" id="block"><div class="head" id="head"></div><div class="body rt" id="body"></div></div>
+  </div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById("stage"), block = document.getElementById("block");
+  const head = document.getElementById("head"), body = document.getElementById("body");
+
+  /* scale the 1920×1080 design to the browser source's real size */
+  function scaleStage() { stage.style.transform = `scale(${Math.min(innerWidth / 1920, innerHeight / 1080)})`; }
+  addEventListener("resize", () => { scaleStage(); fit(); }); scaleStage();
+
+  let visible = false, opts = {}, hideTimer = null, baseSize = 36;
+
+  /** Apply layout options from the Content Panel (see header for the list). */
+  function setOptions(o) {
+    opts = Object.assign({ position: "left", width: "medium", size: 100, style: "card", align: "top", clearLT: true, autohide: 0 }, o || {});
+    const cl = document.body.classList;
+    [...cl].filter((c) => /^(pos|w|st|va)-/.test(c)).forEach((c) => cl.remove(c));
+    cl.add("pos-" + (["left", "center", "right", "full"].includes(opts.position) ? opts.position : "left"));
+    cl.add("w-" + (["narrow", "medium", "wide"].includes(opts.width) ? opts.width : "medium"));
+    cl.add("st-" + (opts.style === "plain" ? "plain" : "card"));
+    cl.add("va-" + (opts.align === "middle" ? "middle" : "top"));
+    baseSize = 36 * Math.max(40, Math.min(250, Number(opts.size) || 100)) / 100 * (opts.position === "full" ? 1.3 : 1);
+  }
+  /** Put the header and (cleaned) text into the block. */
+  function render(d) {
+    d = d || {};
+    const h = String(d.header || "").trim();
+    head.textContent = h;
+    document.body.classList.toggle("has-head", !!h);
+    body.innerHTML = AWYM.cleanHTML(d.html || "");
+    AWYM.sizeImages(body, fit);
+  }
+
+  /* Keep the block on screen: shrink the text step by step (to 55%), then the whole
+     block, until it fits above the lower thirds (or the screen bottom). */
+  function fit() {
+    body.style.zoom = "";
+    let size = baseSize;
+    body.style.setProperty("--tsize", size + "px");
+    body.style.setProperty("--img-max", Math.round(size * 14) + "px");
+    const full = opts.position === "full", middle = full || opts.align === "middle";
+    const limitBottom = full ? 1040 : (opts.clearLT !== false ? 800 : 1040);
+    const top = middle ? 40 : 120;
+    const room = middle ? limitBottom - top : limitBottom - top;
+    const tall = () => block.offsetHeight > room;
+    while (tall() && size > baseSize * 0.55) {
+      size -= baseSize * 0.05;
+      body.style.setProperty("--tsize", size.toFixed(1) + "px");
+      body.style.setProperty("--img-max", Math.round(size * 12) + "px");
+    }
+    if (tall()) {
+      const other = block.offsetHeight - body.offsetHeight;
+      body.style.zoom = Math.max(0.35, (room - other) / body.offsetHeight).toFixed(3);
+    }
+    // the middle position centers in the space above the lower thirds
+    block.style.top = middle ? (top + room / 2) + "px" : "";
+  }
+  if (document.fonts) { document.fonts.ready.then(fit); document.fonts.addEventListener("loadingdone", fit); }
+
+  const report = () => AWYM.send({ from: "content", visible });
+  /** Show (or replace) the text with its entrance animation. */
+  function show(d, o, swapOnly) {
+    clearTimeout(hideTimer);
+    setOptions(o);
+    if (swapOnly && visible) { block.classList.remove("swap"); void block.offsetWidth; block.classList.add("swap"); }
+    render(d); fit();
+    visible = true; document.body.classList.add("showing");
+    const secs = Number(opts.autohide) || 0;
+    if (secs > 0) hideTimer = setTimeout(hide, secs * 1000);
+    report();
+  }
+  function hide() { clearTimeout(hideTimer); visible = false; document.body.classList.remove("showing"); report(); }
+
+  AWYM.listen((m) => {
+    if (m.to !== "content") return;
+    if (m.cmd === "show") show(m.data, m.options, false);
+    else if (m.cmd === "update") { if (visible) { setOptions(m.options); render(m.data); fit(); report(); } }
+    else if (m.cmd === "hide") hide();
+    else if (m.cmd === "ping") report();
+  });
+  AWYM.onTheme(() => setTimeout(fit, 400));   // fonts may change size
+  AWYM.onClear(hide);                          // 🚨 Clear button in any dock
+  AWYM.send({ from: "content", cmd: "hello" });
+})();
+</script>
+</body>

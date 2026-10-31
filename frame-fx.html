@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Frame Effects</title>
+<!--
+  FRAME EFFECTS — fire, ice, lightning, smoke, sparks and a shake, drawn around a
+  camera frame. The middle stays clear, so the camera is never covered.
+  The setup script adds one per camera frame ("AWYM Frame FX 1" …) right above
+  its frame and keeps it lined up: move or resize the frame and its effects
+  layer follows (as long as the script is loaded). Fire them from the Show
+  Runner's "Frame effects" section, or the FX hotkeys / M18 keys.
+
+  URL settings:
+    ?id=1            the camera frame / People slot it belongs to
+    &shape=circle    circle, rounded or hexagon (normally learned from the frame itself)
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, designed at 1000 × 1100: the 600 × 660 frame with
+             200 px of room on every side for flames and sparks. Ring centre (500, 500),
+             open hole radius 262 (frame.html's geometry moved by +200, +200).
+             The setup script sizes it 5/3 of the frame and centres it on the frame.
+  Uses:      theme.css, shared.js, lib/anime.umd.min.js (anime.js 4, MIT) for the
+             effects' timing (ignite, flare, die down). The particles are drawn on a canvas.
+  Messages:  listens  to:"fx" {id: "1".."4" | "*" | "floor", cmd:"play", effect, dur} · {cmd:"stop", effect?} · ping
+                        effect: fire | ice | zap | smoke | sparks | shake
+                        dur: seconds (0 = until stopped; default per effect)
+                        id "floor" = the seat that has the floor (★ spotlight), or every seat if nobody has it
+                      from:"frame" {id, spot, shape} (who has the floor, frame shape)
+                      to:"all" clear → stops everything
+             sends    from:"fx" {id, playing:[…]} whenever that changes, and on ping/hello
+                      to:"frame" {id, cmd:"shake", ms} for the shake
+  Test it:   open frame-fx.html?test=1 in a normal browser for buttons.
+  Cost:      nothing runs while no effect is playing.
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .test { position: fixed; left: 8px; top: 8px; z-index: 2; display: none; flex-wrap: wrap; gap: 6px; font: 14px system-ui, sans-serif; max-width: 96vw; }
+  .test.on { display: flex; }
+  .test button { font: inherit; padding: 6px 10px; }
+  body.testbg { background: #23202b; }
+  body.testbg .ghost { display: block; }
+  .ghost { display: none; position: absolute; pointer-events: none; }
+</style>
+</head>
+<body>
+<svg id="ghost" class="ghost" aria-hidden="true"></svg>
+<canvas id="cv"></canvas>
+<div class="test" id="test"></div>
+<script src="shared.js"></script>
+<script src="lib/anime.umd.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  const A = window.anime || null;              // anime.js (timing); the page still works without it
+  const W = 1000, H = 1100, CX = 500, CY = 500, HOLE = 262, RING = 276;
+  const id = AWYM.param("id", "1");
+  let shape = AWYM.param("shape", "circle");
+  const cv = document.getElementById("cv"), g = cv.getContext("2d");
+
+  /* ---------------- geometry ---------------- */
+  let k = 1, ox = 0, oy = 0;                   // design → canvas pixels
+  function fit() {
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.round(innerWidth * dpr)); cv.height = Math.max(1, Math.round(innerHeight * dpr));
+    k = Math.min(innerWidth / W, innerHeight / H) * dpr;
+    ox = (cv.width - W * k) / 2; oy = (cv.height - H * k) / 2;
+    drawGhost();
+  }
+  /** The frame's outline at radius r around the ring centre (same shapes as frame.html). */
+  function outline(r) {
+    const c = CX, cy = CY;
+    if (shape === "hexagon") {
+      const pts = [];
+      for (let i = 0; i < 6; i++) { const a = (60 * i - 90) * Math.PI / 180; pts.push((c + r * Math.cos(a)).toFixed(1) + "," + (cy + r * Math.sin(a)).toFixed(1)); }
+      return "M" + pts.join("L") + "Z";
+    }
+    if (shape === "rounded") {
+      const q = r * 2 * 0.18, x = c - r, y = cy - r, s = r * 2;
+      return `M${x + q},${y}H${x + s - q}Q${x + s},${y} ${x + s},${y + q}V${y + s - q}Q${x + s},${y + s} ${x + s - q},${y + s}H${x + q}Q${x},${y + s} ${x},${y + s - q}V${y + q}Q${x},${y} ${x + q},${y}Z`;
+    }
+    return `M${c - r},${cy}a${r},${r} 0 1,0 ${r * 2},0a${r},${r} 0 1,0 ${-r * 2},0Z`;
+  }
+  let holePath = null, ringPath = null, perim = [];
+  /** Rebuild the hole, the ring path and 720 points around the ring (with outward normals). */
+  function buildShape() {
+    holePath = new Path2D(outline(HOLE));
+    ringPath = new Path2D(outline(RING));
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    const p = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    p.setAttribute("d", outline(RING)); svg.appendChild(p);
+    svg.style.position = "absolute"; svg.style.width = svg.style.height = "0"; document.body.appendChild(svg);
+    perim = [];
+    const L = p.getTotalLength(), N = 720;
+    for (let i = 0; i < N; i++) {
+      const a = p.getPointAtLength((i / N) * L), b = p.getPointAtLength(((i + 1) / N) * L);
+      let nx = b.y - a.y, ny = -(b.x - a.x); const len = Math.hypot(nx, ny) || 1; nx /= len; ny /= len;
+      if (nx * (a.x - CX) + ny * (a.y - CY) < 0) { nx = -nx; ny = -ny; }     // point outward
+      perim.push({ x: a.x, y: a.y, nx, ny });
+    }
+    svg.remove();
+    drawGhost();
+  }
+  const onRing = () => perim[(Math.random() * perim.length) | 0];
+  const rnd = (a, b) => a + Math.random() * (b - a);
+
+  /* ---------------- colors from the theme ---------------- */
+  function themeColor(name, fallback) {
+    const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return v || fallback;
+  }
+  const glowK = () => { const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--glow-k")); return isFinite(v) ? v : 1; };
+
+  /* ---------------- soft round sprites (made once) ---------------- */
+  function sprite(r, gch, b, hard) {
+    const c = document.createElement("canvas"); c.width = c.height = 64;
+    const x = c.getContext("2d"), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, `rgba(${r},${gch},${b},1)`); gr.addColorStop(hard ? 0.45 : 0.25, `rgba(${r},${gch},${b},${hard ? 0.9 : 0.55})`); gr.addColorStop(1, `rgba(${r},${gch},${b},0)`);
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 64); return c;
+  }
+  const FIRE = [sprite(255, 246, 200), sprite(255, 205, 90), sprite(255, 140, 30), sprite(235, 70, 15), sprite(150, 30, 10)];
+  const SMOKE_DARK = sprite(78, 76, 84), SMOKE_LIGHT = sprite(165, 162, 170), MIST = sprite(225, 242, 255), EMBER = sprite(255, 170, 60, true);
+
+  /* ---------------- effects ----------------
+     Each effect: env = {v} 0…1 (its strength, animated with anime.js), its particles,
+     start(dur), release(), step(dt), draw(). running while env.v > 0 or particles remain. */
+  const fx = {};
+  /** Animate an effect's strength with anime.js (falls back to a simple ramp without it). */
+  function ramp(e, to, ms, ease, done) {
+    if (A) {
+      A.remove(e.env);
+      A.animate(e.env, { v: to, duration: ms, ease: ease || "outQuad", onComplete: () => done && done() });
+    } else {
+      const from = e.env.v, t0 = performance.now();
+      e._ramp = { from, to, t0, ms, done };
+    }
+    wake();
+  }
+  function stepRamp(e) {
+    const r = e._ramp; if (!r) return;
+    const t = Math.min(1, (performance.now() - r.t0) / r.ms);
+    e.env.v = r.from + (r.to - r.from) * t;
+    if (t >= 1) { e._ramp = null; r.done && r.done(); }
+  }
+  /** Common start / timed release / stop for an effect. */
+  function base(name, defaultDur, attack, releaseMs) {
+    const e = { name, env: { v: 0 }, parts: [], timer: 0, on: false, defaultDur };
+    e.start = (dur) => {
+      e.on = true; clearTimeout(e.timer);
+      ramp(e, 1, attack, "outCubic");
+      const d = dur == null || !isFinite(dur) ? defaultDur : dur;
+      if (d > 0) e.timer = setTimeout(e.release, d * 1000);
+      if (e.onStart) e.onStart();
+      announce();
+    };
+    e.release = (fast) => {
+      clearTimeout(e.timer);
+      if (!e.on && e.env.v === 0) return;
+      e.on = false;
+      ramp(e, 0, fast ? 450 : releaseMs, "inOutSine", announce);
+      if (e.onRelease) e.onRelease(fast);
+      announce();
+    };
+    e.busy = () => e.on || e.env.v > 0.001 || e.parts.length > 0 || (e.busyMore && e.busyMore());
+    return e;
+  }
+
+  /* 🔥 FIRE: flames licking up and out of the ring, the ring glowing hot, embers rising */
+  (function () {
+    const e = fx.fire = base("fire", 8, 700, 1600);
+    const embers = [];
+    e.onStart = () => { flash = Math.max(flash, 0.9); };   // a whoomph of light on ignition
+    e.busyMore = () => embers.length > 0;
+    e.step = (dt, t) => {
+      const heat = e.env.v;
+      let n = heat * 950 * dt;
+      while (n > 0 && e.parts.length < 1500) {
+        if (Math.random() < n) {
+          const p = onRing(), up = rnd(80, 200) * (p.y < CY ? 1.25 : 1);
+          e.parts.push({ x: p.x + p.nx * rnd(-14, 10), y: p.y + p.ny * rnd(-14, 10), vx: p.nx * rnd(10, 55) + rnd(-12, 12), vy: -up + p.ny * rnd(10, 40),
+                         age: 0, life: rnd(0.5, 1.2), size: rnd(20, 36) * (0.65 + heat * 0.5), seed: Math.random() * 10 });
+        }
+        n -= 1;
+      }
+      if (Math.random() < heat * dt * 26) { const p = onRing(); embers.push({ x: p.x, y: p.y, vx: rnd(-30, 30) + p.nx * 30, vy: rnd(-200, -90), age: 0, life: rnd(1.2, 2.4) }); }
+      for (let i = e.parts.length - 1; i >= 0; i--) {
+        const q = e.parts[i]; q.age += dt;
+        if (q.age >= q.life) { e.parts.splice(i, 1); continue; }
+        q.vy -= 160 * dt; q.vx += Math.sin(t * 4 + q.seed + q.y * 0.03) * 70 * dt; q.vx *= 1 - 0.8 * dt;
+        q.x += q.vx * dt; q.y += q.vy * dt;
+      }
+      for (let i = embers.length - 1; i >= 0; i--) {
+        const q = embers[i]; q.age += dt;
+        if (q.age >= q.life) { embers.splice(i, 1); continue; }
+        q.vx += Math.sin(t * 3 + i) * 40 * dt; q.vy -= 20 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      }
+    };
+    e.draw = (t) => {
+      const heat = e.env.v;
+      // the ring itself glowing hot
+      if (heat > 0.01) {
+        g.save(); g.globalCompositeOperation = "lighter";
+        g.strokeStyle = `rgba(255,${110 + 60 * Math.sin(t * 9) | 0},30,${0.55 * heat})`; g.lineWidth = 30;
+        g.shadowColor = "rgba(255,120,20,1)"; g.shadowBlur = (22 + 20 * glowK()) * k; g.stroke(ringPath);
+        g.restore();
+      }
+      // flame bodies: soot underneath, then additive fire
+      g.save();
+      for (const q of e.parts) {
+        const u = q.age / q.life; if (u < 0.55) continue;
+        const s = q.size * (1.4 + u); g.globalAlpha = 0.10 * (1 - u) * 2;
+        g.drawImage(SMOKE_DARK, q.x - s, q.y - s - 10, s * 2, s * 2);
+      }
+      g.globalCompositeOperation = "lighter";
+      for (const q of e.parts) {
+        const u = q.age / q.life, s = q.size * (1 - u * 0.55);
+        const img = FIRE[Math.min(4, (u * 5) | 0)];
+        g.globalAlpha = Math.pow(1 - u, 1.1) * 0.62;
+        g.drawImage(img, q.x - s, q.y - s, s * 2, s * 2);
+      }
+      for (const q of embers) {
+        const u = q.age / q.life; g.globalAlpha = (1 - u) * (0.6 + 0.4 * Math.sin(t * 30 + q.x));
+        g.drawImage(EMBER, q.x - 5, q.y - 5, 10, 10);
+      }
+      g.restore();
+    };
+  })();
+
+  /* 🧊 ICE: frost spikes grow out of the ring, cold mist, glints; it melts and drips away */
+  (function () {
+    const e = fx.ice = base("ice", 7, 1300, 2200);
+    let spikes = [], drips = [], melting = false;
+    function grow() {
+      spikes = [];
+      for (let i = 0; i < 150; i++) {
+        const p = perim[Math.floor(i / 150 * perim.length + rnd(0, 4)) % perim.length];
+        const ang = Math.atan2(p.ny, p.nx) + rnd(-0.5, 0.5), len = rnd(18, 72);
+        const br = [];
+        for (let j = 0; j < 3; j++) br.push({ at: rnd(0.3, 0.8), ang: ang + (Math.random() < 0.5 ? -1 : 1) * rnd(0.5, 1.0), len: len * rnd(0.25, 0.5) });
+        spikes.push({ x: p.x + p.nx * 10, y: p.y + p.ny * 10, ang, len, br, delay: rnd(0, 0.45) });
+      }
+    }
+    e.onStart = () => { melting = false; grow(); };
+    e.onRelease = (fast) => { melting = !fast; };
+    e.busyMore = () => drips.length > 0;
+    e.step = (dt) => {
+      const v = e.env.v;
+      if (melting && v > 0.05 && Math.random() < dt * 22) {         // drips fall from the lower half while it melts
+        const p = onRing(); if (p.y > CY - 40) drips.push({ x: p.x + p.nx * 14, y: p.y + p.ny * 14, vy: rnd(0, 40), age: 0, life: rnd(0.8, 1.4) });
+      }
+      if (e.on && Math.random() < dt * 10) { const p = onRing(); e.parts.push({ x: p.x + p.nx * rnd(10, 50), y: p.y + p.ny * rnd(10, 50), age: 0, life: rnd(0.4, 0.9), s: rnd(5, 11) }); }   // glints
+      for (let i = drips.length - 1; i >= 0; i--) { const d = drips[i]; d.age += dt; d.vy += 900 * dt; d.y += d.vy * dt; if (d.age > d.life || d.y > H) drips.splice(i, 1); }
+      for (let i = e.parts.length - 1; i >= 0; i--) { const q = e.parts[i]; q.age += dt; if (q.age > q.life) e.parts.splice(i, 1); }
+    };
+    e.draw = (t) => {
+      const v = e.env.v;
+      g.save();
+      if (v > 0.01) {
+        // frosted crust over the ring
+        g.globalAlpha = 0.85 * v; g.lineWidth = 38; g.strokeStyle = "rgba(190,228,255,0.55)"; g.stroke(ringPath);
+        g.lineWidth = 3; g.strokeStyle = "rgba(255,255,255,0.9)"; g.setLineDash([3, 9]); g.stroke(ringPath); g.setLineDash([]);
+        // cold mist hugging the ring
+        g.globalAlpha = 0.10 * v;
+        for (let i = 0; i < perim.length; i += 24) { const p = perim[i], s = 70 + 20 * Math.sin(t * 0.8 + i); g.drawImage(MIST, p.x + p.nx * 30 - s, p.y + p.ny * 30 - s, s * 2, s * 2); }
+        // frost spikes
+        g.globalAlpha = 1; g.lineCap = "round";
+        g.shadowColor = "rgba(160,215,255,0.9)"; g.shadowBlur = 8 * k * glowK();
+        for (const s of spikes) {
+          const pr = Math.max(0, Math.min(1, (v - s.delay) / (1 - s.delay))); if (pr <= 0) continue;
+          const L = s.len * pr, ex = s.x + Math.cos(s.ang) * L, ey = s.y + Math.sin(s.ang) * L;
+          g.strokeStyle = "rgba(232,248,255,0.95)"; g.lineWidth = 2.6;
+          g.beginPath(); g.moveTo(s.x, s.y); g.lineTo(ex, ey);
+          for (const b of s.br) {
+            if (b.at > pr) continue;
+            const bx = s.x + Math.cos(s.ang) * s.len * b.at, by = s.y + Math.sin(s.ang) * s.len * b.at, bl = b.len * pr;
+            g.moveTo(bx, by); g.lineTo(bx + Math.cos(b.ang) * bl, by + Math.sin(b.ang) * bl);
+          }
+          g.stroke();
+        }
+        g.shadowBlur = 0;
+      }
+      // glints: little four-point stars
+      g.globalCompositeOperation = "lighter";
+      for (const q of e.parts) {
+        const u = q.age / q.life, a = Math.sin(u * Math.PI), s = q.s * a;
+        g.globalAlpha = a * v; g.fillStyle = "#fff";
+        g.beginPath(); g.moveTo(q.x - s, q.y); g.lineTo(q.x, q.y - s * 0.18); g.lineTo(q.x + s, q.y); g.lineTo(q.x, q.y + s * 0.18); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(q.x, q.y - s); g.lineTo(q.x + s * 0.18, q.y); g.lineTo(q.x, q.y + s); g.lineTo(q.x - s * 0.18, q.y); g.closePath(); g.fill();
+      }
+      g.globalCompositeOperation = "source-over";
+      // melt-water drips
+      for (const d of drips) {
+        g.globalAlpha = 0.8 * (1 - d.age / d.life); g.fillStyle = "rgba(200,235,255,1)";
+        g.beginPath(); g.ellipse(d.x, d.y, 3.2, 5.5 + Math.min(8, d.vy / 120), 0, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+    };
+  })();
+
+  /* ⚡ LIGHTNING: crackling arcs racing round the ring and bolts striking outward */
+  (function () {
+    const e = fx.zap = base("zap", 2.5, 120, 500);
+    let next = 0;
+    function jag(x1, y1, x2, y2, rough, depth, out) {
+      if (depth === 0) { out.push(x2, y2); return; }
+      const mx = (x1 + x2) / 2 + rnd(-rough, rough), my = (y1 + y2) / 2 + rnd(-rough, rough);
+      jag(x1, y1, mx, my, rough / 2, depth - 1, out); jag(mx, my, x2, y2, rough / 2, depth - 1, out);
+    }
+    function strike() {
+      const bolts = 1 + ((Math.random() * 3) | 0);
+      for (let b = 0; b < bolts; b++) {
+        const pts = [];
+        if (Math.random() < 0.55) {                         // an arc along the ring
+          const i0 = (Math.random() * perim.length) | 0, span = (rnd(40, 140)) | 0;
+          let prev = perim[i0]; pts.push(prev.x + prev.nx * rnd(-6, 12), prev.y + prev.ny * rnd(-6, 12));
+          for (let s = 1; s <= 6; s++) {
+            const p = perim[(i0 + Math.round(span * s / 6)) % perim.length], off = rnd(-4, 26);
+            jag(pts[pts.length - 2], pts[pts.length - 1], p.x + p.nx * off, p.y + p.ny * off, 16, 3, pts);
+          }
+        } else {                                              // a bolt striking outward, with a fork
+          const p = onRing(), len = rnd(90, 210), ang = Math.atan2(p.ny, p.nx) + rnd(-0.4, 0.4);
+          pts.push(p.x, p.y);
+          jag(p.x, p.y, p.x + Math.cos(ang) * len, p.y + Math.sin(ang) * len, 50, 5, pts);
+          const fi = 2 * ((pts.length / 4) | 0), fork = [pts[fi], pts[fi + 1]], fa = ang + rnd(-0.9, 0.9);
+          jag(fork[0], fork[1], fork[0] + Math.cos(fa) * len * 0.5, fork[1] + Math.sin(fa) * len * 0.5, 26, 4, fork);
+          e.parts.push({ pts: fork, age: 0, life: rnd(0.1, 0.2), w: 0.6 });
+        }
+        e.parts.push({ pts, age: 0, life: rnd(0.16, 0.32), w: 1 });
+      }
+      flash = Math.max(flash, 0.55);
+    }
+    e.onStart = () => { next = 0; };
+    e.step = (dt) => {
+      if (e.on || e.env.v > 0.3) { next -= dt; if (next <= 0) { strike(); next = rnd(0.04, 0.14) / Math.max(0.3, e.env.v); } }
+      for (let i = e.parts.length - 1; i >= 0; i--) { const q = e.parts[i]; q.age += dt; if (q.age > q.life) e.parts.splice(i, 1); }
+    };
+    e.draw = () => {
+      const v = e.env.v;
+      g.save(); g.globalCompositeOperation = "lighter"; g.lineJoin = "round"; g.lineCap = "round";
+      if (v > 0.01) {               // electric glow on the ring
+        g.globalAlpha = 0.16 * v; g.strokeStyle = "rgb(120,170,255)"; g.lineWidth = 18;
+        g.shadowColor = "rgb(140,180,255)"; g.shadowBlur = 24 * k * glowK(); g.stroke(ringPath); g.shadowBlur = 0;
+      }
+      for (const q of e.parts) {
+        const a = 1 - q.age / q.life; if (a <= 0) continue;
+        const path = new Path2D(); path.moveTo(q.pts[0], q.pts[1]);
+        for (let i = 2; i < q.pts.length; i += 2) path.lineTo(q.pts[i], q.pts[i + 1]);
+        g.globalAlpha = 0.45 * a; g.strokeStyle = "rgb(110,150,255)"; g.lineWidth = 12 * q.w;
+        g.shadowColor = "rgb(120,160,255)"; g.shadowBlur = 18 * k * glowK(); g.stroke(path);
+        g.shadowBlur = 0; g.globalAlpha = a; g.strokeStyle = "rgb(235,242,255)"; g.lineWidth = 3 * q.w; g.stroke(path);
+      }
+      g.restore();
+    };
+  })();
+
+  /* 💨 SMOKE: thick smoke pouring off the ring ("that take is cooked"), with a few embers */
+  (function () {
+    const e = fx.smoke = base("smoke", 6, 900, 2000);
+    e.step = (dt, t) => {
+      const v = e.env.v;
+      let n = v * 60 * dt;
+      while (n > 0) {
+        if (Math.random() < n) {
+          const p = onRing(), dark = Math.random() < 0.35;
+          e.parts.push({ x: p.x + p.nx * 8, y: p.y + p.ny * 8, vx: p.nx * rnd(10, 40) + rnd(-10, 10), vy: rnd(-90, -45) + p.ny * 20,
+                         age: 0, life: rnd(2.2, 3.6), s0: rnd(26, 40), s1: rnd(110, 170), dark, rot: rnd(0, 6), ember: Math.random() < 0.12 });
+        }
+        n -= 1;
+      }
+      for (let i = e.parts.length - 1; i >= 0; i--) {
+        const q = e.parts[i]; q.age += dt;
+        if (q.age > q.life) { e.parts.splice(i, 1); continue; }
+        q.vx += Math.sin(t * 0.9 + q.rot) * 14 * dt; q.vy -= 8 * dt; q.vx *= 1 - 0.3 * dt;
+        q.x += q.vx * dt; q.y += q.vy * dt;
+      }
+    };
+    e.draw = (t) => {
+      g.save();
+      for (const q of e.parts) {
+        const u = q.age / q.life, s = q.s0 + (q.s1 - q.s0) * Math.pow(u, 0.7);
+        g.globalAlpha = 0.5 * Math.sin(Math.min(1, u * 3) * Math.PI / 2) * (1 - u);
+        g.drawImage(q.dark ? SMOKE_DARK : SMOKE_LIGHT, q.x - s, q.y - s, s * 2, s * 2);
+      }
+      g.globalCompositeOperation = "lighter";
+      for (const q of e.parts) {
+        if (!q.ember) continue; const u = q.age / q.life; if (u > 0.5) continue;
+        g.globalAlpha = (1 - u * 2) * (0.6 + 0.4 * Math.sin(t * 25 + q.rot)); g.drawImage(EMBER, q.x - 4, q.y - 4, 8, 8);
+      }
+      g.restore();
+    };
+  })();
+
+  /* ✨ SPARKS: a burst of gold sparks and confetti in the show colors */
+  (function () {
+    const e = fx.sparks = base("sparks", 3.5, 150, 800);
+    let conf = [], bursts = [];
+    function burst(power) {
+      for (let i = 0; i < 160 * power; i++) {
+        const p = onRing(), sp = rnd(220, 640) * power, a = Math.atan2(p.ny, p.nx) + rnd(-0.6, 0.6);
+        e.parts.push({ x: p.x, y: p.y, px: p.x, py: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, age: 0, life: rnd(0.6, 1.4), hot: Math.random() });
+      }
+      const cols = [themeColor("--primary", "#ff7a00"), themeColor("--accent", "#ffd400"), themeColor("--secondary", "#3a2c7a"), themeColor("--light", "#ffffff"), "#ffd56b"];
+      for (let i = 0; i < 90 * power; i++) {
+        let p = onRing(); for (let tries = 0; tries < 6 && p.y > CY + 60; tries++) p = onRing();   // mostly from the top half
+        const a = -Math.PI / 2 + rnd(-1.1, 1.1), sp = rnd(250, 560);
+        conf.push({ x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: 0, life: rnd(2.0, 3.2), c: cols[(Math.random() * cols.length) | 0], w: rnd(8, 14), h: rnd(5, 9), r: rnd(0, 6), vr: rnd(-9, 9), f: rnd(4, 10) });
+      }
+      flash = Math.max(flash, 0.5);
+    }
+    e.onStart = () => { burst(1); bursts = [0.35, 0.8]; };
+    e.busyMore = () => conf.length > 0;
+    e.step = (dt) => {
+      if (e.on) for (let i = 0; i < bursts.length; i++) { bursts[i] -= dt; if (bursts[i] <= 0) { bursts.splice(i, 1); i--; burst(0.55); } }
+      for (let i = e.parts.length - 1; i >= 0; i--) {
+        const q = e.parts[i]; q.age += dt; if (q.age > q.life) { e.parts.splice(i, 1); continue; }
+        q.px = q.x; q.py = q.y; q.vy += 700 * dt; q.vx *= 1 - 1.4 * dt; q.vy *= 1 - 1.0 * dt; q.x += q.vx * dt; q.y += q.vy * dt;
+      }
+      for (let i = conf.length - 1; i >= 0; i--) {
+        const q = conf[i]; q.age += dt; if (q.age > q.life || q.y > H + 20) { conf.splice(i, 1); continue; }
+        q.vy += 520 * dt; q.vx *= 1 - 2.2 * dt; q.vy *= 1 - 2.2 * dt; q.vy = Math.min(q.vy, 170); q.x += q.vx * dt + Math.sin(q.age * q.f) * 30 * dt; q.y += q.vy * dt; q.r += q.vr * dt;
+      }
+    };
+    e.draw = () => {
+      g.save(); g.globalCompositeOperation = "lighter"; g.lineCap = "round";
+      for (const q of e.parts) {
+        const u = q.age / q.life; g.globalAlpha = 1 - u;
+        g.strokeStyle = q.hot > 0.5 ? "rgb(255,236,170)" : "rgb(255,170,60)"; g.lineWidth = 2.6;
+        g.beginPath(); g.moveTo(q.px - (q.x - q.px) * 1.5, q.py - (q.y - q.py) * 1.5); g.lineTo(q.x, q.y); g.stroke();
+      }
+      g.globalCompositeOperation = "source-over";
+      for (const q of conf) {
+        const u = q.age / q.life; g.globalAlpha = u > 0.75 ? (1 - u) * 4 : 1;
+        g.save(); g.translate(q.x, q.y); g.rotate(q.r); g.scale(1, Math.cos(q.age * q.f)); g.fillStyle = q.c; g.fillRect(-q.w / 2, -q.h / 2, q.w, q.h); g.restore();
+      }
+      g.restore();
+    };
+  })();
+
+  /* 💥 SHAKE: the frame (and anything burning on it) jolts, settling in about half a second */
+  const SHAKE_MS = 650;
+  function shakeKeys(amp) {
+    const keys = [];
+    for (let i = 0; i <= 10; i++) { const a = amp * (1 - i / 10); keys.push({ transform: `translate(${(Math.random() * 2 - 1) * a}px, ${(Math.random() * 2 - 1) * a}px) rotate(${(Math.random() * 2 - 1) * a * 0.12}deg)` }); }
+    keys[10] = { transform: "translate(0,0) rotate(0deg)" };
+    return keys;
+  }
+  function shake() {
+    const amp = 9 * Math.min(innerWidth / W, innerHeight / H);
+    try { document.body.animate(shakeKeys(amp), { duration: SHAKE_MS, easing: "linear" }); } catch (e) {}
+    AWYM.send({ to: "frame", id, cmd: "shake", ms: SHAKE_MS });
+  }
+
+  /* ---------------- the loop (runs only while something is playing) ---------------- */
+  let flash = 0, raf = 0, last = 0;
+  const busy = () => flash > 0.01 || Object.values(fx).some((e) => e.busy());
+  function wake() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
+    g.setTransform(k, 0, 0, k, ox, oy);
+    for (const e of Object.values(fx)) { stepRamp(e); e.step(dt, t); }
+    // draw order: smoke at the back, then ice, fire, lightning, sparks
+    fx.smoke.draw(t); fx.ice.draw(t); fx.fire.draw(t); fx.zap.draw(t); fx.sparks.draw(t);
+    if (flash > 0.01) {        // a flash of light round the ring (ignition, lightning, bursts)
+      g.save(); g.globalCompositeOperation = "lighter"; g.globalAlpha = flash * 0.6;
+      g.strokeStyle = "rgb(255,240,210)"; g.lineWidth = 40; g.shadowColor = "#fff"; g.shadowBlur = 30 * k * glowK(); g.stroke(ringPath); g.restore();
+      flash *= Math.pow(0.02, dt);
+    }
+    // keep the middle clear: the camera is never covered
+    g.save(); g.globalCompositeOperation = "destination-out"; g.fill(holePath); g.restore();
+    if (busy()) raf = requestAnimationFrame(frame);
+    else { raf = 0; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); announce(); }
+  }
+
+  /* ---------------- who has the floor ---------------- */
+  const floor = {};                                  // frame id → has the floor
+  const someoneHasFloor = () => Object.values(floor).some(Boolean);
+  function targeted(m) {
+    if (m.id === id || m.id === "*" || m.id == null) return true;
+    if (m.id === "floor") return someoneHasFloor() ? !!floor[id] : true;
+    return false;
+  }
+
+  /* ---------------- commands ---------------- */
+  let lastSent = "";
+  function playing() { return Object.values(fx).filter((e) => e.on).map((e) => e.name); }
+  function announce(force) {
+    const p = playing(), s = p.join(",");
+    if (!force && s === lastSent) return;
+    lastSent = s; AWYM.send({ from: "fx", id, playing: p });
+  }
+  function play(effect, dur) {
+    if (effect === "shake") { shake(); return; }
+    const e = fx[effect]; if (!e) return;
+    e.start(dur == null || dur === "" ? null : Number(dur));
+  }
+  function stop(effect, fast) {
+    for (const e of Object.values(fx)) if (!effect || e.name === effect) e.release(fast);
+  }
+
+  AWYM.listen((m) => {
+    if (m.from === "frame" && m.id != null) {
+      if ("spot" in m) floor[String(m.id)] = !!m.spot;
+      if (String(m.id) === id && m.shape && m.shape !== shape && !AWYM.param("shape")) { shape = m.shape; buildShape(); }
+      return;
+    }
+    if (m.to !== "fx") return;
+    if (m.cmd === "ping") { announce(true); return; }
+    if (!targeted(m)) return;
+    if (m.cmd === "play") play(m.effect, m.dur);
+    else if (m.cmd === "stop") stop(m.effect, true);
+  });
+  AWYM.onClear(() => stop(null, true));           // 🚨 Clear
+
+  addEventListener("resize", fit);
+  buildShape(); fit();
+  AWYM.send({ to: "frame", id: "*", cmd: "ping" });   // learn who has the floor (and the frame's shape)
+  announce(true);
+
+  /* ?test=1 — buttons, and a ghost of the frame to see the hole */
+  function drawGhost() {
+    const svg = document.getElementById("ghost"); if (!svg || !document.body.classList.contains("testbg")) return;
+    const s = Math.min(innerWidth / W, innerHeight / H);
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.style.width = W * s + "px"; svg.style.height = H * s + "px";
+    svg.style.left = (innerWidth - W * s) / 2 + "px"; svg.style.top = (innerHeight - H * s) / 2 + "px";
+    svg.innerHTML = `<path d="${outline(HOLE)}" fill="#4a6b8a"/><path d="${outline(RING)}" fill="none" stroke="#e86f2d" stroke-width="24"/>`;
+  }
+  if (AWYM.param("test") === "1") {
+    document.body.classList.add("testbg"); drawGhost();
+    const box = document.getElementById("test"); box.classList.add("on");
+    const list = [["fire", "🔥 Fire"], ["ice", "🧊 Ice"], ["zap", "⚡ Lightning"], ["smoke", "💨 Smoke"], ["sparks", "✨ Sparks"], ["shake", "💥 Shake"]];
+    box.innerHTML = list.map(([e, n]) => `<button data-e="${e}">${n}</button>`).join("") + `<button data-stop>Stop</button>`;
+    box.onclick = (ev) => { const b = ev.target.closest("button"); if (!b) return; b.dataset.stop != null ? stop(null, true) : play(b.dataset.e); };
+  }
+  window.AWYM_FX = { play, stop, playing, busy };   // for tests
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Debate Overlay</title>
+<!--
+  DEBATE OVERLAY — OBS browser source, 1920 x 1080 (lay it over the whole canvas).
+  Shows the Show Runner dock's on-screen graphics:
+    - the debate scoreboard with its "who's winning" tug-of-war meter
+    - the winner announcement (with confetti)
+    - hot-take receipts and each person's hot-take record
+    - segment intros from the rundown ("Segment 3 · Buy or Sell")
+    - a REPLAY tag while an instant replay is playing
+    - the talk-time card: who's talked how long, and how much you talked over each other
+  Add it with a typed file:/// URL (not "Local file") so the dock can reach it.
+  Nothing shows until you use the Show Runner.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080, transparent.
+  Uses:      theme.css, shared.js.
+  Messages:  listens  to:"debate" (see below) · to:"all" clear (hides everything)
+             sends    from:"debate" {score, receipt, replay} after every change · {cmd:"hello"} on load
+  Commands:  score {data}       data {a:{name, score}, b:{name, score}, round, title, numbers, pos}
+             hideScore
+             winner {name, sub} big announcement + confetti, hides by itself after 8 s
+             receipt {data}     data {no, who, take, said, due, status: pending|cashed|busted, note}
+             record {data}      data {title, rows:[{who, cashed, busted, pending}]}
+             hideReceipt        (hides a receipt or a record)
+             segment {data}     data {num, name, desc, next}  intro card, hides by itself after 4.5 s
+             replay {on}        the REPLAY tag
+             talk {data}        data {title, rows:[{name, secs, pct, live}], total, overlap, overlapPct,
+                                cutins:[{name, n}], pos: right|left}; send again to update it live
+             hideTalk
+             hide               hides everything · ping → reports state
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<style>
+  /* Debate overlay styles. Design size 1920×1080 in .stage. Each graphic is hidden until its
+     element gets the class "on". Side A uses --primary, side B --accent. */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  body { font-family: var(--font-body); color: var(--light); user-select: none; }
+  .stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+
+  /* ---------- scoreboard ---------- */
+  .bug { position: absolute; left: 50%; top: 26px; width: 1120px; translate: -50% -140%; opacity: 0;
+    transition: translate .55s cubic-bezier(.2,.9,.25,1.1), opacity .3s; filter: drop-shadow(0 12px 26px rgba(0,0,0,.45)); }
+  .bug.on { translate: -50% 0; opacity: 1; }
+  .bug.bottom { top: auto; bottom: 290px; translate: -50% 60%; }
+  .bug.bottom.on { translate: -50% 0; }
+  .row { display: grid; grid-template-columns: 14px minmax(0, 1fr) 112px 220px 112px minmax(0, 1fr) 14px; height: 92px; background: var(--dark); border-radius: 18px 18px 0 0; overflow: hidden; }
+  .bug.nonum .row { grid-template-columns: 14px minmax(0, 1fr) 0 260px 0 minmax(0, 1fr) 14px; }
+  .bug.nonum .pts { display: none; }
+  .edge.a { background: var(--primary); } .edge.b { background: var(--accent); }
+  .nm { display: flex; align-items: center; padding: 0 20px; font-family: var(--font-heading); font-size: 40px; text-transform: uppercase; letter-spacing: 1px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .nm.b { justify-content: flex-end; text-align: right; }
+  .nm span { white-space: nowrap; }
+  .pts { display: flex; align-items: center; justify-content: center; font-family: var(--font-heading); font-size: 66px; line-height: 1; font-variant-numeric: tabular-nums; }
+  .pts.a { background: var(--primary); color: var(--dark); } .pts.b { background: var(--accent); color: var(--dark); }
+  .pts.pop { animation: pop .5s cubic-bezier(.2,.9,.3,1.4); }
+  @keyframes pop { 0% { scale: 1; } 40% { scale: 1.35; } 100% { scale: 1; } }
+  .mid { display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--secondary); text-align: center; padding: 0 8px; }
+  .mid .t { font-family: var(--font-display); font-size: 20px; color: var(--light); line-height: 1.05; }
+  .mid .r { font-size: 16px; letter-spacing: 2.5px; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-top: 5px; }
+  .lead.a .nm.a, .lead.b .nm.b { color: var(--light); text-shadow: 0 0 18px rgba(255,255,255,.35); }
+  .lead.a .nm.b, .lead.b .nm.a { opacity: .65; }
+  /* tug of war */
+  .meter { position: relative; height: 22px; background: var(--secondary); border-radius: 0 0 14px 14px; overflow: hidden; }
+  .meter .fa, .meter .fb { position: absolute; top: 0; bottom: 0; transition: width .8s cubic-bezier(.2,.9,.25,1); }
+  .meter .fa { left: 0; background: var(--primary) linear-gradient(90deg, transparent, rgba(255,255,255,.3)); }
+  .meter .fb { right: 0; background: var(--accent) linear-gradient(270deg, transparent, rgba(255,255,255,.3)); }
+  .meter .knot { position: absolute; top: 50%; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; background: var(--light);
+    border: 4px solid var(--dark); transition: left .8s cubic-bezier(.2,.9,.25,1); box-shadow: 0 0 calc(10px * var(--glow-k, 1)) var(--light); }
+  .meter .mid50 { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: var(--dark); opacity: .6; }
+  .float { position: absolute; top: 4px; font-family: var(--font-heading); font-size: 46px; pointer-events: none; animation: floatUp 1.1s ease-out forwards; text-shadow: 0 3px 0 rgba(0,0,0,.5); }
+  @keyframes floatUp { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: 0 -70px; } }
+  .bug.bottom .float { animation-name: floatDn; }
+  @keyframes floatDn { from { opacity: 1; translate: 0 60px; } to { opacity: 0; translate: 0 -10px; } }
+
+  /* ---------- winner ---------- */
+  .win { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: 0; transition: opacity .4s; }
+  .win.on { opacity: 1; }
+  .win::before { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse 60% 55% at 50% 50%, rgba(0,0,0,.65), transparent 75%); }
+  .win .box { position: relative; text-align: center; scale: .6; transition: scale .6s cubic-bezier(.2,1.4,.3,1); }
+  .win.on .box { scale: 1; }
+  .win .eb { display: inline-block; font-family: var(--font-heading); font-size: 40px; letter-spacing: 8px; text-transform: uppercase; color: var(--dark); background: var(--accent); padding: 6px 26px 4px; border-radius: 10px; }
+  .win .who { font-family: var(--font-display); font-size: 150px; line-height: 1; margin: 18px 0 10px; color: var(--light);
+    text-shadow: 6px 6px 0 var(--primary), 12px 12px 0 var(--dark), 0 0 calc(40px * var(--glow-k, 1)) var(--primary); }
+  .win .sub { font-family: var(--font-heading); font-size: 42px; text-transform: uppercase; letter-spacing: 2px; color: var(--light); opacity: .9; }
+  canvas#confetti { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
+
+  /* ---------- receipt (paper slip) ---------- */
+  .paper { position: absolute; left: 50%; top: 0; width: 640px; translate: -50% -110%; rotate: -1.5deg; transition: translate .9s cubic-bezier(.2,.9,.25,1); }
+  .paper.on { translate: -50% 170px; }
+  .slip { position: relative; background: #FBF8F1; color: #1d1b19; padding: 34px 40px 30px; font-family: "Courier New", Courier, ui-monospace, monospace;
+    box-shadow: 0 24px 50px rgba(0,0,0,.45);
+    -webkit-mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 26px 100%;
+            mask: conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 50% / 26px 100%; padding-bottom: 46px; }
+  .slip .hd { text-align: center; border-bottom: 3px dashed #1d1b19; padding-bottom: 14px; margin-bottom: 16px; }
+  .slip .hd b { display: block; font-family: var(--font-display); font-weight: 400; font-size: 30px; letter-spacing: 1px; color: #1d1b19; }
+  .slip .hd span { display: block; font-size: 22px; letter-spacing: 6px; font-weight: 700; margin-top: 6px; }
+  .slip .ln { display: flex; justify-content: space-between; gap: 18px; font-size: 22px; line-height: 1.5; text-transform: uppercase; }
+  .slip .ln b { text-align: right; }
+  .slip .take { font-size: 31px; line-height: 1.3; font-weight: 700; margin: 16px 0; padding: 14px 0; border-top: 2px dashed #1d1b19; border-bottom: 2px dashed #1d1b19; }
+  .slip .take::before { content: "“"; } .slip .take::after { content: "”"; }
+  .slip .note { font-size: 20px; line-height: 1.4; margin-top: 10px; }
+  .slip .bar { height: 46px; margin-top: 18px; background: repeating-linear-gradient(90deg, #1d1b19 0 3px, transparent 3px 5px, #1d1b19 5px 6px, transparent 6px 9px, #1d1b19 9px 13px, transparent 13px 15px); opacity: .85; }
+  .stamp { position: absolute; right: 34px; bottom: 58px; rotate: -12deg; font-family: var(--font-heading); font-size: 54px; letter-spacing: 3px; text-transform: uppercase;
+    padding: 4px 18px; border: 6px solid currentColor; border-radius: 10px; opacity: 0; scale: 2.2; transition: opacity .25s .7s, scale .35s .7s cubic-bezier(.3,1.6,.4,1); mix-blend-mode: multiply; }
+  .paper.on .stamp { opacity: .88; scale: 1; }
+  .stamp.cashed { color: #138a3b; } .stamp.busted { color: #c81e1e; } .stamp.pending { color: #8a6a12; font-size: 40px; }
+  /* record table */
+  .rec { width: 100%; border-collapse: collapse; font-size: 24px; }
+  .rec th { font-size: 17px; letter-spacing: 2px; text-align: right; padding: 0 6px 8px; }
+  .rec th:first-child, .rec td:first-child { text-align: left; }
+  .rec td { padding: 6px; text-align: right; border-top: 1px dashed #1d1b19; font-weight: 700; text-transform: uppercase; }
+  .rec td.pct { font-size: 28px; }
+
+  /* ---------- segment intro ---------- */
+  .seg { position: absolute; left: 0; right: 0; top: 50%; translate: 0 -50%; height: 300px; pointer-events: none; }
+  .seg .band { position: absolute; left: 0; right: 0; top: 40px; bottom: 40px; background: var(--dark); transform: scaleX(0); transform-origin: left; transition: transform .5s cubic-bezier(.7,0,.2,1); }
+  .seg .band.p { top: 26px; bottom: auto; height: 14px; background: var(--primary); transition-delay: .05s; }
+  .seg .band.a { top: auto; bottom: 26px; height: 14px; background: var(--accent); transform-origin: right; transition-delay: .1s; }
+  .seg.on .band { transform: scaleX(1); }
+  .seg .txt { position: absolute; inset: 40px 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; opacity: 0; translate: 0 18px; transition: opacity .35s .35s, translate .45s .35s; }
+  .seg.on .txt { opacity: 1; translate: 0 0; }
+  .seg .num { font-size: 26px; letter-spacing: 8px; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+  .seg .nm2 { font-family: var(--font-display); font-size: 104px; line-height: 1.02; margin: 6px 40px; color: var(--light); }
+  .seg .ds { font-size: 30px; opacity: .85; }
+  .seg .nx { position: absolute; right: 60px; bottom: -6px; font-size: 22px; letter-spacing: 2px; text-transform: uppercase; background: var(--secondary); padding: 8px 18px; border-radius: 10px; opacity: 0; transition: opacity .3s .6s; }
+  .seg.on .nx { opacity: 1; }
+  .seg.out .band { transform-origin: right; transform: scaleX(0); transition-delay: .15s; }
+  .seg.out .band.a { transform-origin: left; }
+  .seg.out .txt { opacity: 0; transition-delay: 0s; }
+
+  /* ---------- talk time ---------- */
+  .talkc { position: absolute; top: 250px; right: 60px; width: 600px; background: var(--dark); border: 4px solid var(--primary); border-radius: 22px;
+    padding: 24px 30px 22px; box-shadow: 0 24px 50px rgba(0,0,0,.45); opacity: 0; translate: 80px 0; transition: opacity .4s, translate .6s cubic-bezier(.2,1.2,.3,1); }
+  .talkc.left { right: auto; left: 60px; translate: -80px 0; }
+  .talkc.on { opacity: 1; translate: 0 0; }
+  .talkc .tkhd { font-family: var(--font-heading); font-size: 40px; letter-spacing: 4px; text-transform: uppercase; color: var(--accent); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: baseline; }
+  .talkc .tkhd small { font-family: var(--font-body); font-size: 22px; letter-spacing: 1px; color: var(--light); opacity: .7; }
+  .talkc .tkrow { margin: 12px 0 0; }
+  .talkc .tktop { display: flex; align-items: baseline; gap: 12px; font-size: 30px; font-weight: 700; }
+  .talkc .tknm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; font-family: var(--font-heading); letter-spacing: 1px; }
+  .talkc .tklive { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); margin-right: 10px; opacity: 0; vertical-align: middle; transition: opacity .15s; box-shadow: 0 0 calc(12px * var(--glow-k, 1)) var(--accent); }
+  .talkc .tkrow.speaking .tklive { opacity: 1; }
+  .talkc .tktm { font-variant-numeric: tabular-nums; opacity: .85; }
+  .talkc .tkpc { width: 86px; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .talkc .tkbar { height: 16px; border-radius: 8px; background: rgba(255,255,255,.1); margin-top: 6px; overflow: hidden; }
+  .talkc .tkbar i { display: block; height: 100%; border-radius: 8px; width: 0; transition: width .8s cubic-bezier(.2,.9,.25,1); }
+  .talkc .tkft { margin-top: 18px; padding-top: 14px; border-top: 2px solid rgba(255,255,255,.12); font-size: 24px; line-height: 1.45; opacity: .92; }
+  .talkc .tkft b { color: var(--accent); }
+
+  /* ---------- replay tag ---------- */
+  .replay { position: absolute; left: 50px; top: 46px; display: flex; align-items: center; gap: 14px; padding: 10px 24px 8px 18px; border-radius: 12px;
+    background: var(--warning); color: #fff; font-family: var(--font-heading); font-size: 40px; letter-spacing: 4px; text-transform: uppercase;
+    opacity: 0; translate: -30px 0; transition: opacity .3s, translate .4s; box-shadow: 0 10px 24px rgba(0,0,0,.4); }
+  .replay.on { opacity: 1; translate: 0 0; }
+  .replay i { width: 18px; height: 18px; border-radius: 50%; background: #fff; animation: blink 1s steps(2, jump-none) infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="bug" id="bug">
+    <div class="row">
+      <div class="edge a"></div>
+      <div class="nm a"><span id="aName">Side A</span></div>
+      <div class="pts a" id="aPts">0</div>
+      <div class="mid"><div class="t" id="bTitle">Who's winning?</div><div class="r" id="bRound"></div></div>
+      <div class="pts b" id="bPts">0</div>
+      <div class="nm b"><span id="bName">Side B</span></div>
+      <div class="edge b"></div>
+    </div>
+    <div class="meter"><div class="fa" id="fa"></div><div class="fb" id="fb"></div><div class="mid50"></div><div class="knot" id="knot"></div></div>
+  </div>
+
+  <div class="seg" id="seg"><div class="band"></div><div class="band p"></div><div class="band a"></div>
+    <div class="txt"><div class="num" id="segNum"></div><div class="nm2" id="segName"></div><div class="ds" id="segDesc"></div></div>
+    <div class="nx" id="segNext"></div></div>
+
+  <div class="paper" id="paper"><div class="slip" id="slip"></div></div>
+
+  <div class="win" id="win"><div class="box"><div class="eb">Winner</div><div class="who" id="winWho"></div><div class="sub" id="winSub"></div></div></div>
+  <canvas id="confetti" width="1920" height="1080"></canvas>
+
+  <div class="talkc" id="talkc"></div>
+
+  <div class="replay" id="replay"><i></i>Replay</div>
+</div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const stage = $("stage");
+  function scaleStage() { stage.style.transform = `scale(${Math.min(innerWidth / 1920, innerHeight / 1080)})`; }
+  addEventListener("resize", scaleStage); scaleStage();
+
+  const state = { score: false, receipt: false, replay: false, talk: false };
+  const report = () => AWYM.send(Object.assign({ from: "debate" }, state));
+
+  /* ---------- scoreboard ---------- */
+  let last = { a: null, b: null };
+  /** Show/update the scoreboard; animates any score that changed. */
+  function score(d) {
+    d = d || {};
+    const a = d.a || {}, b = d.b || {};
+    const as = Number(a.score) || 0, bs = Number(b.score) || 0;
+    $("aName").textContent = a.name || "Side A"; $("bName").textContent = b.name || "Side B";
+    $("bTitle").textContent = d.title || "Who's winning?";
+    $("bRound").textContent = d.round || "";
+    const bug = $("bug");
+    bug.classList.toggle("nonum", d.numbers === false);
+    bug.classList.toggle("bottom", d.pos === "bottom");
+    bug.classList.toggle("lead", as !== bs); bug.classList.toggle("a", as > bs); bug.classList.toggle("b", bs > as);
+    [["a", as, "aPts"], ["b", bs, "bPts"]].forEach(([k, v, id]) => {
+      const el = $(id);
+      if (last[k] !== null && v !== last[k] && state.score) {
+        el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop");
+        const f = document.createElement("div"); f.className = "float";
+        f.textContent = (v > last[k] ? "+" : "−") + Math.abs(v - last[k]);
+        f.style.color = k === "a" ? "var(--primary)" : "var(--accent)";
+        f.style.left = (k === "a" ? 210 : 650) + "px";
+        bug.appendChild(f); setTimeout(() => f.remove(), 1200);
+      }
+      el.textContent = v; last[k] = v;
+    });
+    fitNames();
+    // tug of war: 50/50 at a tie; one point from 0–0 moves it a little, a big lead a lot
+    const share = (as + 1) / (as + bs + 2);
+    $("fa").style.width = (share * 100) + "%"; $("fb").style.width = ((1 - share) * 100) + "%";
+    $("knot").style.left = (share * 100) + "%";
+    bug.classList.add("on"); state.score = true;
+  }
+  /** Shrink long names until they fit their box (40px down to 22px). */
+  function fitNames() {
+    ["aName", "bName"].forEach((id) => {
+      const sp = $(id), box = sp.parentNode; let size = 40; sp.style.fontSize = size + "px";
+      while (sp.scrollWidth > box.clientWidth - 40 && size > 22) { size -= 2; sp.style.fontSize = size + "px"; }
+    });
+  }
+  if (document.fonts) document.fonts.ready.then(fitNames);
+  function hideScore() { $("bug").classList.remove("on"); state.score = false; }
+
+  /* ---------- winner + confetti ---------- */
+  let winTimer = null;
+  function winner(name, sub) {
+    $("winWho").textContent = name || ""; $("winSub").textContent = sub || "";
+    clearTimeout(segTimer); $("seg").classList.remove("on", "out");      // make room
+    const who = $("winWho"); let size = 150; who.style.fontSize = size + "px";
+    while (who.scrollWidth > 1760 && size > 60) { size -= 6; who.style.fontSize = size + "px"; }
+    const w = $("win"); w.classList.remove("on"); void w.offsetWidth; w.classList.add("on");
+    confetti();
+    clearTimeout(winTimer); winTimer = setTimeout(() => w.classList.remove("on"), 8000);
+  }
+  const cv = $("confetti"), cx = cv.getContext("2d");
+  let bits = [], raf = 0;
+  /** Burst of confetti in the theme colors. */
+  function confetti() {
+    const css = getComputedStyle(document.documentElement);
+    const cols = ["--primary", "--accent", "--light", "--clock-digit"].map((v) => css.getPropertyValue(v).trim() || "#fff");
+    for (let i = 0; i < 260; i++) {
+      const side = i % 2 ? 1 : -1;
+      bits.push({ x: 960 + side * 520, y: 720, vx: -side * (4 + Math.random() * 12), vy: -(14 + Math.random() * 16), r: Math.random() * 6.28,
+        vr: (Math.random() - .5) * .4, w: 10 + Math.random() * 10, h: 6 + Math.random() * 8, c: cols[i % cols.length], life: 0 });
+    }
+    if (!raf) raf = requestAnimationFrame(tick);
+  }
+  function tick() {
+    cx.clearRect(0, 0, 1920, 1080);
+    bits.forEach((b) => { b.vy += .45; b.vx *= .99; b.x += b.vx; b.y += b.vy; b.r += b.vr; b.life++;
+      cx.save(); cx.translate(b.x, b.y); cx.rotate(b.r); cx.fillStyle = b.c; cx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h * Math.abs(Math.cos(b.life * .15))); cx.restore(); });
+    bits = bits.filter((b) => b.y < 1150 && b.life < 600);
+    raf = bits.length ? requestAnimationFrame(tick) : 0;
+    if (!raf) cx.clearRect(0, 0, 1920, 1080);
+  }
+
+  /* ---------- receipts ---------- */
+  const STATUS = { cashed: "Cashed ✓", busted: "Busted ✗", pending: "Pending" };
+  /** Print a hot-take receipt (slides down like a printer). */
+  function receipt(d) {
+    d = d || {};
+    const st = STATUS[d.status] ? d.status : "pending";
+    paper(`<div class="hd"><b>${esc(AWYM.showName() || "Hot Takes")}</b><span>RECEIPT${d.no ? " #" + esc(String(d.no).padStart(4, "0")) : ""}</span></div>
+      <div class="ln"><span>Said by</span><b>${esc(d.who || "—")}</b></div>
+      <div class="ln"><span>Date</span><b>${esc(d.said || "")}</b></div>
+      ${d.due ? `<div class="ln"><span>Check by</span><b>${esc(d.due)}</b></div>` : ""}
+      <div class="take">${esc(d.take || "")}</div>
+      ${d.note ? `<div class="note">${esc(d.note)}</div>` : ""}
+      <div class="ln"><span>Status</span><b>${esc(STATUS[st])}</b></div>
+      <div class="bar"></div>
+      <div class="stamp ${st}">${esc(st === "pending" ? "Pending" : st)}</div>`);
+  }
+  /** A table of each person's cashed / busted / pending takes. */
+  function record(d) {
+    d = d || {};
+    const rows = (d.rows || []).map((r) => {
+      const c = Number(r.cashed) || 0, b = Number(r.busted) || 0, p = Number(r.pending) || 0;
+      const pct = c + b ? Math.round(100 * c / (c + b)) + "%" : "—";
+      return `<tr><td>${esc(r.who)}</td><td>${c}</td><td>${b}</td><td>${p}</td><td class="pct">${pct}</td></tr>`;
+    }).join("");
+    paper(`<div class="hd"><b>${esc(AWYM.showName() || "Hot Takes")}</b><span>${esc(d.title || "Hot-take record")}</span></div>
+      <table class="rec"><thead><tr><th>Name</th><th>✓</th><th>✗</th><th>⏳</th><th>Hit %</th></tr></thead><tbody>${rows || `<tr><td colspan="5">No receipts yet</td></tr>`}</tbody></table>
+      <div class="bar"></div>`);
+  }
+  /** Swap the slip's contents (retracting it first if one is already out). */
+  function paper(html) {
+    const p = $("paper");
+    const put = () => { $("slip").innerHTML = html; void p.offsetWidth; p.classList.add("on"); state.receipt = true; report(); };
+    if (p.classList.contains("on")) { p.classList.remove("on"); setTimeout(put, 650); } else put();
+  }
+  function hideReceipt() { $("paper").classList.remove("on"); state.receipt = false; }
+
+  /* ---------- segment intro ---------- */
+  let segTimer = null;
+  function segment(d) {
+    d = d || {};
+    $("segNum").textContent = d.num ? "Segment " + d.num : "Up now";
+    $("segName").textContent = d.name || ""; $("segDesc").textContent = d.desc || "";
+    $("segNext").textContent = d.next ? "Up next: " + d.next : ""; $("segNext").style.display = d.next ? "" : "none";
+    const s = $("seg"); s.classList.remove("on", "out"); void s.offsetWidth; s.classList.add("on");
+    clearTimeout(segTimer);
+    segTimer = setTimeout(() => { s.classList.add("out"); setTimeout(() => s.classList.remove("on", "out"), 900); }, 4500);
+  }
+
+  /* ---------- talk time ---------- */
+  const COLORS = ["var(--primary)", "var(--accent)", "var(--light)", "var(--warning)"];
+  const mmss = (s) => { s = Math.round(Number(s) || 0); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  /** Show or update the talk-time card (rows update in place, so the bars glide). */
+  function talk(d) {
+    d = d || {};
+    const c = $("talkc"), rows = d.rows || [];
+    c.classList.toggle("left", d.pos === "left");
+    const sig = rows.map((r) => r.name).join("|");
+    if (c.dataset.sig !== sig) {
+      c.dataset.sig = sig;
+      c.innerHTML = `<div class="tkhd">${esc(d.title || "Talk time")}<small id="tkTotal"></small></div>` +
+        rows.map((r, i) => `<div class="tkrow" data-i="${i}"><div class="tktop"><span class="tknm"><span class="tklive"></span>${esc(r.name)}</span><span class="tktm"></span><span class="tkpc"></span></div>
+          <div class="tkbar"><i style="background:${COLORS[i % COLORS.length]}"></i></div></div>`).join("") + `<div class="tkft" id="tkFoot"></div>`;
+    }
+    const max = Math.max(1, ...rows.map((r) => Number(r.pct) || 0));
+    rows.forEach((r, i) => {
+      const el = c.querySelector(`.tkrow[data-i="${i}"]`); if (!el) return;
+      el.classList.toggle("speaking", !!r.live);
+      el.querySelector(".tktm").textContent = mmss(r.secs);
+      el.querySelector(".tkpc").textContent = Math.round(Number(r.pct) || 0) + "%";
+      el.querySelector(".tkbar i").style.width = (100 * (Number(r.pct) || 0) / max) + "%";
+    });
+    $("tkTotal").textContent = d.total ? mmss(d.total) + " of talk" : "";
+    const ft = [];
+    if (d.overlap != null) ft.push(`🗣️ Talking at the same time: <b>${mmss(d.overlap)}</b>${d.overlapPct != null ? ` (${Math.round(d.overlapPct)}%)` : ""}`);
+    const cut = (d.cutins || []).filter((x) => x.n > 0).sort((a, b) => b.n - a.n)[0];
+    if (cut) ft.push(`✂️ Most cut-ins: <b>${esc(cut.name)}</b> (${cut.n})`);
+    $("tkFoot").innerHTML = ft.join("<br>"); $("tkFoot").style.display = ft.length ? "" : "none";
+    if (!c.classList.contains("on")) { void c.offsetWidth; c.classList.add("on"); }
+    state.talk = true;
+  }
+  function hideTalk() { $("talkc").classList.remove("on"); state.talk = false; }
+
+  /* ---------- everything ---------- */
+  function hideAll() {
+    hideScore(); hideReceipt(); hideTalk();
+    $("win").classList.remove("on"); bits = []; $("seg").classList.remove("on", "out");
+    $("replay").classList.remove("on"); state.replay = false;
+  }
+  AWYM.listen((m) => {
+    if (m.to !== "debate") return;
+    switch (m.cmd) {
+      case "score": score(m.data); break;
+      case "hideScore": hideScore(); break;
+      case "winner": winner(m.name, m.sub); break;
+      case "receipt": receipt(m.data); break;
+      case "record": record(m.data); break;
+      case "hideReceipt": hideReceipt(); break;
+      case "segment": segment(m.data); break;
+      case "replay": $("replay").classList.toggle("on", !!m.on); state.replay = !!m.on; break;
+      case "talk": talk(m.data); break;
+      case "hideTalk": hideTalk(); break;
+      case "hide": hideAll(); break;
+    }
+    report();
+  });
+  AWYM.onClear(() => { hideAll(); report(); });
+  AWYM.send({ from: "debate", cmd: "hello" });
+})();
+</script>
+</body>
+</html>
