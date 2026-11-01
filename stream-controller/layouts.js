@@ -11,24 +11,7 @@ window.AWYM_DECK_LAYOUTS = {
    "clear",
    "@next"
   ],
-  "extra": [
-   {
-    "name": "AWYM Run of Show",
-    "file": "VSD-M18/AWYM-Run-of-Show.SDProfile"
-   },
-   {
-    "name": "AWYM Scoreboard",
-    "file": "VSD-M18/AWYM-Scoreboard.SDProfile"
-   },
-   {
-    "name": "AWYM Frame FX",
-    "file": "VSD-M18/AWYM-Frame-FX.SDProfile"
-   },
-   {
-    "name": "AWYM Sound Board",
-    "file": "VSD-M18/AWYM-Sound-Board.SDProfile"
-   }
-  ],
+  "extra": [],
   "pages": [
    {
     "name": "Show",
@@ -129,6 +112,46 @@ window.AWYM_DECK_LAYOUTS = {
      null,
      null
     ]
+   },
+   {
+    "name": "Verdicts",
+    "keys": [
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking",
+     "fx-cap",
+     "fx-bricked",
+     "fx-airball",
+     "fx-technical",
+     "fx-posterized",
+     "fx-onfire",
+     "fx-clown",
+     null,
+     null,
+     "fx-stop",
+     null,
+     null
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-1",
+     "face-2",
+     "face-3",
+     "face-4",
+     "face-5",
+     "face-6",
+     "face-7",
+     "face-8",
+     "face-9",
+     "face-10",
+     "avatar-toggle",
+     "face-next",
+     null,
+     null,
+     null
+    ]
    }
   ]
  },
@@ -217,6 +240,46 @@ window.AWYM_DECK_LAYOUTS = {
      null,
      "@next"
     ]
+   },
+   {
+    "name": "Verdicts",
+    "keys": [
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking",
+     "fx-cap",
+     "fx-bricked",
+     "fx-airball",
+     "fx-technical",
+     "fx-posterized",
+     "fx-onfire",
+     "fx-clown",
+     "@prev",
+     null,
+     null,
+     null,
+     "@next"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-1",
+     "face-2",
+     "face-3",
+     "face-4",
+     "face-5",
+     "face-6",
+     "face-7",
+     "face-8",
+     "face-9",
+     "face-10",
+     "@prev",
+     "avatar-toggle",
+     "face-next",
+     null,
+     "@next"
+    ]
    }
   ]
  },
@@ -264,7 +327,7 @@ window.AWYM_DECK_LAYOUTS = {
     ]
    },
    {
-    "name": "Sound board · Clips & graphics",
+    "name": "Sound board · Verdicts",
     "keys": [
      "snd-airhorn",
      "snd-buzzer",
@@ -283,10 +346,47 @@ window.AWYM_DECK_LAYOUTS = {
      "snd-boing",
      "snd-micdrop",
      "snd-tinfoil",
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking",
+     "fx-cap",
+     "fx-bricked",
+     "fx-airball",
+     "fx-technical",
+     "@prev",
+     "fx-posterized",
+     "fx-onfire",
+     "fx-clown",
+     null,
+     null,
+     null,
+     "@next"
+    ]
+   },
+   {
+    "name": "Clips & graphics · Faces",
+    "keys": [
      "save-clip",
      "replay",
      "hide-stats",
      "hide-text",
+     "face-1",
+     "face-2",
+     "face-3",
+     "face-4",
+     "face-5",
+     "face-6",
+     "face-7",
+     "face-8",
+     "face-9",
+     "face-10",
+     "avatar-toggle",
+     "face-next",
+     null,
+     null,
+     null,
+     null,
+     null,
      null,
      null,
      null,
@@ -441,6 +541,39 @@ window.AWYM_DECK_LAYOUTS = {
     ]
    },
    {
+    "name": "Verdicts",
+    "keys": [
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking",
+     "@prev",
+     "fx-cap",
+     "@next"
+    ]
+   },
+   {
+    "name": "Verdicts",
+    "keys": [
+     "fx-bricked",
+     "fx-airball",
+     "fx-technical",
+     "@prev",
+     "fx-posterized",
+     "@next"
+    ]
+   },
+   {
+    "name": "Verdicts",
+    "keys": [
+     "fx-onfire",
+     "fx-clown",
+     null,
+     "@prev",
+     null,
+     "@next"
+    ]
+   },
+   {
     "name": "Clips & graphics",
     "keys": [
      "save-clip",
@@ -448,6 +581,39 @@ window.AWYM_DECK_LAYOUTS = {
      "hide-stats",
      "@prev",
      "hide-text",
+     "@next"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-1",
+     "face-2",
+     "face-3",
+     "@prev",
+     "face-4",
+     "@next"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-5",
+     "face-6",
+     "face-7",
+     "@prev",
+     "face-8",
+     "@next"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-9",
+     "face-10",
+     "avatar-toggle",
+     "@prev",
+     "face-next",
      "@next"
     ]
    },
@@ -549,12 +715,51 @@ window.AWYM_DECK_LAYOUTS = {
     ]
    },
    {
-    "name": "Clips & graphics",
+    "name": "Verdicts",
     "keys": [
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking",
+     "fx-cap",
+     "fx-bricked",
+     "fx-airball",
+     "fx-technical",
+     "fx-posterized"
+    ]
+   },
+   {
+    "name": "Verdicts · Clips & graphics",
+    "keys": [
+     "fx-onfire",
+     "fx-clown",
      "save-clip",
      "replay",
      "hide-stats",
      "hide-text",
+     null,
+     null
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-1",
+     "face-2",
+     "face-3",
+     "face-4",
+     "face-5",
+     "face-6",
+     "face-7",
+     "face-8"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-9",
+     "face-10",
+     "avatar-toggle",
+     "face-next",
      null,
      null,
      null,
@@ -674,15 +879,67 @@ window.AWYM_DECK_LAYOUTS = {
     ]
    },
    {
-    "name": "Frame FX · Clips & graphics",
+    "name": "Frame FX · Verdicts",
     "keys": [
      "fx-stop",
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking",
+     "@prev",
+     "fx-cap",
+     "fx-bricked",
+     "@next"
+    ]
+   },
+   {
+    "name": "Verdicts",
+    "keys": [
+     "fx-airball",
+     "fx-technical",
+     "fx-posterized",
+     "fx-onfire",
+     "@prev",
+     "fx-clown",
+     null,
+     "@next"
+    ]
+   },
+   {
+    "name": "Clips & graphics",
+    "keys": [
      "save-clip",
      "replay",
      "hide-stats",
-     "@prev",
      "hide-text",
+     "@prev",
      null,
+     null,
+     "@next"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-1",
+     "face-2",
+     "face-3",
+     "face-4",
+     "@prev",
+     "face-5",
+     "face-6",
+     "@next"
+    ]
+   },
+   {
+    "name": "Faces",
+    "keys": [
+     "face-7",
+     "face-8",
+     "face-9",
+     "face-10",
+     "@prev",
+     "avatar-toggle",
+     "face-next",
      "@next"
     ]
    }

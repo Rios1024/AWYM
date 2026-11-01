@@ -183,13 +183,14 @@
       <li>Click <kbd>+</kbd> (bottom left of the Scripts window) and choose <b>awym-obs-setup.lua</b> from this folder:
         <div class="addr" style="margin-top:6px"><div class="line"><input readonly id="luaPath" aria-label="Script location"><button class="copy" id="luaCopy">Copy</button></div>
         <div class="note">Paste this into the file picker's name box to jump straight to it.</div></div></li>
-      <li>On the right, choose how many people are on the show and what to include.</li>
-      <li>Click <b>Build my scenes</b>. You'll see "Done!" and the new scenes appear in your Scenes list.</li>
+      <li>On the right, pick the <b>Main Show layout</b> (1–4 people, or 2–5 + a moderator) and what to include.</li>
+      <li>Click <b>Build my scenes</b>. You'll see "Done!" and the new scenes appear in your Scenes list: Main Show, plus a <b>Show: …</b> scene for every layout (switch between them during the show), the stream screens and <b>Show Overlays</b> (the graphics, shown inside every show scene).</li>
+      <li>Each person is a color-coded group, <b>Seat 1</b>, <b>Seat 2</b>… (<b>Moderator</b> in the moderator layouts): their camera, avatar, frame and frame effects. Double-click <b>Camera 1</b> (inside Seat 1) and pick your camera; same for the others.</li>
       <li>Still in the Scripts window, copy the five dock addresses it shows and add them as in <b>step 2</b>. (OBS doesn't let scripts add docks.)</li>
       <li>Close the Scripts window, but <b>leave the script in the list</b>: it also provides the AWYM hotkeys (step 10).</li>
     </ol>
-    <p class="layers"><b>What's left to do by hand:</b> step 2 (the five docks), step 5 (put your cameras behind the frames, with the crop and mask), and your own words on the stream screens with the Screen Maker if you want them. Names go in the Control Panel dock. The script skips scenes that already exist, so it won't touch your current setup.</p>
-    <p class="layers"><b>Already built your scenes with an older version?</b> Run the script again with <b>"If Main Show already exists, add the overlays it's missing"</b> ticked. It adds only the new overlays (Debate overlay, Sound Effects, Instant Replay, On-Screen Text) to Main Show and leaves everything else as it is.</p>
+    <p class="layers"><b>What's left to do by hand:</b> step 2 (the five docks), picking each camera's device (double-click Camera 1, 2…; they're already cut to a circle for 16:9 cameras), and your own words on the stream screens with the Screen Maker if you want them. Names go in the Control Panel dock. The script skips scenes that already exist, so it won't touch your current setup.</p>
+    <p class="layers"><b>Already built your scenes with an older version?</b> Run the script again with <b>"If Main Show already exists, add the overlays it's missing"</b> ticked. It renames the old "AWYM …" sources to their plain names, adds the new layout scenes, and adds only missing overlays to your Main Show, leaving everything else as it is. For the grouped Main Show, rename yours first (e.g. "Main Show old") and build again.</p>
     <p><button class="btn" id="markAuto">I used the fast way: tick off steps 3, 4, 6, 7 and 8</button></p>
   </div>
 
@@ -336,6 +337,8 @@
       <div id="rows-frame"></div>
       <p style="margin-top:14px"><b>e) Optional: frame effects</b> (🔥 fire, 🧊 ice, ⚡ lightning, 💨 smoke, ✨ sparks, 💥 shake from the Show Runner). Add this Browser source <i>above</i> the frame. The middle stays clear, so it never covers the camera. If the setup script is loaded, it lines this up with its frame for you and keeps it there.</p>
       <div id="rows-fx"></div>
+      <p style="margin-top:14px"><b>Optional: faces instead of the live camera</b> (pictures listed in <b>avatars/avatars.js</b>; switch them in the Show Runner's Faces section, with hotkeys or a stream deck). Add this Browser source <i>between</i> the camera and the frame, with exactly the frame's position and size. The setup script does it for you and keeps it lined up.</p>
+      <div id="rows-av"></div>
       <p><b>f) Line them up exactly:</b> select a source, press <kbd>Ctrl</kbd>+<kbd>E</kbd> (Mac: <kbd>⌘</kbd>+<kbd>E</kbd>) for <b>Edit Transform</b>, and type in the Position and Size from the table above. Then select them, right-click → <b>Group Selected Items</b>, so they move together.</p>
     </div>
   </section>
@@ -369,7 +372,7 @@
       <div id="rows-stats"></div>
       <p class="layers">They all stay invisible until you use their docks: stats cards come from the <b>Stats Desk</b>, your own text, lists, emojis and photos from the <b>Content Panel</b>, and the scoreboard, receipts, segment intros and sounds from the <b>Show Runner</b>.</p>
       <div class="addr"><div class="top"><b>Instant replay</b><span class="chip kind">Media Source</span></div>
-        <div class="note">For the Show Runner's <b>Instant replay</b> button: Sources → <b>+</b> → <b>Media Source</b> → name it exactly <b>AWYM Instant Replay</b> → OK → leave the file empty → OK. Then click its 👁 eye in the Sources list to hide it; the Show Runner shows it while a replay plays.</div></div>
+        <div class="note">For the Show Runner's <b>Instant replay</b> button: Sources → <b>+</b> → <b>Media Source</b> → name it exactly <b>Instant Replay</b> → OK → leave the file empty → OK. Then click its 👁 eye in the Sources list to hide it; the Show Runner shows it while a replay plays.</div></div>
       <div class="addr"><div class="top"><b>OBS WebSocket</b><span class="chip kind">One-time setting</span></div>
         <div class="note">Clips, instant replays, recording, moments and the rundown's scene switching talk to OBS through its built-in WebSocket server: <b>Tools → WebSocket Server Settings</b> → tick <b>Enable WebSocket server</b> → <b>Show Connect Info</b> → copy the <b>Server Password</b> into the Show Runner's <b>Clips &amp; replays</b> section. For clips, also turn on <b>Settings → Output → Replay Buffer</b>.</div></div>
     </div>
@@ -397,7 +400,7 @@
     <header><div class="num">10</div><h2>Hotkeys and your stream controller<small>Optional: run the show from a keyboard, VSD M18, Stream Deck, Loupedeck, Touch Portal or any macro pad</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
     <div class="body">
       <ol class="how">
-        <li><b>Keep the setup script loaded</b> (Tools → Scripts: <b>awym-obs-setup.lua</b> stays in the list). It adds 51 actions to <span class="menu">Settings → Hotkeys</span>, all starting with <b>AWYM:</b>, and fills in the keys below the first time (always <b>Ctrl + Alt + Shift</b> plus one key, so they won't clash with anything). Change any of them there if you like. If you built your scenes before hotkeys existed, click <b>Build my scenes</b> once more: it adds the invisible <b>AWYM Hotkeys</b> source that carries them out.</li>
+        <li><b>Keep the setup script loaded</b> (Tools → Scripts: <b>awym-obs-setup.lua</b> stays in the list). It adds 73 actions to <span class="menu">Settings → Hotkeys</span>, all starting with <b>AWYM:</b>, and fills in the keys below the first time (always <b>Ctrl + Alt + Shift</b> plus one key, so they won't clash with anything). Change any of them there if you like. If you built your scenes before hotkeys existed, click <b>Build my scenes</b> once more: it adds the invisible <b>Hotkeys</b> source that carries them out.</li>
         <li>So they work while you're clicked into another window: <span class="menu">Settings → Advanced → Hotkeys → Hotkey Focus Behavior → Never disable hotkeys</span>.</li>
         <li>Keep the <b>Show Runner</b> dock open: it does the rundown, scoreboard, sound volume and clip actions. (Sounds still play without it, at 80%.)</li>
         <li><b>Set up your controller:</b> open the one you use below. Each has its own steps (a ready-made file to import where there is one). The others stay folded out of the way.</li>
@@ -408,11 +411,11 @@
       <h3 style="margin:18px 0 6px">Your controller</h3>
       <div class="decks">
         <details class="deck" data-deck="m18">
-          <summary>VSD M18 <span class="tag">ready-made scenes · VSD Craft</span></summary>
+          <summary>VSD M18 <span class="tag">one file · VSD Craft</span></summary>
           <ol class="how">
-            <li>In <b>VSD Craft</b>, click the import button next to the scene list and pick <b>stream-controller/VSD-M18/AWYM-Show.SDProfile</b>. A scene called <b>AWYM Show</b> appears with all 51 actions on the 5 pages below.</li>
+            <li>In <b>VSD Craft</b>, click the import button next to the scene list and pick <b>stream-controller/VSD-M18/AWYM-Show.SDProfile</b>. A scene called <b>AWYM Show</b> appears with all 73 actions on the 7 pages below.</li>
             <li>The 3 plain buttons under the screen keys are the same on every page: ◀ previous page, 🚨 Clear screen, next page ▶. The bottom row of page 1 mutes each person (seats 1–4) and unmutes everyone.</li>
-            <li>Optional one-page scenes in the same folder: <b>AWYM-Run-of-Show</b> (segments, shot clock, clips, graphics), <b>AWYM-Scoreboard</b> (debate score, names, reaction sounds), <b>AWYM-Frame-FX</b> and <b>AWYM-Sound-Board</b>. Their plain buttons are previous segment, Clear, next segment.</li>
+            <li>That one file has everything. If you imported the older one-page scenes (AWYM Run of Show, Scoreboard, Frame FX, Faces, Sound Board), you can delete them in VSD Craft.</li>
           </ol>
           <div class="deckpages" data-layout="m18"></div>
         </details>
@@ -480,7 +483,7 @@
       </div>
 
       <details class="deck" data-deck="all" style="margin-top:14px">
-        <summary>Every action and its keys <span class="tag">51</span></summary>
+        <summary>Every action and its keys <span class="tag">73</span></summary>
       <div class="hktable" id="hkTable"></div>
       </details>
     </div>
@@ -496,7 +499,7 @@
         <li>Send each guest their <b>invite link</b> (<b>Copy invite message</b> gives you a ready-to-send text).</li>
         <li>Put the guests into Main Show, either way:
           <ul>
-            <li><b>Automatic:</b> Tools → Scripts → awym-obs-setup.lua → type the <b>room name</b>, <b>password</b> and <b>seats</b> from the Guests page into the three "Remote guests" boxes → make sure <b>People on the show</b> covers those seats → <b>Build my scenes</b> (with "add the overlays it's missing" ticked if Main Show exists). Each guest lands behind their camera frame, cropped and cut out, with their own audio slider.</li>
+            <li><b>Automatic:</b> Tools → Scripts → awym-obs-setup.lua → type the <b>room name</b>, <b>password</b> and <b>seats</b> from the Guests page into the three "Remote guests" boxes → make sure the <b>Main Show layout</b> has those seats → <b>Build my scenes</b> (with "add the overlays it's missing" ticked if Main Show exists). Each guest lands behind their camera frame, cropped and cut out, with their own audio slider.</li>
             <li><b>By hand:</b> add each guest's <b>OBS address</b> as a Browser source (1280 × 720, tick Control audio via OBS), then crop and mask it like a camera (step 5).</li>
           </ul></li>
         <li>Open <b>Your link</b> in Chrome or Edge on this computer and leave it open, so the guests hear (and see) you. Wear headphones, and turn off OBS's <b>Desktop Audio</b> so guests aren't recorded twice.</li>
@@ -536,6 +539,7 @@
 
 <script src="shared.js"></script>
 <script src="screens.js"></script>
+<script src="avatars/avatars.js"></script>
 <script src="hotkeys.js"></script>
 <script src="stream-controller/layouts.js"></script>
 <script>
@@ -566,7 +570,7 @@
     const nav = id === "neo" ? "Change pages with the Neo's two touch points under the keys." : "The ◀ / ▶ page keys in the bottom corners flip between the pages.";
     const extra = id === "plus" ? " The dials and touch strip are left free for you (a dial on OBS's Sound Effects volume works well)." : "";
     el.innerHTML = `<ol class="how">
-        <li>Double-click <b>stream-controller/Elgato-Stream-Deck/${fname}</b> (or in the Stream Deck app: the profile list → <b>Import</b>). A profile called <b>AWYM Show</b> appears with all 51 actions on ${l.pages.length} pages: ${nav}${extra}</li>
+        <li>Double-click <b>stream-controller/Elgato-Stream-Deck/${fname}</b> (or in the Stream Deck app: the profile list → <b>Import</b>). A profile called <b>AWYM Show</b> appears with all 73 actions on ${l.pages.length} pages: ${nav}${extra}</li>
         <li>Needs the Stream Deck app 6.0 or newer (made for 7.3+). If it won't import, set the keys up by hand: drag <b>System → Hotkey</b> onto a key, press the action's keys (list below) and set its picture from <b>icons/hotkeys/</b>.</li>
       </ol>` + pagesHTML(l);
   });
@@ -728,12 +732,12 @@
       <tr><td>Frame (Edit Transform)</td><td>Position <b>${X}, ${Y}</b> · Size <b>${F} × ${Math.round(F * 1.1)}</b></td></tr>
       <tr><td>Frame Browser source size</td><td>Width <b>600</b> · Height <b>660</b> (keep these; resize it on screen instead)</td></tr>
       <tr><td>Frame effects (Edit Transform)</td><td>Position <b>${Math.round(X - F / 3)}, ${Math.round(Y - F / 3)}</b> · Size <b>${Math.round(F * 5 / 3)} × ${Math.round(F * 1.1 * 5 / 3)}</b> (source size <b>1000 × 1100</b>)</td></tr></table>`;
-    const maskBox = $("rows-mask"), frameBox = $("rows-frame"), fxBox = $("rows-fx");
-    maskBox.innerHTML = ""; frameBox.innerHTML = ""; fxBox.innerHTML = "";
+    const maskBox = $("rows-mask"), frameBox = $("rows-frame"), fxBox = $("rows-fx"), avBox = $("rows-av");
+    maskBox.innerHTML = ""; frameBox.innerHTML = ""; fxBox.innerHTML = ""; avBox.innerHTML = "";
     const shape = $("cShape").value, file = { circle: "circle", rounded: "rounded-square", hexagon: "hexagon" }[shape];
     const maskURL = base + "masks/" + file + "-1x1.png";
     ["Mask image"].forEach((k) => { const i = all.findIndex((a) => a[0].startsWith(k)); if (i >= 0) all.splice(i, 1); });
-    ["Camera frame", "Frame effects"].forEach((k) => { const i = all.findIndex((a) => a[0].startsWith(k)); if (i >= 0) all.splice(i, 1); });
+    ["Camera frame", "Frame effects", "Avatar"].forEach((k) => { const i = all.findIndex((a) => a[0].startsWith(k)); if (i >= 0) all.splice(i, 1); });
     row(maskBox, { title: `Mask image (${shape})`, kind: "File path for Image Mask", value: toDiskPath(maskURL), path: true,
       notes: "Paste into the Image Mask/Blend <b>Path</b> box, or click Browse and pick it from the <b>masks</b> folder." });
     row(frameBox, { title: `Camera frame ${$("cSlot").value}`, kind: "Browser source",
@@ -742,6 +746,9 @@
     row(fxBox, { title: `Frame effects ${$("cSlot").value}`, kind: "Browser source",
       value: url("frame-fx.html", { id: $("cSlot").value }), w: 1000, h: 1100, ticks: ["Untick Local file"],
       notes: "Put it in the same group as its frame (if you grouped them), just above the frame. While the setup script is loaded it keeps it lined up with the frame that has the same id, whatever they're called." });
+    row(avBox, { title: `Avatar ${$("cSlot").value}`, kind: "Browser source",
+      value: url("avatar.html", { id: $("cSlot").value }), w: 600, h: 660, ticks: ["Untick Local file"],
+      notes: "Same position and size as the frame (the Frame row in the table above), just below the frame and above the camera. Invisible until you pick a face." });
     renderMainShow();
   }
 
@@ -760,7 +767,7 @@
     const layers = [
       { n: 1, name: "Sound effects", where: "top of the list", step: 8, rows: [{ title: "Sound effects", kind: "Browser source", value: url("sfx.html"), w: 100, h: 100, ticks: ["Untick Local file", "Control audio via OBS"] }] },
       { n: 2, name: "Debate overlay", step: 8, rows: [{ title: "Debate overlay", kind: "Browser source", value: url("debate.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }] },
-      { n: 3, name: "Instant replay", step: 8, note: "A <b>Media Source</b> named <b>AWYM Instant Replay</b>, with no file, hidden (eye off). Step 8 has the details.", rows: [] },
+      { n: 3, name: "Instant replay", step: 8, note: "A <b>Media Source</b> named <b>Instant Replay</b>, with no file, hidden (eye off). Step 8 has the details.", rows: [] },
       { n: 4, name: "Stats overlay", step: 8, rows: [{ title: "Stats overlay", kind: "Browser source", value: url("stats-card.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }] },
       { n: 5, name: "On-screen text", step: 8, rows: [{ title: "On-screen text", kind: "Browser source", value: url("content.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }] },
       { n: 6, name: "Shot clock", step: 7, rows: [{ title: "Shot clock", kind: "Browser source", value: url("shot-clock.html", { time: $("clkTime").value.trim(), label: $("clkLabel").value.trim() }), w: 640, h: 320, ticks: ["Untick Local file", "Control audio via OBS"] }] },
@@ -770,9 +777,11 @@
           return { title: `Frame effects ${id}`, kind: "Browser source", value: url("frame-fx.html", { id }), w: 1000, h: 1100, ticks: ["Untick Local file"] }; }) },
       { n: 9, name: "Camera frames", step: 5, note: "Optional. One per camera, sized and positioned with the calculator in step 5.", rows: people.map((id) => {
           const p = personOf(id); return { title: `Camera frame ${id}${p.name ? " — " + p.name : ""}`, kind: "Browser source", value: frameURL(id), w: 600, h: 660, ticks: ["Untick Local file"] }; }) },
-      { n: 10, name: "Cameras (masked)", step: 5, note: "Add each camera with Sources → <b>+</b> → <b>Video Capture Device</b> (no address needed). For the cutout, add Crop/Pad then Image Mask/Blend with this file (step 5 has the crop numbers):",
+      { n: 10, name: "Avatars (faces)", step: 5, note: "Optional. Faces instead of the live camera, one per frame, same box as the frame, between the frame and the camera.", rows: people.map((id) => {
+          return { title: `Avatar ${id}`, kind: "Browser source", value: url("avatar.html", { id }), w: 600, h: 660, ticks: ["Untick Local file"] }; }) },
+      { n: 11, name: "Cameras (masked)", step: 5, note: "Add each camera with Sources → <b>+</b> → <b>Video Capture Device</b> (no address needed). For the cutout, add Crop/Pad then Image Mask/Blend with this file (step 5 has the crop numbers):",
         rows: [{ title: `Mask image (${shape})`, kind: "File path for Image Mask", value: toDiskPath(base + "masks/" + file + "-1x1.png"), path: true }] },
-      { n: 11, name: "Background", where: "bottom of the list", step: 4, rows: [{ title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }],
+      { n: 12, name: "Background", where: "bottom of the list", step: 4, rows: [{ title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] }],
         after: "Then right-click it → <b>Lock</b>, so you can't drag it by accident." }
     ];
     layers.forEach((L) => {
@@ -797,7 +806,7 @@
     row($("rows-docks"), { title: "Theme Panel", kind: "Dock", value: url("theme-dock.html"), notes: "Dock name: <b>Theme Panel</b>. Change colors, fonts, background scene, badge, show name and glow on every overlay, live." });
     row($("rows-docks"), { title: "Content Panel", kind: "Dock", value: url("content-panel.html"), notes: "Dock name: <b>Content Panel</b>. Type text (bold, lists, emojis, photos) and show it on screen, or import a whole show script from Google Docs / Word (template in <b>templates/</b>)." });
     if ($("rows-guests")) { $("rows-guests").innerHTML = ""; row($("rows-guests"), { title: "Guests (optional dock)", kind: "Dock", value: url("guests.html"), notes: "Dock name: <b>Guests</b>. Only needed if you want <b>Send names to the Control Panel</b>; the links work from your normal browser too." }); }
-    row($("rows-docks"), { title: "Show Runner", kind: "Dock", value: url("show-runner.html"), notes: "Dock name: <b>Show Runner</b>. Rundown, debate scoreboard, hot-take receipts, sound board, frame effects, talk time (speaking light), clips &amp; replays, and Backup." });
+    row($("rows-docks"), { title: "Show Runner", kind: "Dock", value: url("show-runner.html"), notes: "Dock name: <b>Show Runner</b>. Rundown, debate scoreboard, hot-take receipts, sound board, faces, frame effects, talk time (speaking light), mute, clips &amp; replays, and Backup." });
     row($("rows-bg"), { title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
     renderClock();
     row($("rows-stats"), { title: "Stats overlay", kind: "Browser source", value: url("stats-card.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });

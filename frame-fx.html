@@ -4,9 +4,12 @@
 <meta charset="utf-8">
 <title>AWYM Frame Effects</title>
 <!--
-  FRAME EFFECTS — fire, ice, lightning, smoke, sparks and a shake, drawn around a
-  camera frame. The middle stays clear, so the camera is never covered.
-  The setup script adds one per camera frame ("AWYM Frame FX 1" …) right above
+  FRAME EFFECTS — fire, ice, lightning, smoke, sparks and a shake, drawn around a camera
+  frame, plus the "verdicts": trash take, 100% facts, cooking, cap, bricked, air ball,
+  technical foul, posterized, on fire and clown take. The middle stays clear, so the camera
+  is never covered, except by the verdicts' strips across the lower part (and the clown
+  nose, the posterized glass), on purpose.
+  The setup script adds one per camera frame ("Frame FX 1" …) right above
   its frame and keeps it lined up: move or resize the frame and its effects
   layer follows (as long as the script is loaded). Fire them from the Show
   Runner's "Frame effects" section, or the FX hotkeys / M18 keys.
@@ -23,10 +26,13 @@
   Uses:      theme.css, shared.js, lib/anime.umd.min.js (anime.js 4, MIT) for the
              effects' timing (ignite, flare, die down). The particles are drawn on a canvas.
   Messages:  listens  to:"fx" {id: "1".."4" | "*" | "floor", cmd:"play", effect, dur} · {cmd:"stop", effect?} · ping
-                        effect: fire | ice | zap | smoke | sparks | shake
+                        effect: fire | ice | zap | smoke | sparks | shake, and the verdicts: trash | facts |
+                                cooking | cap | bricked | airball | technical | posterized | onfire | clown
                         dur: seconds (0 = until stopped; default per effect)
                         id "floor" = the seat that has the floor (★ spotlight), or every seat if nobody has it
                       from:"frame" {id, spot, shape} (who has the floor, frame shape)
+                      to:"frame" talk {id, on, lvl} (speaking light: halo + ripples outside the ring)
+                      to:"fx" {cmd: "tune", tune: {effect: {knob: ×}}} (Fine-tune sliders; any id)
                       to:"all" clear → stops everything
              sends    from:"fx" {id, playing:[…]} whenever that changes, and on ping/hello
                       to:"frame" {id, cmd:"shake", ms} for the shake
@@ -58,7 +64,28 @@
   const W = 1000, H = 1100, CX = 500, CY = 500, HOLE = 262, RING = 276;
   const id = AWYM.param("id", "1");
   let shape = AWYM.param("shape", "circle");
-  const cv = document.getElementById("cv"), g = cv.getContext("2d");
+  const cv = document.getElementById("cv"), G = cv.getContext("2d");
+  let g = G;                                   // what effects draw on (a side layer while one is dimmed/brightened)
+
+  /* ---------------- fine-tuning (Show Runner → Frame effects → Fine-tune) ----------------
+     TUNE[effect][knob] multiplies the built-in look; 1 = as designed. Knobs:
+       fire / ice / zap / smoke / sparks: amount, size, speed, bright
+       shake: strength, length      talk (speaking light): spread, fade, rate, bright, halo
+     Saved in localStorage "awym-fx-tune-v1" (shared by every Frame FX layer) and sent live as
+     to:"fx" {cmd: "tune", tune}. */
+  const TUNE_KEY = "awym-fx-tune-v1";
+  let TUNE = {};
+  try { TUNE = JSON.parse(localStorage.getItem(TUNE_KEY) || "{}") || {}; } catch (e) { TUNE = {}; }
+  function P(fxName, knob) {
+    const v = Number((TUNE[fxName] || {})[knob]);
+    return isFinite(v) && v > 0 ? Math.max(0.05, Math.min(5, v)) : 1;
+  }
+  function setTune(t, store) {
+    if (!t || typeof t !== "object") return;
+    TUNE = t;
+    if (store) try { localStorage.setItem(TUNE_KEY, JSON.stringify(t)); } catch (e) {}
+    if (fx.ice && fx.ice.on && fx.ice.regrow) fx.ice.regrow();
+  }
 
   /* ---------------- geometry ---------------- */
   let k = 1, ox = 0, oy = 0;                   // design → canvas pixels
@@ -175,16 +202,17 @@
     e.busyMore = () => embers.length > 0;
     e.step = (dt, t) => {
       const heat = e.env.v;
-      let n = heat * 950 * dt;
-      while (n > 0 && e.parts.length < 1500) {
+      const amt = P("fire", "amount"), sz = P("fire", "size");
+      let n = heat * 950 * dt * amt;
+      while (n > 0 && e.parts.length < 3000) {
         if (Math.random() < n) {
-          const p = onRing(), up = rnd(80, 200) * (p.y < CY ? 1.25 : 1);
+          const p = onRing(), up = rnd(80, 200) * (p.y < CY ? 1.25 : 1) * Math.sqrt(sz);
           e.parts.push({ x: p.x + p.nx * rnd(-14, 10), y: p.y + p.ny * rnd(-14, 10), vx: p.nx * rnd(10, 55) + rnd(-12, 12), vy: -up + p.ny * rnd(10, 40),
-                         age: 0, life: rnd(0.5, 1.2), size: rnd(20, 36) * (0.65 + heat * 0.5), seed: Math.random() * 10 });
+                         age: 0, life: rnd(0.5, 1.2), size: rnd(20, 36) * (0.65 + heat * 0.5) * sz, seed: Math.random() * 10 });
         }
         n -= 1;
       }
-      if (Math.random() < heat * dt * 26) { const p = onRing(); embers.push({ x: p.x, y: p.y, vx: rnd(-30, 30) + p.nx * 30, vy: rnd(-200, -90), age: 0, life: rnd(1.2, 2.4) }); }
+      if (Math.random() < heat * dt * 26 * amt) { const p = onRing(); embers.push({ x: p.x, y: p.y, vx: rnd(-30, 30) + p.nx * 30, vy: rnd(-200, -90), age: 0, life: rnd(1.2, 2.4) }); }
       for (let i = e.parts.length - 1; i >= 0; i--) {
         const q = e.parts[i]; q.age += dt;
         if (q.age >= q.life) { e.parts.splice(i, 1); continue; }
@@ -234,15 +262,17 @@
     let spikes = [], drips = [], melting = false;
     function grow() {
       spikes = [];
-      for (let i = 0; i < 150; i++) {
-        const p = perim[Math.floor(i / 150 * perim.length + rnd(0, 4)) % perim.length];
-        const ang = Math.atan2(p.ny, p.nx) + rnd(-0.5, 0.5), len = rnd(18, 72);
+      const N = Math.round(Math.max(30, Math.min(400, 150 * P("ice", "amount")))), sz = P("ice", "size");
+      for (let i = 0; i < N; i++) {
+        const p = perim[Math.floor(i / N * perim.length + rnd(0, 4)) % perim.length];
+        const ang = Math.atan2(p.ny, p.nx) + rnd(-0.5, 0.5), len = rnd(18, 72) * sz;
         const br = [];
         for (let j = 0; j < 3; j++) br.push({ at: rnd(0.3, 0.8), ang: ang + (Math.random() < 0.5 ? -1 : 1) * rnd(0.5, 1.0), len: len * rnd(0.25, 0.5) });
         spikes.push({ x: p.x + p.nx * 10, y: p.y + p.ny * 10, ang, len, br, delay: rnd(0, 0.45) });
       }
     }
     e.onStart = () => { melting = false; grow(); };
+    e.regrow = grow;                                       // fine-tune changed while it's on
     e.onRelease = (fast) => { melting = !fast; };
     e.busyMore = () => drips.length > 0;
     e.step = (dt) => {
@@ -250,7 +280,7 @@
       if (melting && v > 0.05 && Math.random() < dt * 22) {         // drips fall from the lower half while it melts
         const p = onRing(); if (p.y > CY - 40) drips.push({ x: p.x + p.nx * 14, y: p.y + p.ny * 14, vy: rnd(0, 40), age: 0, life: rnd(0.8, 1.4) });
       }
-      if (e.on && Math.random() < dt * 10) { const p = onRing(); e.parts.push({ x: p.x + p.nx * rnd(10, 50), y: p.y + p.ny * rnd(10, 50), age: 0, life: rnd(0.4, 0.9), s: rnd(5, 11) }); }   // glints
+      if (e.on && Math.random() < dt * 10 * P("ice", "amount")) { const p = onRing(); e.parts.push({ x: p.x + p.nx * rnd(10, 50), y: p.y + p.ny * rnd(10, 50), age: 0, life: rnd(0.4, 0.9), s: rnd(5, 11) }); }   // glints
       for (let i = drips.length - 1; i >= 0; i--) { const d = drips[i]; d.age += dt; d.vy += 900 * dt; d.y += d.vy * dt; if (d.age > d.life || d.y > H) drips.splice(i, 1); }
       for (let i = e.parts.length - 1; i >= 0; i--) { const q = e.parts[i]; q.age += dt; if (q.age > q.life) e.parts.splice(i, 1); }
     };
@@ -316,11 +346,11 @@
           const i0 = (Math.random() * perim.length) | 0, span = (rnd(40, 140)) | 0;
           let prev = perim[i0]; pts.push(prev.x + prev.nx * rnd(-6, 12), prev.y + prev.ny * rnd(-6, 12));
           for (let s = 1; s <= 6; s++) {
-            const p = perim[(i0 + Math.round(span * s / 6)) % perim.length], off = rnd(-4, 26);
+            const p = perim[(i0 + Math.round(span * s / 6)) % perim.length], off = rnd(-4, 26) * P("zap", "size");
             jag(pts[pts.length - 2], pts[pts.length - 1], p.x + p.nx * off, p.y + p.ny * off, 16, 3, pts);
           }
         } else {                                              // a bolt striking outward, with a fork
-          const p = onRing(), len = rnd(90, 210), ang = Math.atan2(p.ny, p.nx) + rnd(-0.4, 0.4);
+          const p = onRing(), len = rnd(90, 210) * P("zap", "size"), ang = Math.atan2(p.ny, p.nx) + rnd(-0.4, 0.4);
           pts.push(p.x, p.y);
           jag(p.x, p.y, p.x + Math.cos(ang) * len, p.y + Math.sin(ang) * len, 50, 5, pts);
           const fi = 2 * ((pts.length / 4) | 0), fork = [pts[fi], pts[fi + 1]], fa = ang + rnd(-0.9, 0.9);
@@ -333,7 +363,7 @@
     }
     e.onStart = () => { next = 0; };
     e.step = (dt) => {
-      if (e.on || e.env.v > 0.3) { next -= dt; if (next <= 0) { strike(); next = rnd(0.04, 0.14) / Math.max(0.3, e.env.v); } }
+      if (e.on || e.env.v > 0.3) { next -= dt; if (next <= 0) { strike(); next = rnd(0.04, 0.14) / Math.max(0.3, e.env.v) / P("zap", "amount"); } }
       for (let i = e.parts.length - 1; i >= 0; i--) { const q = e.parts[i]; q.age += dt; if (q.age > q.life) e.parts.splice(i, 1); }
     };
     e.draw = () => {
@@ -360,12 +390,13 @@
     const e = fx.smoke = base("smoke", 6, 900, 2000);
     e.step = (dt, t) => {
       const v = e.env.v;
-      let n = v * 60 * dt;
+      const sz = P("smoke", "size");
+      let n = v * 60 * dt * P("smoke", "amount");
       while (n > 0) {
         if (Math.random() < n) {
           const p = onRing(), dark = Math.random() < 0.35;
           e.parts.push({ x: p.x + p.nx * 8, y: p.y + p.ny * 8, vx: p.nx * rnd(10, 40) + rnd(-10, 10), vy: rnd(-90, -45) + p.ny * 20,
-                         age: 0, life: rnd(2.2, 3.6), s0: rnd(26, 40), s1: rnd(110, 170), dark, rot: rnd(0, 6), ember: Math.random() < 0.12 });
+                         age: 0, life: rnd(2.2, 3.6), s0: rnd(26, 40) * sz, s1: rnd(110, 170) * sz, dark, rot: rnd(0, 6), ember: Math.random() < 0.12 });
         }
         n -= 1;
       }
@@ -397,14 +428,15 @@
     const e = fx.sparks = base("sparks", 3.5, 150, 800);
     let conf = [], bursts = [];
     function burst(power) {
-      for (let i = 0; i < 160 * power; i++) {
-        const p = onRing(), sp = rnd(220, 640) * power, a = Math.atan2(p.ny, p.nx) + rnd(-0.6, 0.6);
+      const amt = P("sparks", "amount"), reach = P("sparks", "size");
+      for (let i = 0; i < 160 * power * amt; i++) {
+        const p = onRing(), sp = rnd(220, 640) * power * reach, a = Math.atan2(p.ny, p.nx) + rnd(-0.6, 0.6);
         e.parts.push({ x: p.x, y: p.y, px: p.x, py: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 120, age: 0, life: rnd(0.6, 1.4), hot: Math.random() });
       }
       const cols = [themeColor("--primary", "#ff7a00"), themeColor("--accent", "#ffd400"), themeColor("--secondary", "#3a2c7a"), themeColor("--light", "#ffffff"), "#ffd56b"];
-      for (let i = 0; i < 90 * power; i++) {
+      for (let i = 0; i < 90 * power * amt; i++) {
         let p = onRing(); for (let tries = 0; tries < 6 && p.y > CY + 60; tries++) p = onRing();   // mostly from the top half
-        const a = -Math.PI / 2 + rnd(-1.1, 1.1), sp = rnd(250, 560);
+        const a = -Math.PI / 2 + rnd(-1.1, 1.1), sp = rnd(250, 560) * Math.sqrt(reach);
         conf.push({ x: p.x, y: p.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, age: 0, life: rnd(2.0, 3.2), c: cols[(Math.random() * cols.length) | 0], w: rnd(8, 14), h: rnd(5, 9), r: rnd(0, 6), vr: rnd(-9, 9), f: rnd(4, 10) });
       }
       flash = Math.max(flash, 0.5);
@@ -438,6 +470,811 @@
     };
   })();
 
+  /* 🗑️ TRASH TAKE: a grimy "TRASH TAKE" strip slaps across the camera at an angle (the one
+     effect allowed over the picture, just a band across the lower part), and a metal trash can
+     pops up under the frame: lid flapping, stink lines, flies, the odd paper ball. When it ends,
+     the strip gets tossed into the can, the lid bangs shut and the can drops away. */
+  (function () {
+    const e = fx.trash = base("trash", 6, 200, 450);
+    const S = { t: 0, phase: "idle", r: 0, slapped: false, lid: 0, lidV: 0, flies: [], balls: [], nextBall: 0 };
+    const clamp01 = (x) => Math.max(0, Math.min(1, x));
+    const outBack = (x) => { const c = 1.9; x = clamp01(x); return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+    const inQuad = (x) => clamp01(x) * clamp01(x);
+    const BX = CX, BY = 612, CANB = 1094;                  // strip centre; the can's bottom
+    e.onStart = () => {
+      S.t = 0; S.phase = "in"; S.r = 0; S.slapped = false; S.lid = 0; S.lidV = 0; S.balls = []; S.nextBall = 1.4;
+      const n = Math.round(3 * P("trash", "amount")) + 1;
+      S.flies = []; for (let i = 0; i < n; i++) S.flies.push({ a: rnd(0, 6.3), r: rnd(110, 150), sp: rnd(2.4, 4.2) * (Math.random() < 0.5 ? -1 : 1), wob: rnd(0, 6) });
+    };
+    e.onRelease = (fast) => { if (S.phase === "idle") return; if (fast) { S.phase = "fade"; } else { S.phase = "toss"; S.r = 0; } };
+    e.busyMore = () => S.phase !== "idle";
+    e.step = (dt) => {
+      if (S.phase === "idle") return;
+      S.t += dt; if (S.phase === "toss") S.r += dt;
+      if (S.phase === "fade" && e.env.v < 0.01) { S.phase = "idle"; S.balls = []; return; }
+      if (S.phase === "toss" && S.r > 1.9) { S.phase = "idle"; S.balls = []; e.env.v = 0; return; }
+      if (!S.slapped && S.t > 0.55) {                       // the strip lands: a little jolt
+        S.slapped = true;
+        try { document.body.animate(shakeKeys(4 * Math.min(innerWidth / W, innerHeight / H)), { duration: 260, easing: "linear" }); } catch (er) {}
+        AWYM.send({ to: "frame", id, cmd: "shake", ms: 260, amp: 0.45 });
+      }
+      // the lid: a springy flap, open while the take is on screen, banged shut in the toss
+      const open = (S.phase === "toss" ? S.r < 0.72 : S.t > 0.5) ? -0.42 + 0.08 * Math.sin(S.t * 1.7) : 0;
+      const kick = (S.phase !== "toss" && S.t > 0.5 && (S.t % 2.3) < 0.05) ? -3 : 0;   // a rattle now and then
+      S.lidV += ((open - S.lid) * 140 - S.lidV * 9) * dt + kick; S.lid += S.lidV * dt;
+      if (S.phase === "in") {                                // paper balls hopping out of the can
+        S.nextBall -= dt * P("trash", "amount");
+        if (S.nextBall <= 0 && S.t > 0.8) { S.nextBall = rnd(0.9, 1.8); S.balls.push({ x: BX + rnd(-30, 30), y: CANB - 150, vx: rnd(-70, 70), vy: rnd(-330, -250), rot: rnd(0, 6), vr: rnd(-6, 6), age: 0 }); }
+      }
+      for (let i = S.balls.length - 1; i >= 0; i--) {
+        const b = S.balls[i]; b.age += dt; b.vy += 900 * dt; b.x += b.vx * dt; b.y += b.vy * dt; b.rot += b.vr * dt;
+        if (b.vy > 0 && b.y > CANB - 150) S.balls.splice(i, 1);   // back in the can
+      }
+      for (const f of S.flies) f.a += f.sp * dt;
+    };
+    const alpha = () => (S.phase === "fade" ? e.env.v : 1);
+    /* where the can is: rises with a bounce, hops when the lid bangs, sinks at the end */
+    function canLift() {
+      let y = (1 - outBack(S.t / 0.55)) * 260;
+      if (S.phase === "toss") {
+        if (S.r > 0.72 && S.r < 0.95) y -= Math.sin((S.r - 0.72) / 0.23 * Math.PI) * 14;
+        if (S.r > 1.15) y += inQuad((S.r - 1.15) / 0.6) * 300;
+      }
+      return y;
+    }
+    function drawCan(t) {
+      const sz = P("trash", "size"), lift = canLift();
+      g.save();
+      g.translate(BX, CANB + lift); g.scale(sz, sz);
+      const H0 = 150, TW = 96, BW = 80;                       // body height, half widths top/bottom
+      // shadow + body
+      g.fillStyle = "rgba(0,0,0,.35)"; g.beginPath(); g.ellipse(0, 2, BW + 16, 9, 0, 0, Math.PI * 2); g.fill();
+      const body = new Path2D(); body.moveTo(-BW, 0); body.lineTo(-TW, -H0); body.lineTo(TW, -H0); body.lineTo(BW, 0); body.closePath();
+      const gr = g.createLinearGradient(-TW, 0, TW, 0);
+      gr.addColorStop(0, "#59626b"); gr.addColorStop(.22, "#aeb7bf"); gr.addColorStop(.45, "#848e97"); gr.addColorStop(.7, "#9aa4ad"); gr.addColorStop(1, "#4f575f");
+      g.fillStyle = gr; g.fill(body); g.lineWidth = 3; g.strokeStyle = "#3b4248"; g.stroke(body);
+      g.save(); g.clip(body); g.strokeStyle = "rgba(40,46,52,.45)"; g.lineWidth = 2;   // ridges and bands
+      for (let i = -4; i <= 4; i++) { g.beginPath(); g.moveTo(i * 19, 0); g.lineTo(i * 22.5, -H0); g.stroke(); }
+      g.lineWidth = 7; g.strokeStyle = "rgba(60,66,72,.75)";
+      for (const yy of [-40, -108]) { g.beginPath(); g.moveTo(-TW, yy); g.lineTo(TW, yy); g.stroke(); }
+      g.fillStyle = "rgba(90,110,40,.35)";                     // grime
+      for (const [x, y, r] of [[-40, -20, 16], [30, -70, 11], [55, -18, 9], [-62, -96, 8]]) { g.beginPath(); g.ellipse(x, y, r * 1.4, r, 0.3, 0, Math.PI * 2); g.fill(); }
+      g.restore();
+      g.strokeStyle = "#4a5259"; g.lineWidth = 6; g.lineCap = "round";   // handles
+      for (const sx of [-1, 1]) { g.beginPath(); g.arc(sx * (TW - 4), -H0 * 0.7, 14, sx > 0 ? -1.2 : Math.PI - 0.0, sx > 0 ? 1.2 : Math.PI + 2.4); g.stroke(); }
+      // the open mouth (dark), then the lid on its hinge (left rim)
+      g.fillStyle = "#1c1f1a"; g.beginPath(); g.ellipse(0, -H0, TW, 15, 0, 0, Math.PI * 2); g.fill();
+      g.fillStyle = "rgba(120,160,40,.5)"; g.beginPath(); g.ellipse(0, -H0 + 3, TW * 0.7, 7, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.translate(-TW - 4, -H0); g.rotate(S.lid);
+      const lg2 = g.createLinearGradient(0, -30, 0, 8); lg2.addColorStop(0, "#c3cbd2"); lg2.addColorStop(1, "#6b747c");
+      g.fillStyle = lg2; g.strokeStyle = "#3b4248"; g.lineWidth = 3;
+      g.beginPath(); g.ellipse(TW + 4, 0, TW + 10, 13, 0, 0, Math.PI * 2); g.fill(); g.stroke();       // rim
+      g.beginPath(); g.ellipse(TW + 4, -4, TW - 4, 24, 0, Math.PI, Math.PI * 2); g.fill(); g.stroke();  // dome
+      g.fillStyle = "#5b636b"; g.fillRect(TW - 14, -40, 36, 9);                                    // handle
+      g.restore();
+      g.restore();
+      return { mouthY: CANB + lift - H0 * sz, sz };
+    }
+    function drawStink(t, mouthY, sz) {
+      if (S.lid > -0.12) return;
+      g.save(); g.lineCap = "round"; g.lineWidth = 5 * sz;
+      for (let i = 0; i < 3; i++) {
+        const side = i - 1, ph = (t * 0.6 + i * 0.33) % 1;
+        g.strokeStyle = `rgba(150,200,60,${0.55 * Math.sin(ph * Math.PI)})`;
+        g.beginPath();
+        for (let k = 0; k <= 14; k++) {
+          const u = k / 14, yy = mouthY - 8 - u * 58 * sz - ph * 20 * sz;
+          const xx = BX + side * (34 + u * 40) * sz + Math.sin(u * 9 + t * 5 + i) * 7 * sz;
+          k ? g.lineTo(xx, yy) : g.moveTo(xx, yy);
+        }
+        g.stroke();
+      }
+      g.restore();
+    }
+    function drawFlies(t, mouthY, sz) {
+      const vis = clamp01((-S.lid - 0.08) / 0.2);            // only while the lid is open
+      if (vis <= 0) return;
+      g.save(); g.globalAlpha *= vis;
+      for (const f of S.flies) {
+        // flies buzz in loose loops beside and above the can (kept off the rim)
+        const x = BX + Math.cos(f.a) * f.r * sz + Math.sin(t * 7 + f.wob) * 8, y = mouthY + 30 * sz + Math.sin(f.a * 1.7 + f.wob) * 45 * sz;
+        const w = 5 + 3 * Math.abs(Math.sin(t * 60 + f.wob));
+        g.fillStyle = "rgba(225,238,255,.7)";
+        g.beginPath(); g.ellipse(x - 4, y - 4, w, 3.2, -0.7, 0, Math.PI * 2); g.ellipse(x + 4, y - 4, w, 3.2, 0.7, 0, Math.PI * 2); g.fill();
+        g.fillStyle = "#1a1a1a"; g.beginPath(); g.ellipse(x, y, 4.2, 2.8, Math.cos(f.a) > 0 ? 0.4 : -0.4, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+    }
+    function drawBalls() {
+      for (const b of S.balls) {
+        g.save(); g.translate(b.x, b.y); g.rotate(b.rot);
+        g.fillStyle = "#e9e4d6"; g.strokeStyle = "#8d8676"; g.lineWidth = 2;
+        g.beginPath(); for (let k = 0; k < 9; k++) { const a = k / 9 * Math.PI * 2, r = 13 + ((k * 7) % 5); g.lineTo(Math.cos(a) * r, Math.sin(a) * r); } g.closePath(); g.fill(); g.stroke();
+        g.beginPath(); g.moveTo(-6, -3); g.lineTo(3, 2); g.moveTo(-2, 6); g.lineTo(6, -5); g.stroke();
+        g.restore();
+      }
+    }
+    e.draw = (t) => {
+      if (S.phase === "idle") return;
+      g.save(); g.globalAlpha = alpha();
+      const c = drawCan(t);
+      drawStink(t, c.mouthY, c.sz); drawFlies(t, c.mouthY, c.sz); drawBalls();
+      g.restore();
+    };
+    /* the strip: drawn after the camera hole is cleared, so it lies across the picture */
+    let font = "";
+    e.drawOver = (t) => {
+      if (S.phase === "idle" || S.t < 0.25) return;
+      const sz = P("trash", "size");
+      let k = clamp01((S.t - 0.25) / 0.32), sc = 1 + 1.3 * (1 - outBack(k)), rot = (-9 - 16 * (1 - k)) * Math.PI / 180, x = BX, y = BY, a = Math.min(1, k * 3);
+      rot += Math.sin(S.t * 2.1) * 0.012;
+      if (S.phase === "toss") {                              // into the can: shrink, spin, drop
+        const u = inQuad(S.r / 0.7), mouthY = CANB + canLift() - 150 * sz;
+        if (S.r > 0.7) return;
+        x = BX + Math.sin(u * Math.PI) * 60; y = BY + (mouthY - BY) * u; sc *= 1 - 0.85 * u; rot += u * 3.4;
+      }
+      if (!font) font = (getComputedStyle(document.documentElement).getPropertyValue("--font-heading").trim() || "Impact, sans-serif");
+      const wdt = 700, hgt = 108;
+      g.save(); g.globalAlpha = a * alpha() * Math.min(1, P("trash", "bright"));
+      g.translate(x, y); g.rotate(rot); g.scale(sc * sz, sc * sz);
+      // torn strip
+      const strip = new Path2D(); strip.moveTo(-wdt / 2, -hgt / 2);
+      for (let i = 1; i <= 14; i++) strip.lineTo(-wdt / 2 + i * wdt / 14, -hgt / 2 + ((i * 37) % 7) - 3);
+      for (let i = 0; i <= 6; i++) strip.lineTo(wdt / 2 + ((i * 13) % 9) - 4, -hgt / 2 + i * hgt / 6);
+      for (let i = 14; i >= 0; i--) strip.lineTo(-wdt / 2 + i * wdt / 14, hgt / 2 + ((i * 29) % 7) - 3);
+      for (let i = 6; i >= 0; i--) strip.lineTo(-wdt / 2 - ((i * 11) % 9) + 4, -hgt / 2 + i * hgt / 6);
+      strip.closePath();
+      g.shadowColor = "rgba(0,0,0,.55)"; g.shadowBlur = 18 * k; g.shadowOffsetY = 6;
+      const sg = g.createLinearGradient(0, -hgt / 2, 0, hgt / 2); sg.addColorStop(0, "#3a3b2c"); sg.addColorStop(1, "#23241b");
+      g.fillStyle = sg; g.fill(strip); g.shadowColor = "transparent";
+      g.save(); g.clip(strip);                                // stains
+      for (const [sx, sy, r, col] of [[-250, 18, 34, "rgba(120,150,40,.28)"], [190, -22, 26, "rgba(110,80,40,.35)"], [40, 30, 20, "rgba(120,150,40,.22)"], [290, 25, 16, "rgba(110,80,40,.3)"]]) {
+        g.fillStyle = col; g.beginPath(); g.ellipse(sx, sy, r * 1.6, r, 0.4, 0, Math.PI * 2); g.fill();
+      }
+      g.restore();
+      g.strokeStyle = "rgba(182,227,58,.9)"; g.lineWidth = 3; g.setLineDash([14, 9]); g.stroke(strip); g.setLineDash([]);
+      g.font = `900 76px ${font}`; g.textAlign = "center"; g.textBaseline = "middle";
+      g.lineWidth = 8; g.strokeStyle = "#111"; g.strokeText("TRASH TAKE", 0, 4);
+      g.fillStyle = "#b6e33a"; g.fillText("TRASH TAKE", 0, 4);
+      // little drips under the letters
+      g.fillStyle = "#b6e33a";
+      for (const dx of [-205, -60, 118, 236]) { const d = 6 + 10 * clamp01((S.t - 0.6) / 1.5); g.beginPath(); g.ellipse(dx, 36 + d / 2, 4, d / 2 + 2, 0, 0, Math.PI * 2); g.fill(); }
+      g.restore();
+    };
+  })();
+
+  /* ---------- shared bits for the "verdict" effects (Trash take's siblings) ---------- */
+  const clamp01 = (x) => Math.max(0, Math.min(1, x));
+  const outBack = (x, c) => { c = c || 1.9; x = clamp01(x); return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
+  const inQuad = (x) => clamp01(x) * clamp01(x);
+  const outCubic = (x) => 1 - Math.pow(1 - clamp01(x), 3);
+  let headFont = "";
+  const fontHead = () => headFont || (headFont = getComputedStyle(document.documentElement).getPropertyValue("--font-heading").trim() || "Impact, sans-serif");
+  /** A slightly ragged strip (w × h around 0,0). */
+  function stripPath(w, h, rough) {
+    const p = new Path2D(); p.moveTo(-w / 2, -h / 2);
+    for (let i = 1; i <= 14; i++) p.lineTo(-w / 2 + i * w / 14, -h / 2 + (((i * 37) % 7) - 3) * rough);
+    for (let i = 0; i <= 6; i++) p.lineTo(w / 2 + (((i * 13) % 9) - 4) * rough, -h / 2 + i * h / 6);
+    for (let i = 14; i >= 0; i--) p.lineTo(-w / 2 + i * w / 14, h / 2 + (((i * 29) % 7) - 3) * rough);
+    for (let i = 6; i >= 0; i--) p.lineTo(-w / 2 - (((i * 11) % 9) - 4) * rough, -h / 2 + i * h / 6);
+    p.closePath(); return p;
+  }
+  /** A small jolt on this layer and its frame (when a stamp lands). */
+  function thud(amp) {
+    try { document.body.animate(shakeKeys(amp * 9 * Math.min(innerWidth / W, innerHeight / H)), { duration: 260, easing: "linear" }); } catch (er) {}
+    AWYM.send({ to: "frame", id, cmd: "shake", ms: 260, amp });
+  }
+  /** Timeline shared by the verdict effects: "in" while on, then "out" (lift off) or "fade" (Stop). */
+  function verdict(name, dur, outLen) {
+    const e = fx[name] = base(name, dur, 200, 450);
+    const S = e.S = { t: 0, r: 0, phase: "idle", landed: false };
+    e.busyMore = () => S.phase !== "idle";
+    const start0 = () => { S.t = 0; S.r = 0; S.phase = "in"; S.landed = false; };
+    e.onStart = () => { start0(); if (e.onBegin) e.onBegin(); };
+    e.onRelease = (fast) => { if (S.phase === "idle") return; S.phase = fast ? "fade" : "out"; S.r = 0; };
+    e.tick = (dt) => {
+      if (S.phase === "idle") return false;
+      S.t += dt; if (S.phase === "out") S.r += dt;
+      if ((S.phase === "fade" && e.env.v < 0.01) || (S.phase === "out" && S.r > outLen)) { S.phase = "idle"; if (e.onEnd) e.onEnd(); return false; }
+      return true;
+    };
+    e.alpha = () => (S.phase === "fade" ? e.env.v : 1);
+    return e;
+  }
+
+  /* 💯 100% FACTS: a gold "100% FACTS" strip stamps across the camera, a gold seal thuds onto the
+     frame's top-right, the ring glows gold and glints sparkle round it. It ends by lifting off. */
+  (function () {
+    const e = verdict("facts", 6, 0.7), S = e.S;
+    const glints = [];
+    e.onBegin = () => { glints.length = 0; };
+    e.step = (dt, t) => {
+      if (!e.tick(dt)) { glints.length = 0; return; }
+      if (!S.landed && S.t > 0.5) { S.landed = true; thud(0.5); flash = Math.max(flash, 0.5); }
+      if (S.phase === "in" && S.t > 0.5 && Math.random() < dt * 14 * P("facts", "amount")) {
+        const p = onRing(); glints.push({ x: p.x + p.nx * rnd(6, 60), y: p.y + p.ny * rnd(6, 60), age: 0, life: rnd(0.5, 1.1), s: rnd(7, 16) });
+      }
+      for (let i = glints.length - 1; i >= 0; i--) { glints[i].age += dt; if (glints[i].age > glints[i].life) glints.splice(i, 1); }
+    };
+    const SX = CX + 245, SY = CY - 250;                         // the seal: over the ring's top-right
+    function seal(t, a) {
+      const sz = P("facts", "size");
+      let k = clamp01((S.t - 0.3) / 0.28), sc = 1 + 1.6 * (1 - outBack(k, 1.4)), rot = -0.25 + (1 - k) * 0.6;
+      if (S.phase === "out") { const u = outCubic(S.r / 0.6); sc *= 1 + 0.4 * u; a *= 1 - u; }
+      if (S.t < 0.3) return;
+      g.save(); g.globalAlpha = a * Math.min(1, k * 3); g.translate(SX, SY); g.rotate(rot); g.scale(sc * sz, sc * sz);
+      g.shadowColor = "rgba(0,0,0,.45)"; g.shadowBlur = 14; g.shadowOffsetY = 5;
+      const R = 82, rosette = new Path2D();
+      for (let i = 0; i <= 48; i++) { const an = i / 48 * Math.PI * 2, r = i % 2 ? R : R - 9; rosette.lineTo(Math.cos(an) * r, Math.sin(an) * r); }
+      const gg = g.createRadialGradient(-20, -25, 5, 0, 0, R); gg.addColorStop(0, "#fff2b0"); gg.addColorStop(.45, "#f2c14e"); gg.addColorStop(1, "#b07a1c");
+      g.fillStyle = gg; g.fill(rosette); g.shadowColor = "transparent";
+      g.strokeStyle = "#7a5212"; g.lineWidth = 3; g.stroke(rosette);
+      g.beginPath(); g.arc(0, 0, R - 20, 0, Math.PI * 2); g.strokeStyle = "rgba(90,60,10,.8)"; g.lineWidth = 3; g.setLineDash([4, 5]); g.stroke(); g.setLineDash([]);
+      g.fillStyle = "#3a2600"; g.textAlign = "center"; g.textBaseline = "middle";
+      g.font = `900 46px ${fontHead()}`; g.fillText("100%", 0, -6);
+      g.font = `800 15px ${fontHead()}`; g.fillText("CERTIFIED", 0, 26);
+      // the sheen sweeping across
+      g.save(); g.clip(rosette); const sx = ((S.t * 0.7) % 1.6 - 0.3) * 2 * R - R;
+      const sh = g.createLinearGradient(sx - 30, 0, sx + 30, 0); sh.addColorStop(0, "rgba(255,255,255,0)"); sh.addColorStop(.5, "rgba(255,255,255,.55)"); sh.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = sh; g.rotate(0.5); g.fillRect(-R * 2, -R * 2, R * 4, R * 4); g.restore();
+      g.restore();
+    }
+    e.draw = (t) => {
+      if (S.phase === "idle") return;
+      const a = e.alpha(), glow = clamp01((S.t - 0.45) / 0.3) * (S.phase === "out" ? 1 - clamp01(S.r / 0.5) : 1);
+      g.save();
+      if (glow > 0.01) {                                       // the ring glowing gold
+        g.globalCompositeOperation = "lighter"; g.globalAlpha = a * glow * (0.45 + 0.1 * Math.sin(t * 4));
+        g.strokeStyle = "rgb(255,200,70)"; g.lineWidth = 26; g.shadowColor = "rgb(255,190,60)"; g.shadowBlur = (24 + 18 * glowK()) * k; g.stroke(ringPath);
+        g.shadowBlur = 0;
+      }
+      g.globalCompositeOperation = "lighter"; g.fillStyle = "#fff4c2";
+      for (const q of glints) {                                 // four-point glints
+        const u = q.age / q.life, s = q.s * Math.sin(u * Math.PI); g.globalAlpha = a * Math.sin(u * Math.PI);
+        g.beginPath(); g.moveTo(q.x - s, q.y); g.lineTo(q.x, q.y - s * 0.2); g.lineTo(q.x + s, q.y); g.lineTo(q.x, q.y + s * 0.2); g.closePath(); g.fill();
+        g.beginPath(); g.moveTo(q.x, q.y - s); g.lineTo(q.x + s * 0.2, q.y); g.lineTo(q.x, q.y + s); g.lineTo(q.x - s * 0.2, q.y); g.closePath(); g.fill();
+      }
+      g.restore();
+    };
+    e.drawOver = (t) => {
+      if (S.phase === "idle") return;
+      const a = e.alpha() * Math.min(1, P("facts", "bright")), sz = P("facts", "size");
+      seal(t, a);
+      if (S.t < 0.15) return;
+      let k = clamp01((S.t - 0.15) / 0.3), sc = 1 + 1.4 * (1 - outBack(k)), rot = (-8 - 14 * (1 - k)) * Math.PI / 180, al = a * Math.min(1, k * 3), y = 612;
+      if (S.phase === "out") { const u = outCubic(S.r / 0.6); y -= 60 * u; sc *= 1 + 0.15 * u; al *= 1 - u; }
+      const w = 640, h = 104;
+      g.save(); g.globalAlpha = al; g.translate(CX, y); g.rotate(rot + Math.sin(S.t * 2) * 0.01); g.scale(sc * sz, sc * sz);
+      const strip = stripPath(w, h, 0.5);
+      g.shadowColor = "rgba(0,0,0,.5)"; g.shadowBlur = 16 * k; g.shadowOffsetY = 6;
+      const sg = g.createLinearGradient(0, -h / 2, 0, h / 2); sg.addColorStop(0, "#ffe27a"); sg.addColorStop(.5, "#f0b93a"); sg.addColorStop(1, "#c88a1e");
+      g.fillStyle = sg; g.fill(strip); g.shadowColor = "transparent";
+      g.save(); g.clip(strip); const sx = ((S.t * 0.55) % 1.8 - 0.4) * w;      // sheen
+      const sh = g.createLinearGradient(sx - 70, 0, sx + 70, 0); sh.addColorStop(0, "rgba(255,255,255,0)"); sh.addColorStop(.5, "rgba(255,255,255,.6)"); sh.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = sh; g.fillRect(-w, -h, w * 2, h * 2); g.restore();
+      g.strokeStyle = "#7a5212"; g.lineWidth = 4; g.stroke(strip);
+      g.font = `900 74px ${fontHead()}`; g.textAlign = "center"; g.textBaseline = "middle";
+      g.lineWidth = 6; g.strokeStyle = "rgba(255,248,214,.9)"; g.strokeText("100% FACTS", 8, 5);
+      g.fillStyle = "#2e1f00"; g.fillText("100% FACTS", 8, 5);
+      g.lineWidth = 9; g.lineCap = "round"; g.lineJoin = "round"; g.strokeStyle = "#1f8f3a";   // a check mark
+      g.beginPath(); g.moveTo(-w / 2 + 26, 2); g.lineTo(-w / 2 + 42, 20); g.lineTo(-w / 2 + 72, -22); g.stroke();
+      g.restore();
+    };
+  })();
+
+  /* 👨‍🍳 COOKING: a chef's hat drops onto the top of the frame, gas-burner flames light round the
+     lower sides, steam curls up, and a hot "COOKING" strip lies across the camera. At the end the
+     hat flies off, the burner clicks off and the steam drifts away. */
+  (function () {
+    const e = verdict("cooking", 6, 1.1), S = e.S;
+    const steam = [];
+    e.onBegin = () => { steam.length = 0; };
+    e.step = (dt, t) => {
+      if (!e.tick(dt)) { steam.length = 0; return; }
+      if (!S.landed && S.t > 0.55) { S.landed = true; thud(0.35); }
+      const on = S.phase === "in" && S.t > 0.4;
+      if (on && Math.random() < dt * 9 * P("cooking", "amount")) {   // steam from the hat and the ring top
+        const fromHat = Math.random() < 0.5, sz = P("cooking", "size");
+        const x = fromHat ? CX + rnd(-60, 60) * sz : CX + rnd(-220, 220), y = fromHat ? CY - RING - 150 * sz : CY - RING * 0.8 + rnd(0, 40);
+        steam.push({ x, y, vx: rnd(-12, 12), vy: rnd(-55, -35), age: 0, life: rnd(1.6, 2.6), s: rnd(26, 46), ph: rnd(0, 6) });
+      }
+      for (let i = steam.length - 1; i >= 0; i--) { const q = steam[i]; q.age += dt; if (q.age > q.life) { steam.splice(i, 1); continue; } q.x += (q.vx + Math.sin(t * 1.5 + q.ph) * 14) * dt; q.y += q.vy * dt; }
+    };
+    e.busyMore = ((prev) => () => prev() || steam.length > 0)(e.busyMore);
+    function burner(t, a) {
+      // flames along the lower sides of the ring (the bottom middle is the name plate)
+      const on = S.phase === "in" ? clamp01((S.t - 0.35) / 0.25) : S.phase === "out" ? 1 - clamp01(S.r / 0.25) : 1;
+      if (on <= 0.01) return;
+      const amt = P("cooking", "amount"), n = Math.round(15 * Math.min(2, amt));
+      g.save(); g.globalCompositeOperation = "lighter"; g.globalAlpha = a * on;
+      g.lineWidth = 30; g.strokeStyle = "rgba(70,120,255,.35)"; g.shadowColor = "rgb(80,140,255)"; g.shadowBlur = 26 * k;   // the burner's glow
+      for (const [a0, a1] of [[36, 68], [112, 144]]) { g.beginPath(); g.arc(CX, CY, RING + 22, a0 * Math.PI / 180, a1 * Math.PI / 180); g.stroke(); }
+      g.shadowBlur = 0;
+      for (const [a0, a1] of [[36, 68], [112, 144]]) {
+        for (let i = 0; i < n; i++) {
+          const an = (a0 + (a1 - a0) * (i + 0.5) / n) * Math.PI / 180, nx = Math.cos(an), ny = Math.sin(an);
+          const bx = CX + nx * (RING + 16), by = CY + ny * (RING + 16);
+          const L = (40 + 14 * Math.sin(t * 17 + i * 1.7) + 8 * Math.sin(t * 29 + i)) * on * Math.sqrt(P("cooking", "size"));
+          const tx = bx + nx * L, ty = by + ny * L, px = -ny * 9, py = nx * 9;
+          const gr = g.createLinearGradient(bx, by, tx, ty);
+          gr.addColorStop(0, "rgba(60,110,255,1)"); gr.addColorStop(.45, "rgba(110,185,255,.85)"); gr.addColorStop(.8, "rgba(255,180,90,.5)"); gr.addColorStop(1, "rgba(255,170,80,0)");
+          g.fillStyle = gr; g.beginPath(); g.moveTo(bx + px, by + py); g.quadraticCurveTo(bx + nx * L * 0.5 + px * 0.9, by + ny * L * 0.5 + py * 0.9, tx, ty);
+          g.quadraticCurveTo(bx + nx * L * 0.5 - px * 0.9, by + ny * L * 0.5 - py * 0.9, bx - px, by - py); g.closePath(); g.fill();
+        }
+      }
+      g.restore();
+    }
+    function hat(t, a) {
+      const sz = P("cooking", "size");
+      let k = clamp01((S.t - 0.2) / 0.38), y = CY - RING + 18 - (1 - outBack(k, 2.2)) * 300, rot = -0.2 + Math.sin(S.t * 2.4) * 0.03, x = CX + 40, al = a * Math.min(1, k * 4);
+      if (S.phase === "out") { const u = clamp01(S.r / 0.8); y -= 420 * u - 120 * u * u; x += 260 * u; rot += u * 4; al *= 1 - clamp01((S.r - 0.5) / 0.3); }
+      if (S.t < 0.2 || al <= 0) return;
+      g.save(); g.globalAlpha = al; g.translate(x, y); g.rotate(rot); g.scale(sz, sz);
+      g.shadowColor = "rgba(0,0,0,.35)"; g.shadowBlur = 12; g.shadowOffsetY = 4;
+      const puff = new Path2D();                                 // puffy top: overlapping rounds
+      for (const [px, py, r] of [[-52, -78, 44], [0, -104, 52], [52, -78, 44], [-26, -60, 40], [26, -60, 40]]) puff.moveTo(px + r, py), puff.arc(px, py, r, 0, Math.PI * 2);
+      const hg = g.createLinearGradient(-90, -150, 80, -20); hg.addColorStop(0, "#ffffff"); hg.addColorStop(1, "#d9dee6");
+      g.fillStyle = hg; g.fill(puff); g.shadowColor = "transparent";
+      g.strokeStyle = "rgba(120,130,145,.55)"; g.lineWidth = 3; g.stroke(puff);
+      g.fill(puff);                                              // (hides the inner outlines, keeps the outer edge)
+      g.strokeStyle = "rgba(160,170,185,.5)"; g.lineWidth = 2;   // a couple of folds
+      for (const [px, py, r, a0, a1] of [[-26, -60, 40, 3.6, 4.6], [26, -60, 40, 4.8, 5.8], [0, -104, 52, 3.9, 5.5]]) { g.beginPath(); g.arc(px, py, r - 10, a0, a1); g.stroke(); }
+      g.fillStyle = "#f4f6f9"; g.strokeStyle = "rgba(120,130,145,.7)"; g.lineWidth = 2.5;   // the band
+      g.beginPath(); g.moveTo(-72, -46); g.lineTo(72, -46); g.lineTo(66, 8); g.quadraticCurveTo(0, 18, -66, 8); g.closePath(); g.fill(); g.stroke();
+      g.strokeStyle = "rgba(150,160,175,.6)"; g.lineWidth = 2;
+      for (const px of [-40, -12, 16, 44]) { g.beginPath(); g.moveTo(px, -44); g.lineTo(px - 2, 10); g.stroke(); }
+      g.restore();
+    }
+    e.draw = (t) => {
+      if (S.phase === "idle" && !steam.length) return;
+      const a = e.alpha();
+      burner(t, a);
+      g.save();
+      for (const q of steam) {                                   // steam: soft puffs that grow and fade
+        const u = q.age / q.life, s = q.s * (0.6 + u * 1.4);
+        g.globalAlpha = a * 0.32 * Math.sin(u * Math.PI);
+        g.drawImage(MIST, q.x - s, q.y - s, s * 2, s * 2);
+      }
+      g.restore();
+      if (S.phase !== "idle") hat(t, a);
+    };
+    e.drawOver = (t) => {
+      if (S.phase === "idle" || S.t < 0.1) return;
+      const a = e.alpha() * Math.min(1, P("cooking", "bright")), sz = P("cooking", "size");
+      let k = clamp01((S.t - 0.1) / 0.3), sc = 1 + 1.4 * (1 - outBack(k)), rot = (7 + 12 * (1 - k)) * Math.PI / 180, al = a * Math.min(1, k * 3), y = 612;
+      if (S.phase === "out") { const u = outCubic(S.r / 0.55); y += 40 * u; al *= 1 - u; }
+      const w = 560, h = 104;
+      g.save(); g.globalAlpha = al; g.translate(CX, y); g.rotate(rot + Math.sin(S.t * 2.3) * 0.012); g.scale(sc * sz, sc * sz);
+      const strip = stripPath(w, h, 0.6);
+      g.shadowColor = "rgba(0,0,0,.5)"; g.shadowBlur = 16 * k; g.shadowOffsetY = 6;
+      const sg = g.createLinearGradient(0, -h / 2, 0, h / 2); sg.addColorStop(0, "#ff9a3c"); sg.addColorStop(.55, "#e8481c"); sg.addColorStop(1, "#a8240e");
+      g.fillStyle = sg; g.fill(strip); g.shadowColor = "transparent";
+      g.save(); g.clip(strip); g.globalCompositeOperation = "lighter";      // heat flicker along the top edge
+      for (let i = 0; i < 12; i++) { const fx = -w / 2 + (i + 0.5) * w / 12, fl = 14 + 8 * Math.sin(t * 9 + i * 1.3);
+        const fg = g.createLinearGradient(0, -h / 2, 0, -h / 2 + fl); fg.addColorStop(0, "rgba(255,230,120,.55)"); fg.addColorStop(1, "rgba(255,230,120,0)");
+        g.fillStyle = fg; g.fillRect(fx - w / 24, -h / 2, w / 12, fl); }
+      g.restore();
+      g.strokeStyle = "#5e1306"; g.lineWidth = 4; g.stroke(strip);
+      g.font = `900 78px ${fontHead()}`; g.textAlign = "center"; g.textBaseline = "middle";
+      g.lineWidth = 8; g.strokeStyle = "#4a0f04"; g.strokeText("COOKING", 0, 5);
+      const tg = g.createLinearGradient(0, -30, 0, 34); tg.addColorStop(0, "#fff7d6"); tg.addColorStop(1, "#ffd27a");
+      g.fillStyle = tg; g.fillText("COOKING", 0, 5);
+      g.restore();
+    };
+  })();
+
+  /** The verdict strip (shared look): text on a ragged strip across the lower camera, stamped in
+      (big → normal, with a tilt) and lifted off at the end. o: { name, text, w, h, deg, y, size (font),
+      fill: [top, mid, bottom], edge, ink, inkStroke, delay, pattern(w, h, t) } */
+  function verdictStrip(e, o, t) {
+    const S = e.S;
+    if (S.phase === "idle" || S.t < (o.delay || 0.1)) return;
+    const a = e.alpha() * Math.min(1, P(o.name, "bright")), sz = P(o.name, "size");
+    const k = clamp01((S.t - (o.delay || 0.1)) / 0.3), dir = o.deg < 0 ? -1 : 1;
+    let sc = 1 + 1.4 * (1 - outBack(k)), rot = (o.deg + dir * 13 * (1 - k)) * Math.PI / 180, al = a * Math.min(1, k * 3), y = o.y || 612;
+    if (S.phase === "out") { const u = outCubic(S.r / 0.55); y -= 50 * u; sc *= 1 + 0.12 * u; al *= 1 - u; }
+    if (al <= 0.003) return;
+    const w = o.w || 600, h = o.h || 104;
+    g.save(); g.globalAlpha = al; g.translate(CX, y); g.rotate(rot + Math.sin(S.t * 2.2) * 0.01); g.scale(sc * sz, sc * sz);
+    const strip = stripPath(w, h, o.rough == null ? 0.6 : o.rough);
+    g.shadowColor = "rgba(0,0,0,.5)"; g.shadowBlur = 16 * k; g.shadowOffsetY = 6;
+    const sg = g.createLinearGradient(0, -h / 2, 0, h / 2); sg.addColorStop(0, o.fill[0]); sg.addColorStop(.5, o.fill[1]); sg.addColorStop(1, o.fill[2]);
+    g.fillStyle = sg; g.fill(strip); g.shadowColor = "transparent";
+    if (o.pattern) { g.save(); g.clip(strip); o.pattern(w, h, t); g.restore(); }
+    g.strokeStyle = o.edge; g.lineWidth = 4; g.stroke(strip);
+    g.font = `900 ${o.size || 74}px ${fontHead()}`; g.textAlign = "center"; g.textBaseline = "middle";
+    g.lineJoin = "round"; g.lineWidth = o.strokeW || 8; g.strokeStyle = o.inkStroke; g.strokeText(o.text, 0, 5);
+    g.fillStyle = typeof o.ink === "function" ? o.ink() : o.ink; g.fillText(o.text, 0, 5);
+    g.restore();
+  }
+  /** A round badge stamped onto the frame's top corner (like the 100% seal). */
+  function badgeStamp(e, x, y, R, paint) {
+    const S = e.S; if (S.phase === "idle" || S.t < 0.3) return;
+    const a = e.alpha() * Math.min(1, P(e.name, "bright")), sz = P(e.name, "size");
+    const k = clamp01((S.t - 0.3) / 0.28); let sc = 1 + 1.6 * (1 - outBack(k, 1.4)), al = a * Math.min(1, k * 3);
+    if (S.phase === "out") { const u = outCubic(S.r / 0.5); sc *= 1 + 0.4 * u; al *= 1 - u; }
+    if (al <= 0.003) return;
+    g.save(); g.globalAlpha = al; g.translate(x, y); g.rotate(0.2 * (x < CX ? 1 : -1) + (1 - k) * 0.6); g.scale(sc * sz, sc * sz);
+    g.shadowColor = "rgba(0,0,0,.45)"; g.shadowBlur = 14; g.shadowOffsetY = 5;
+    paint(R); g.restore();
+  }
+
+  /* 🧢 CAP: "THAT'S CAP". Baseball caps rain down and bounce off the frame, and a lie-detector
+     tape under the frame scribbles wildly. */
+  (function () {
+    const e = verdict("cap", 6, 0.8), S = e.S;
+    const caps = []; let next = 0, scroll = 0;
+    const COLS = [["#c8102e", "#8a0b20"], ["#1d428a", "#0f2a5e"], ["#111111", "#000000"], ["#f5f5f5", "#b8b8b8"], ["#00843d", "#005a2a"], ["#fdb927", "#c58b0a"]];
+    e.onBegin = () => { caps.length = 0; next = 0.3; scroll = 0; };
+    e.busyMore = ((prev) => () => prev() || caps.length > 0)(e.busyMore);
+    e.step = (dt) => {
+      const live = e.tick(dt);
+      if (live && S.phase === "in") {
+        next -= dt * P("cap", "amount");
+        if (next <= 0 && S.t > 0.25) { next = rnd(0.22, 0.45); const c = COLS[(Math.random() * COLS.length) | 0];
+          caps.push({ x: CX + rnd(-250, 250), y: -50, vx: rnd(-40, 40), vy: rnd(0, 80), rot: rnd(-0.6, 0.6), vr: rnd(-3, 3), c, s: rnd(0.85, 1.15) * P("cap", "size") }); }
+      }
+      if (live) scroll += dt * (60 + 140 * clamp01((S.t - 0.4) / 0.6));
+      for (let i = caps.length - 1; i >= 0; i--) {
+        const q = caps[i]; q.vy += 1100 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.rot += q.vr * dt;
+        const dx = q.x - CX, dy = q.y - CY, d = Math.hypot(dx, dy), R = RING + 26 * q.s;
+        if (d < R && dy < 60) {                               // bounce off the ring
+          const nx = dx / d, ny = dy / d; q.x = CX + nx * R; q.y = CY + ny * R;
+          const vn = q.vx * nx + q.vy * ny; if (vn < 0) { q.vx -= 1.55 * vn * nx; q.vy -= 1.55 * vn * ny; q.vx += nx * 60; q.vr += rnd(-5, 5); }
+        }
+        if (q.y > H + 80 || q.x < -100 || q.x > W + 100) caps.splice(i, 1);
+      }
+    };
+    function cap(q) {
+      g.save(); g.translate(q.x, q.y); g.rotate(q.rot); g.scale(q.s, q.s);
+      g.fillStyle = q.c[1]; g.beginPath(); g.ellipse(22, 4, 30, 8, 0.08, 0, Math.PI * 2); g.fill();            // brim
+      const cg = g.createLinearGradient(-20, -30, 20, 4); cg.addColorStop(0, q.c[0]); cg.addColorStop(1, q.c[1]);
+      g.fillStyle = cg; g.beginPath(); g.moveTo(-28, 4); g.bezierCurveTo(-28, -38, 28, -38, 28, 4); g.closePath(); g.fill();   // crown
+      g.strokeStyle = "rgba(0,0,0,.3)"; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -26); g.quadraticCurveTo(-4, -10, -2, 4); g.stroke();
+      g.fillStyle = q.c[1]; g.beginPath(); g.arc(0, -27, 4, 0, Math.PI * 2); g.fill();                                   // button
+      g.restore();
+    }
+    function polygraph(t, a) {
+      const sz = P("cap", "size");
+      let show = S.phase === "in" ? outBack(clamp01((S.t - 0.2) / 0.45)) : S.phase === "out" ? 1 - inQuad(S.r / 0.6) : 1;
+      if (show <= 0) return;
+      const w = 360 * sz, h = 92 * sz, x0 = CX - w / 2, y0 = 880 + (1 - show) * 260;
+      g.save(); g.globalAlpha = a;
+      g.shadowColor = "rgba(0,0,0,.4)"; g.shadowBlur = 10; g.shadowOffsetY = 4;
+      g.fillStyle = "#f6f3e8"; g.fillRect(x0, y0, w, h); g.shadowColor = "transparent";
+      g.save(); g.beginPath(); g.rect(x0, y0, w, h); g.clip();
+      g.strokeStyle = "rgba(60,140,200,.25)"; g.lineWidth = 1;          // grid paper, scrolling left
+      const step = 18 * sz, off = (scroll * sz) % step;
+      for (let x = x0 - off; x < x0 + w; x += step) { g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y0 + h); g.stroke(); }
+      for (let y = y0 + 9; y < y0 + h; y += step) { g.beginPath(); g.moveTo(x0, y); g.lineTo(x0 + w, y); g.stroke(); }
+      const penX = x0 + w * 0.82, mid = y0 + h / 2, wild = clamp01((S.t - 0.5) / 0.4);
+      const yAt = (u) => { const s = u / sz; return mid + (Math.sin(s * 0.09) * 4 + (Math.sin(s * 0.53) * 0.6 + Math.sin(s * 1.37 + 1) * 0.4) * 34 * wild) * sz; };
+      g.strokeStyle = "#d0152b"; g.lineWidth = 2.6; g.beginPath();
+      for (let x = x0; x <= penX; x += 3) { const u = scroll * sz - (penX - x); const yy = Math.max(y0 + 5, Math.min(y0 + h - 5, yAt(u))); x === x0 ? g.moveTo(x, yy) : g.lineTo(x, yy); }
+      g.stroke(); g.restore();
+      const py = Math.max(y0 + 5, Math.min(y0 + h - 5, yAt(scroll * sz)));                  // the pen arm
+      g.strokeStyle = "#444"; g.lineWidth = 4 * sz; g.beginPath(); g.moveTo(x0 + w + 20 * sz, y0 - 14 * sz); g.lineTo(penX, py); g.stroke();
+      g.fillStyle = "#d0152b"; g.beginPath(); g.arc(penX, py, 4 * sz, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "rgba(0,0,0,.35)"; g.lineWidth = 2; g.strokeRect(x0, y0, w, h);
+      g.font = `800 ${13 * sz}px ${fontHead()}`; g.fillStyle = "#555"; g.textAlign = "left"; g.textBaseline = "top"; g.fillText("LIE DETECTOR", x0 + 8 * sz, y0 + 5 * sz);
+      g.restore();
+    }
+    e.draw = (t) => {
+      if (S.phase === "idle" && !caps.length) return;
+      const a = e.alpha();
+      if (S.phase !== "idle") polygraph(t, a);
+      g.save(); g.globalAlpha = a; for (const q of caps) cap(q); g.restore();
+    };
+    e.drawOver = (t) => verdictStrip(e, { name: "cap", text: "THAT'S CAP", w: 620, deg: -7,
+      fill: ["#2c4f96", "#1d3a75", "#11244f"], edge: "#c8102e", ink: "#ffffff", inkStroke: "#c8102e" }, t);
+  })();
+
+  /* 🧱 BRICKED: a brick drops onto the frame with a CLANK, the ring cracks where it hit, dust
+     and rubble fall, and the brick tumbles away. */
+  (function () {
+    const e = verdict("bricked", 5, 0.7), S = e.S;
+    const HIT = -58 * Math.PI / 180, IX = CX + Math.cos(HIT) * (RING + 8), IY = CY + Math.sin(HIT) * (RING + 8);
+    let brick = null, cracks = [], bits = [], hit = false;
+    e.onBegin = () => {
+      brick = { x: IX + 40, y: -90, vx: -50, vy: 0, rot: 0.5, vr: 1.2 }; hit = false; bits = []; cracks = [];
+      const n = Math.round(5 + 4 * Math.min(2, P("bricked", "amount")));
+      for (let i = 0; i < n; i++) {                           // cracks wander along the ring band
+        let an = HIT, r = RING + rnd(-6, 6); const dir = i % 2 ? 1 : -1, pts = [[IX, IY]], len = rnd(0.12, 0.42);
+        for (let s = 1; s <= 7; s++) { an += dir * len / 7; r = Math.max(HOLE + 2, Math.min(RING + 18, r + rnd(-9, 9))); pts.push([CX + Math.cos(an) * r, CY + Math.sin(an) * r]); }
+        cracks.push(pts);
+      }
+    };
+    e.busyMore = ((prev) => () => prev() || bits.length > 0)(e.busyMore);
+    e.step = (dt) => {
+      const live = e.tick(dt);
+      if (brick && live) {
+        if (!hit && S.t >= 0.42) { hit = true; brick.x = IX + 20; brick.y = IY - 40; brick.vx = rnd(160, 220); brick.vy = -380; brick.vr = 5; thud(0.9); flash = Math.max(flash, 0.35);
+          for (let i = 0; i < 26 * P("bricked", "amount"); i++) bits.push({ x: IX + rnd(-14, 14), y: IY + rnd(-8, 8), vx: rnd(-180, 180), vy: rnd(-320, -60), age: 0, life: rnd(0.8, 1.6), s: rnd(3, 8), dust: Math.random() < 0.45 }); }
+        if (!hit) { const u = clamp01(S.t / 0.42); brick.y = -90 + (IY - 40 + 90) * u * u; brick.x = IX + 40 - 20 * u; brick.rot = 0.5 - 0.4 * u; }
+        else { brick.vy += 1300 * dt; brick.x += brick.vx * dt; brick.y += brick.vy * dt; brick.rot += brick.vr * dt; if (brick.y > H + 100) brick = null; }
+      }
+      for (let i = bits.length - 1; i >= 0; i--) { const q = bits[i]; q.age += dt; if (q.age > q.life) { bits.splice(i, 1); continue; }
+        if (q.dust) { q.vx *= 1 - 2 * dt; q.vy = q.vy * (1 - 2 * dt) - 20 * dt; } else q.vy += 1200 * dt; q.x += q.vx * dt; q.y += q.vy * dt; }
+    };
+    function drawBrick(b) {
+      const sz = P("bricked", "size");
+      g.save(); g.translate(b.x, b.y); g.rotate(b.rot); g.scale(sz, sz);
+      const bg = g.createLinearGradient(0, -24, 0, 24); bg.addColorStop(0, "#c4553a"); bg.addColorStop(1, "#7d2a1a");
+      g.shadowColor = "rgba(0,0,0,.4)"; g.shadowBlur = 10; g.shadowOffsetY = 4;
+      g.fillStyle = bg; g.fillRect(-50, -24, 100, 48); g.shadowColor = "transparent";
+      g.strokeStyle = "#5a1d10"; g.lineWidth = 3; g.strokeRect(-50, -24, 100, 48);
+      g.fillStyle = "rgba(60,20,10,.55)"; for (const px of [-26, 0, 26]) { g.beginPath(); g.ellipse(px, 0, 8, 6, 0, 0, Math.PI * 2); g.fill(); }
+      g.fillStyle = "rgba(255,255,255,.12)"; g.fillRect(-46, -20, 92, 7);
+      g.restore();
+    }
+    e.draw = (t) => {
+      if (S.phase === "idle" && !bits.length) return;
+      const a = e.alpha();
+      g.save(); g.globalAlpha = a;
+      if (hit && S.phase !== "idle") {                       // cracks in the ring
+        const ca = S.phase === "out" ? 1 - clamp01(S.r / 0.5) : clamp01((S.t - 0.42) / 0.08);
+        g.globalAlpha = a * ca; g.lineJoin = "round"; g.lineCap = "round";
+        for (const pts of cracks) {
+          g.strokeStyle = "rgba(20,10,10,.85)"; g.lineWidth = 4; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.stroke();
+          g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 1.2; g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x + 1.5, y + 1.5) : g.moveTo(x + 1.5, y + 1.5)); g.stroke();
+        }
+        if (S.t < 1.2) {                                      // CLANK!
+          const u = clamp01((S.t - 0.42) / 0.7); g.globalAlpha = a * (1 - u);
+          g.save(); g.translate(IX + 90, IY - 70 - 30 * u); g.rotate(0.25); g.scale(0.8 + 0.4 * outBack(u * 2), 0.8 + 0.4 * outBack(u * 2));
+          g.font = `900 46px ${fontHead()}`; g.textAlign = "center"; g.lineWidth = 7; g.strokeStyle = "#2a0c05"; g.strokeText("CLANK!", 0, 0); g.fillStyle = "#ffd36b"; g.fillText("CLANK!", 0, 0); g.restore();
+        }
+        g.globalAlpha = a;
+      }
+      for (const q of bits) {
+        const u = q.age / q.life;
+        if (q.dust) { const s = q.s * 4 * (1 + u * 2); g.globalAlpha = a * 0.5 * (1 - u); g.drawImage(SMOKE_LIGHT, q.x - s, q.y - s, s * 2, s * 2); }
+        else { g.globalAlpha = a * (1 - u * u); g.fillStyle = "#8f3a24"; g.fillRect(q.x - q.s / 2, q.y - q.s / 2, q.s, q.s * 0.8); }
+      }
+      g.globalAlpha = a;
+      if (brick && S.phase !== "idle") drawBrick(brick);
+      g.restore();
+    };
+    e.drawOver = (t) => verdictStrip(e, { name: "bricked", text: "BRICKED", w: 520, deg: 6, delay: 0.45,
+      fill: ["#c4553a", "#a3412a", "#7d2a1a"], edge: "#4a160b", ink: "#fff1d6", inkStroke: "#3b1006",
+      pattern: (w, h) => { g.strokeStyle = "rgba(240,220,200,.35)"; g.lineWidth = 3;
+        for (let r = 0; r < 4; r++) { const y = -h / 2 + r * h / 4; g.beginPath(); g.moveTo(-w / 2, y); g.lineTo(w / 2, y); g.stroke();
+          for (let x = -w / 2 + (r % 2 ? 0 : 35); x < w / 2; x += 70) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + h / 4); g.stroke(); } } } }, t);
+  })();
+
+  /* 🌬️ AIR BALL: a basketball sails clean over the frame, missing everything, then a tumbleweed
+     rolls past underneath. */
+  (function () {
+    const e = verdict("airball", 5.5, 0.7), S = e.S;
+    let weed = [];
+    e.onBegin = () => { weed = []; for (let i = 0; i < 26; i++) weed.push([rnd(0, 6.3), rnd(0.8, 2.6), rnd(12, 34), rnd(-1, 1)]); };
+    e.step = (dt) => { e.tick(dt); };
+    function ball(x, y, r, rot) {
+      g.save(); g.translate(x, y); g.rotate(rot);
+      const bg = g.createRadialGradient(-r * 0.35, -r * 0.35, r * 0.1, 0, 0, r); bg.addColorStop(0, "#f39a4a"); bg.addColorStop(1, "#b8520f");
+      g.fillStyle = bg; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = "#2a1205"; g.lineWidth = r * 0.07;
+      g.beginPath(); g.moveTo(-r, 0); g.lineTo(r, 0); g.stroke(); g.beginPath(); g.moveTo(0, -r); g.lineTo(0, r); g.stroke();
+      g.beginPath(); g.arc(-r * 1.25, 0, r * 0.95, -0.85, 0.85); g.stroke(); g.beginPath(); g.arc(r * 1.25, 0, r * 0.95, Math.PI - 0.85, Math.PI + 0.85); g.stroke();
+      g.restore();
+    }
+    e.draw = (t) => {
+      if (S.phase === "idle") return;
+      const a = e.alpha(), sz = P("airball", "size"), sp = P("airball", "amount");
+      g.save(); g.globalAlpha = a;
+      const u = clamp01((S.t - 0.05) / 1.15);                // the ball: an arc high over the frame
+      if (u > 0 && u < 1) {
+        const x = -70 + 1140 * u, y = 380 - 4 * 300 * u * (1 - u) - 40 * u;
+        g.strokeStyle = "rgba(255,255,255,.35)"; g.lineWidth = 3; g.lineCap = "round";           // whoosh lines
+        for (let i = 1; i <= 3; i++) { const uu = Math.max(0, u - i * 0.035); const xx = -70 + 1140 * uu, yy = 380 - 1200 * uu * (1 - uu) - 40 * uu; g.beginPath(); g.moveTo(xx, yy + (i - 2) * 12); g.lineTo(xx - 50, yy + (i - 2) * 12 + 10); g.stroke(); }
+        ball(x, y, 40 * sz, u * 9);
+      }
+      const v = clamp01((S.t - 1.0) / (3.2 / sp));            // the tumbleweed: rolls left → right below the frame
+      if (v > 0 && v < 1) {
+        const r = 46 * sz, x = -80 + 1160 * v, y = 1040 - Math.abs(Math.sin(v * Math.PI * 5)) * 40 - r * 0.2, rot = v * 14;
+        g.save(); g.translate(x, y); g.rotate(rot); g.strokeStyle = "#8a6a3a"; g.lineWidth = 2.2;
+        for (const [a0, len, rr, off] of weed) { g.beginPath(); g.arc(off * r * 0.3, 0, rr * r / 34, a0, a0 + len); g.stroke(); }
+        g.strokeStyle = "#5e4524"; g.lineWidth = 1.6; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke();
+        g.restore();
+        g.fillStyle = "rgba(180,150,100,.25)"; for (let i = 1; i < 4; i++) { const s = 10 * i; g.drawImage(SMOKE_LIGHT, x - 30 * i - s, 1070 - s, s * 2, s * 2); }
+      }
+      g.restore();
+    };
+    e.drawOver = (t) => verdictStrip(e, { name: "airball", text: "AIR BALL", w: 540, deg: -5, delay: 0.9,
+      fill: ["#f2f2f2", "#d6d6d6", "#a9a9a9"], edge: "#555", ink: "#222", inkStroke: "#ffffff", strokeW: 6 }, t);
+  })();
+
+  /* 🟥 TECHNICAL FOUL: the ring flashes referee red, a striped "T" badge stamps onto the frame's
+     top-left, and a "TECHNICAL FOUL" strip lands with a jolt. */
+  (function () {
+    const e = verdict("technical", 5, 0.7), S = e.S;
+    e.step = (dt) => { if (e.tick(dt) && !S.landed && S.t > 0.4) { S.landed = true; thud(0.7); } };
+    e.draw = (t) => {
+      if (S.phase === "idle") return;
+      const a = e.alpha(), on = S.phase === "out" ? 1 - clamp01(S.r / 0.5) : clamp01(S.t / 0.15);
+      const pulse = 0.5 + 0.5 * Math.abs(Math.sin(t * 6)), burst = Math.max(0, 1 - S.t / 0.5);
+      g.save(); g.globalCompositeOperation = "lighter"; g.globalAlpha = a * on * Math.min(1, 0.35 + 0.45 * pulse + burst) * Math.min(1, P("technical", "bright"));
+      g.strokeStyle = "rgb(255,40,40)"; g.lineWidth = 30 + 30 * burst; g.shadowColor = "rgb(255,30,30)"; g.shadowBlur = (30 + 20 * glowK()) * k; g.stroke(ringPath);
+      g.restore();
+      badgeStamp(e, CX - 245, CY - 250, 80, (R) => {
+        g.save(); g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.clip();
+        g.fillStyle = "#fff"; g.fillRect(-R, -R, R * 2, R * 2); g.fillStyle = "#111";
+        for (let x = -R; x < R; x += 24) g.fillRect(x, -R, 12, R * 2);
+        g.restore();
+        g.lineWidth = 6; g.strokeStyle = "#111"; g.beginPath(); g.arc(0, 0, R, 0, Math.PI * 2); g.stroke();
+        g.fillStyle = "#e01b24"; g.beginPath(); g.arc(0, 0, R * 0.72, 0, Math.PI * 2); g.fill();
+        g.font = `900 ${R * 1.15}px ${fontHead()}`; g.textAlign = "center"; g.textBaseline = "middle";
+        g.lineWidth = 6; g.strokeStyle = "#5a0005"; g.strokeText("T", 0, 6); g.fillStyle = "#fff"; g.fillText("T", 0, 6);
+      });
+    };
+    e.drawOver = (t) => verdictStrip(e, { name: "technical", text: "TECHNICAL FOUL", w: 720, deg: -6, size: 66, delay: 0.25,
+      fill: ["#2a2a2a", "#161616", "#050505"], edge: "#e01b24", ink: "#ffffff", inkStroke: "#e01b24", strokeW: 7,
+      pattern: (w, h) => { g.fillStyle = "rgba(255,255,255,.07)"; for (let x = -w / 2; x < w / 2; x += 36) g.fillRect(x, -h / 2, 18, h); } }, t);
+  })();
+
+  /* 💥 POSTERIZED: the picture shatters like a backboard (white cracks from the impact), then the
+     shards drop away, and a "POSTERIZED" strip slams on. The camera's clear again once they've fallen. */
+  (function () {
+    const e = verdict("posterized", 5, 0.7), S = e.S;
+    let shards = [], P0 = [0, 0];
+    function rayOut(ax, ay, ang, R) {                         // where a ray from (ax, ay) leaves the circle of radius R
+      const dx = Math.cos(ang), dy = Math.sin(ang), fx = ax - CX, fy = ay - CY;
+      const b = fx * dx + fy * dy, c = fx * fx + fy * fy - R * R, tt = -b + Math.sqrt(Math.max(0, b * b - c));
+      return [ax + dx * tt, ay + dy * tt, tt];
+    }
+    e.onBegin = () => {
+      P0 = [CX + rnd(-50, 60), CY + rnd(-70, 10)]; shards = [];
+      const n = Math.round(9 + 4 * Math.min(2, P("posterized", "amount"))), angs = [];
+      let a0 = rnd(0, 1); for (let i = 0; i < n; i++) angs.push(a0 + (i + rnd(-0.3, 0.3)) / n * Math.PI * 2);
+      const R = HOLE + 8, fr = [0, 0.22, 0.5, 0.78, 1];
+      for (let i = 0; i < n; i++) {
+        const A = angs[i], B = angs[(i + 1) % n] + (i === n - 1 ? Math.PI * 2 : 0);
+        const ea = rayOut(P0[0], P0[1], A, R), eb = rayOut(P0[0], P0[1], B, R);
+        for (let j = 0; j < fr.length - 1; j++) {
+          const pt = (e2, f, an) => f >= 1 ? [e2[0], e2[1]] : [P0[0] + Math.cos(an) * e2[2] * f + rnd(-6, 6) * (f > 0), P0[1] + Math.sin(an) * e2[2] * f + rnd(-6, 6) * (f > 0)];
+          const poly = [pt(ea, fr[j], A), pt(eb, fr[j], B), pt(eb, fr[j + 1], B), pt(ea, fr[j + 1], A)];
+          const cx = poly.reduce((s, p) => s + p[0], 0) / 4, cy = poly.reduce((s, p) => s + p[1], 0) / 4;
+          shards.push({ poly: poly.map(([x, y]) => [x - cx, y - cy]), x: cx, y: cy, vx: (cx - P0[0]) * rnd(0.6, 1.4), vy: rnd(-120, 0), rot: 0, vr: rnd(-4, 4),
+            delay: 1.15 + Math.hypot(cx - P0[0], cy - P0[1]) / 900 + rnd(0, 0.12), shine: Math.random() });
+        }
+      }
+    };
+    e.busyMore = ((prev) => () => prev() || shards.some((s) => s.y < H + 80 && s.falling))(e.busyMore);
+    e.step = (dt) => {
+      const live = e.tick(dt);
+      if (live && !S.landed && S.t > 0.28) { S.landed = true; thud(1.1); flash = Math.max(flash, 0.8); }
+      for (const s of shards) {
+        if (!s.falling && live && S.t > s.delay) s.falling = true;
+        if (s.falling) { s.vy += 1500 * dt; s.x += s.vx * dt; s.y += s.vy * dt; s.rot += s.vr * dt; }
+      }
+    };
+    e.draw = () => {};
+    e.drawOver = (t) => {
+      if (S.phase !== "idle" && S.t > 0.28) {
+        const a = e.alpha() * Math.min(1, P("posterized", "bright"));
+        g.save(); g.globalAlpha = a; g.lineJoin = "round";
+        for (const s of shards) {
+          if (s.y > H + 80) continue;
+          const fall = s.falling ? clamp01((s.y - 300) / 500) : 0;
+          g.save(); g.translate(s.x, s.y); g.rotate(s.rot); g.globalAlpha = a * (1 - fall);
+          g.beginPath(); s.poly.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); g.closePath();
+          g.fillStyle = `rgba(220,240,255,${s.falling ? 0.22 : 0.08 + 0.1 * s.shine})`; g.fill();
+          g.strokeStyle = "rgba(255,255,255,.9)"; g.lineWidth = s.falling ? 2 : 2.6; g.stroke();
+          g.strokeStyle = "rgba(255,255,255,.45)"; g.lineWidth = 1; g.beginPath(); g.moveTo(s.poly[0][0] * 0.6, s.poly[0][1] * 0.6); g.lineTo(s.poly[2][0] * 0.4, s.poly[2][1] * 0.4); g.stroke();
+          g.restore();
+        }
+        if (S.t < 1.2) {                                     // the impact star
+          g.globalAlpha = a * (1 - clamp01((S.t - 0.28) / 0.9)); g.fillStyle = "#fff";
+          g.beginPath(); for (let i = 0; i < 16; i++) { const an = i / 16 * Math.PI * 2, r = i % 2 ? 10 : 34; g.lineTo(P0[0] + Math.cos(an) * r, P0[1] + Math.sin(an) * r); } g.closePath(); g.fill();
+        }
+        g.restore();
+      }
+      verdictStrip(e, { name: "posterized", text: "POSTERIZED", w: 640, deg: 7, delay: 0.5,
+        fill: ["#3a1d7a", "#25104f", "#120830"], edge: "#ffe14d", ink: "#ffe14d", inkStroke: "#000000" }, t);
+    };
+  })();
+
+  /* 🔥 ON FIRE: arcade style. The frame catches fire (the Fire effect), a flaming basketball laps
+     the ring, and an "ON FIRE!" strip lands. */
+  (function () {
+    const e = verdict("onfire", 6, 0.7), S = e.S;
+    const trail = [];
+    e.onBegin = () => { trail.length = 0; fx.fire.start(0); };
+    const rel = e.onRelease; e.onRelease = (fast) => { rel(fast); if (fx.fire.on) fx.fire.release(fast); };
+    e.busyMore = ((prev) => () => prev() || trail.length > 0)(e.busyMore);
+    e.step = (dt) => {
+      const live = e.tick(dt);
+      if (live && S.phase === "in") {
+        const an = -Math.PI / 2 + S.t * Math.PI * 2 / 1.6, r = RING + 48;
+        trail.unshift({ x: CX + Math.cos(an) * r, y: CY + Math.sin(an) * r, an, age: 0 });
+      }
+      for (let i = trail.length - 1; i >= 0; i--) { trail[i].age += dt; if (trail[i].age > 0.35) trail.splice(i, 1); }
+    };
+    e.draw = (t) => {
+      if (!trail.length) return;
+      const a = e.alpha(), sz = P("onfire", "size");
+      g.save(); g.globalCompositeOperation = "lighter";
+      for (const q of trail) { const u = q.age / 0.35, s = (30 - 18 * u) * sz; g.globalAlpha = a * (1 - u) * 0.8; g.drawImage(FIRE[Math.min(4, (u * 5) | 0)], q.x - s, q.y - s, s * 2, s * 2); }
+      g.restore();
+      const h0 = trail[0];
+      if (S.phase === "in") {
+        g.save(); g.globalAlpha = a; g.translate(h0.x, h0.y); g.rotate(t * 8); const r = 26 * sz;
+        const bg = g.createRadialGradient(-r * 0.3, -r * 0.3, 2, 0, 0, r); bg.addColorStop(0, "#ffb15c"); bg.addColorStop(1, "#c4510c");
+        g.fillStyle = bg; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+        g.strokeStyle = "#2a1205"; g.lineWidth = 2; g.beginPath(); g.moveTo(-r, 0); g.lineTo(r, 0); g.moveTo(0, -r); g.lineTo(0, r); g.stroke();
+        g.restore();
+      }
+    };
+    e.drawOver = (t) => verdictStrip(e, { name: "onfire", text: "ON FIRE!", w: 560, deg: -8, size: 86, delay: 0.3,
+      fill: ["#173a8c", "#0f2766", "#081640"], edge: "#ff8a00",
+      ink: () => { const tg = g.createLinearGradient(0, -36, 0, 40); tg.addColorStop(0, "#fff36b"); tg.addColorStop(.5, "#ffb000"); tg.addColorStop(1, "#ff4d00"); return tg; },
+      inkStroke: "#2a0700", strokeW: 10 }, t);
+  })();
+
+  /* 🤡 CLOWN TAKE: a red clown nose boings onto the middle of the picture (honk!), rainbow wig
+     tufts pop out of the frame's top corners, confetti bursts, and a polka-dot "CLOWN TAKE" strip. */
+  (function () {
+    const e = verdict("clown", 6, 0.7), S = e.S;
+    const RAIN = ["#e40303", "#ff8c00", "#ffed00", "#008026", "#24408e", "#732982"];
+    let tufts = [], conf = [], honks = [];
+    e.onBegin = () => {
+      tufts = []; for (const side of [-1, 1]) for (let i = 0; i < 18; i++) {
+        const an = (side < 0 ? 215 : 325) * Math.PI / 180 + rnd(-0.32, 0.32), r = RING + rnd(10, 70);
+        tufts.push({ x: CX + Math.cos(an) * r, y: CY + Math.sin(an) * r, r: rnd(18, 30), c: RAIN[i % 6], d: rnd(0.25, 0.6) });
+      }
+      conf = []; honks = [];
+    };
+    e.busyMore = ((prev) => () => prev() || conf.length > 0)(e.busyMore);
+    e.step = (dt, t) => {
+      const live = e.tick(dt);
+      if (live && !S.landed && S.t > 0.35) { S.landed = true;
+        for (let i = 0; i < 70 * P("clown", "amount"); i++) { const an = rnd(0, Math.PI * 2), sp = rnd(250, 600);
+          conf.push({ x: CX, y: CY, vx: Math.cos(an) * sp, vy: Math.sin(an) * sp - 200, c: RAIN[i % 6], age: 0, life: rnd(1.6, 2.6), r: rnd(0, 6), vr: rnd(-9, 9), round: Math.random() < 0.5 }); } }
+      if (live && S.phase === "in" && S.t > 0.6 && Math.floor((S.t - 0.6) / 1.4) >= honks.length) honks.push(S.t);
+      for (let i = conf.length - 1; i >= 0; i--) { const q = conf[i]; q.age += dt; if (q.age > q.life) { conf.splice(i, 1); continue; }
+        q.vy += 600 * dt; q.vx *= 1 - 1.8 * dt; q.vy *= 1 - 1.6 * dt; q.x += q.vx * dt; q.y += q.vy * dt; q.r += q.vr * dt; }
+    };
+    e.draw = (t) => {
+      const a = e.alpha(), sz = P("clown", "size");
+      if (S.phase !== "idle") {                               // wig tufts
+        g.save();
+        for (const q of tufts) {
+          let s = outBack(clamp01((S.t - q.d) / 0.35), 2.4); if (S.phase === "out") s *= 1 - clamp01(S.r / 0.5);
+          if (s <= 0) continue; g.globalAlpha = a; g.fillStyle = q.c; g.beginPath(); g.arc(q.x, q.y, q.r * s * sz, 0, Math.PI * 2); g.fill();
+          g.fillStyle = "rgba(255,255,255,.25)"; g.beginPath(); g.arc(q.x - q.r * 0.3 * s, q.y - q.r * 0.3 * s, q.r * 0.35 * s * sz, 0, Math.PI * 2); g.fill();
+        }
+        g.restore();
+      }
+      g.save();
+      for (const q of conf) { const u = q.age / q.life; g.globalAlpha = a * (u > 0.7 ? (1 - u) / 0.3 : 1); g.fillStyle = q.c;
+        g.save(); g.translate(q.x, q.y); g.rotate(q.r); if (q.round) { g.beginPath(); g.arc(0, 0, 5, 0, Math.PI * 2); g.fill(); } else g.fillRect(-6, -3.5, 12, 7); g.restore(); }
+      g.restore();
+    };
+    e.drawOver = (t) => {
+      if (S.phase !== "idle" && S.t > 0.3) {                   // the nose, on the picture (that's the joke)
+        const a = e.alpha() * Math.min(1, P("clown", "bright")), sz = P("clown", "size");
+        let s = outBack(clamp01((S.t - 0.3) / 0.35), 2.6); if (S.phase === "out") s *= 1 - outCubic(S.r / 0.4);
+        const hk = honks.length ? clamp01((S.t - honks[honks.length - 1]) / 0.35) : 1, squash = 1 - 0.18 * Math.sin(hk * Math.PI);
+        const r = 44 * s * sz, nx = CX, ny = CY + 20;
+        if (r > 1) {
+          g.save(); g.globalAlpha = a; g.translate(nx, ny); g.scale(1 / squash, squash);
+          g.shadowColor = "rgba(0,0,0,.4)"; g.shadowBlur = 16; g.shadowOffsetY = 6;
+          const ng = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r); ng.addColorStop(0, "#ff6b6b"); ng.addColorStop(.6, "#e0141e"); ng.addColorStop(1, "#8c0008");
+          g.fillStyle = ng; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill(); g.shadowColor = "transparent";
+          g.fillStyle = "rgba(255,255,255,.75)"; g.beginPath(); g.ellipse(-r * 0.35, -r * 0.42, r * 0.22, r * 0.13, -0.6, 0, Math.PI * 2); g.fill();
+          g.restore();
+          if (hk < 1 && honks.length) {                        // HONK!
+            g.save(); g.globalAlpha = a * (1 - hk); g.translate(nx + 120 * sz, ny - 80 * sz - 20 * hk); g.rotate(-0.2); const hs = 0.8 + 0.4 * outBack(hk * 2);
+            g.scale(hs * sz, hs * sz); g.font = `900 40px ${fontHead()}`; g.textAlign = "center"; g.lineWidth = 7; g.strokeStyle = "#5a0005"; g.strokeText("HONK!", 0, 0);
+            g.fillStyle = "#ffed00"; g.fillText("HONK!", 0, 0); g.restore();
+          }
+        }
+      }
+      verdictStrip(e, { name: "clown", text: "CLOWN TAKE", w: 620, deg: -6, delay: 0.45,
+        fill: ["#ffffff", "#f3f3f3", "#dedede"], edge: "#e40303", ink: "#e40303", inkStroke: "#1d1d6b", strokeW: 8,
+        pattern: (w, h) => { let i = 0; for (let y = -h / 2 + 12; y < h / 2; y += 26) for (let x = -w / 2 + 14 + (i % 2) * 13; x < w / 2; x += 26) { g.fillStyle = RAIN[(i++ * 7) % 6]; g.globalAlpha *= 1; g.beginPath(); g.arc(x, y, 6, 0, Math.PI * 2); g.fill(); } } }, t);
+    };
+  })();
+
   /* 💥 SHAKE: the frame (and anything burning on it) jolts, settling in about half a second */
   const SHAKE_MS = 650;
   function shakeKeys(amp) {
@@ -447,22 +1284,101 @@
     return keys;
   }
   function shake() {
-    const amp = 9 * Math.min(innerWidth / W, innerHeight / H);
-    try { document.body.animate(shakeKeys(amp), { duration: SHAKE_MS, easing: "linear" }); } catch (e) {}
-    AWYM.send({ to: "frame", id, cmd: "shake", ms: SHAKE_MS });
+    const str = P("shake", "strength"), ms = Math.round(SHAKE_MS * P("shake", "length"));
+    const amp = 9 * str * Math.min(innerWidth / W, innerHeight / H);
+    try { document.body.animate(shakeKeys(amp), { duration: ms, easing: "linear" }); } catch (e) {}
+    AWYM.send({ to: "frame", id, cmd: "shake", ms, amp: str });
   }
+
+  /* ---------------- 🎙 speaking light (Show Runner → Talk time) ----------------
+     While this seat is talking: a soft halo round the ring that swells with the voice, and
+     rings that ripple outward and fade. After they stop, the halo lingers and fades out.
+     Not one of the effects above: it follows the frame's "talk" messages, so it's on whenever
+     the speaking light is. ?talk=0 turns it off for this layer. */
+  const talkFx = (function () {
+    const enabled = AWYM.param("talk") !== "0";
+    const T = { on: false, lvl: 0, halo: 0, next: 0, rings: [], off: 0, plate: null };
+    const R0 = RING + 22, SPREAD = 85, LIFE0 = 1.35;       // ripples start just outside the ring
+    function set(on, lvl) {
+      if (!enabled) return;
+      const was = T.on;
+      T.on = !!on; if (isFinite(lvl)) T.lvl = Math.max(0, Math.min(1, lvl)); else if (on) T.lvl = Math.max(T.lvl, 0.6);
+      clearTimeout(T.off); if (T.on) T.off = setTimeout(() => set(false), 3000);   // the dock went quiet
+      if (T.on && !was) T.next = Math.min(T.next, 0.05);    // first ripple comes straight away
+      wake();
+    }
+    function step(dt) {
+      const target = T.on ? 0.45 + 0.55 * T.lvl : 0;
+      // rises fast, fades slowly (about 1.5 s, longer or shorter with Fade time) once they stop
+      T.halo += (target - T.halo) * (1 - Math.pow(target > T.halo ? 0.0005 : Math.pow(0.12, 1 / P("talk", "fade")), dt));
+      if (T.on) {
+        T.next -= dt;
+        if (T.next <= 0) {                               // louder voice → stronger, more frequent ripples
+          T.rings.push({ age: 0, s: 0.45 + 0.55 * T.lvl, life: LIFE0 * P("talk", "fade") });
+          T.next = (0.62 - 0.3 * T.lvl) / P("talk", "rate");
+        }
+      }
+      for (let i = T.rings.length - 1; i >= 0; i--) { const q = T.rings[i]; q.age += dt; if (q.age >= q.life) T.rings.splice(i, 1); }
+    }
+    function draw() {
+      if (T.halo < 0.004 && !T.rings.length) return;
+      const col = themeColor("--light", "#ffffff"), gk = glowK(), br = P("talk", "bright"), hs = P("talk", "halo"), spread = SPREAD * P("talk", "spread");
+      g.save();
+      // only outside the frame's own ring, so the frame itself is never washed out
+      const out = new Path2D(); out.rect(0, 0, W, H); out.addPath(new Path2D(outline(RING + 15)));
+      g.clip(out, "evenodd");
+      if (T.plate) {                                     // ...and not over the name plate (frame design px → this layer: +200)
+        const [x, y, w, h] = T.plate, pad = 10, cut = new Path2D();
+        cut.rect(0, 0, W, H); cut.rect(x + CX - 300 - pad, y + CY - 300 - pad, w + pad * 2, h + pad * 2);
+        g.clip(cut, "evenodd");
+      }
+      g.globalCompositeOperation = "lighter"; g.strokeStyle = col; g.shadowColor = col;
+      if (T.halo > 0.004) {                              // the halo: soft, breathing with the voice
+        g.globalAlpha = Math.min(1, 0.38 * T.halo * br); g.lineWidth = (14 + 16 * T.halo * gk) * hs; g.shadowBlur = (18 + 26 * T.halo * gk) * k * Math.sqrt(hs);
+        g.stroke(new Path2D(outline(RING + 15 + (7 + 6 * T.halo) * hs)));
+      }
+      for (const q of T.rings) {                         // ripples: grow outward, thin out and fade
+        const u = Math.min(1, q.age / q.life), e = 1 - Math.pow(1 - u, 2.2);
+        g.globalAlpha = Math.min(1, q.s * Math.pow(1 - u, 1.6) * 0.6 * br);
+        g.lineWidth = (9 - 7 * u) * (0.7 + 0.5 * gk); g.shadowBlur = (8 + 22 * u) * k * gk;
+        g.stroke(new Path2D(outline(R0 + spread * e * (0.75 + 0.35 * q.s))));
+      }
+      g.restore();
+    }
+    const busy = () => T.on || T.halo > 0.004 || T.rings.length > 0;
+    return { set, step, draw, busy, plate: (b) => { T.plate = Array.isArray(b) && b.length === 4 ? b.map(Number) : null; }, clear: () => { T.on = false; T.halo = 0; T.rings.length = 0; clearTimeout(T.off); }, state: () => ({ on: T.on, halo: T.halo, rings: T.rings.length }) };
+  })();
+
+  const VERDICTS = ["trash", "facts", "cooking", "cap", "bricked", "airball", "technical", "posterized", "onfire", "clown"];
 
   /* ---------------- the loop (runs only while something is playing) ---------------- */
   let flash = 0, raf = 0, last = 0;
-  const busy = () => flash > 0.01 || Object.values(fx).some((e) => e.busy());
+  const busy = () => flash > 0.01 || talkFx.busy() || Object.values(fx).some((e) => e.busy());
+  /** Draw one effect, through a side layer when its Brightness isn't 100%. */
+  let lay = null, lg = null;
+  function drawFx(e, t) {
+    const b = P(e.name, "bright");
+    if (Math.abs(b - 1) < 0.02 || !e.busy()) { e.draw(t); return; }
+    if (!lay) { lay = document.createElement("canvas"); lg = lay.getContext("2d"); }
+    if (lay.width !== cv.width || lay.height !== cv.height) { lay.width = cv.width; lay.height = cv.height; }
+    lg.setTransform(1, 0, 0, 1, 0, 0); lg.clearRect(0, 0, lay.width, lay.height); lg.setTransform(k, 0, 0, k, ox, oy);
+    g = lg; try { e.draw(t); } finally { g = G; }
+    G.save(); G.setTransform(1, 0, 0, 1, 0, 0);
+    G.globalAlpha = Math.min(1, b); G.drawImage(lay, 0, 0);
+    if (b > 1) { G.globalCompositeOperation = "lighter"; G.globalAlpha = Math.min(1, b - 1); G.drawImage(lay, 0, 0); }
+    G.restore();
+  }
   function wake() { if (!raf) { last = performance.now(); raf = requestAnimationFrame(frame); } }
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000); last = now; const t = now / 1000;
+    g = G;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height);
     g.setTransform(k, 0, 0, k, ox, oy);
-    for (const e of Object.values(fx)) { stepRamp(e); e.step(dt, t); }
+    for (const e of Object.values(fx)) { stepRamp(e); e.step(dt * P(e.name, "speed"), t); }
+    talkFx.step(dt); talkFx.draw();
     // draw order: smoke at the back, then ice, fire, lightning, sparks
-    fx.smoke.draw(t); fx.ice.draw(t); fx.fire.draw(t); fx.zap.draw(t); fx.sparks.draw(t);
+    for (const e of [fx.trash, fx.cooking, fx.facts, fx.cap, fx.bricked, fx.airball, fx.technical, fx.posterized, fx.onfire, fx.clown,
+                     fx.smoke, fx.ice, fx.fire, fx.zap, fx.sparks]) drawFx(e, t);
     if (flash > 0.01) {        // a flash of light round the ring (ignition, lightning, bursts)
       g.save(); g.globalCompositeOperation = "lighter"; g.globalAlpha = flash * 0.6;
       g.strokeStyle = "rgb(255,240,210)"; g.lineWidth = 40; g.shadowColor = "#fff"; g.shadowBlur = 30 * k * glowK(); g.stroke(ringPath); g.restore();
@@ -470,6 +1386,7 @@
     }
     // keep the middle clear: the camera is never covered
     g.save(); g.globalCompositeOperation = "destination-out"; g.fill(holePath); g.restore();
+    for (const v of VERDICTS) fx[v].drawOver(t);   // …except the verdicts' strips (and the clown nose, the glass), which lie across the picture on purpose
     if (busy()) raf = requestAnimationFrame(frame);
     else { raf = 0; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); announce(); }
   }
@@ -503,17 +1420,21 @@
   AWYM.listen((m) => {
     if (m.from === "frame" && m.id != null) {
       if ("spot" in m) floor[String(m.id)] = !!m.spot;
+      if ("plate" in m && String(m.id) === id) talkFx.plate(m.plate);
       if (String(m.id) === id && m.shape && m.shape !== shape && !AWYM.param("shape")) { shape = m.shape; buildShape(); }
       return;
     }
+    if (m.to === "frame" && m.cmd === "talk" && (String(m.id) === id || m.id === "*")) { talkFx.set(m.on, m.lvl); return; }
     if (m.to !== "fx") return;
     if (m.cmd === "ping") { announce(true); return; }
+    if (m.cmd === "tune") { setTune(m.tune, false); return; }   // the Show Runner saves it
     if (!targeted(m)) return;
     if (m.cmd === "play") play(m.effect, m.dur);
     else if (m.cmd === "stop") stop(m.effect, true);
   });
-  AWYM.onClear(() => stop(null, true));           // 🚨 Clear
+  AWYM.onClear(() => { stop(null, true); talkFx.clear(); });           // 🚨 Clear
 
+  addEventListener("storage", (e) => { if (e.key === TUNE_KEY) try { setTune(JSON.parse(e.newValue || "{}"), false); } catch (er) {} });
   addEventListener("resize", fit);
   buildShape(); fit();
   AWYM.send({ to: "frame", id: "*", cmd: "ping" });   // learn who has the floor (and the frame's shape)
@@ -530,11 +1451,15 @@
   if (AWYM.param("test") === "1") {
     document.body.classList.add("testbg"); drawGhost();
     const box = document.getElementById("test"); box.classList.add("on");
-    const list = [["fire", "🔥 Fire"], ["ice", "🧊 Ice"], ["zap", "⚡ Lightning"], ["smoke", "💨 Smoke"], ["sparks", "✨ Sparks"], ["shake", "💥 Shake"]];
-    box.innerHTML = list.map(([e, n]) => `<button data-e="${e}">${n}</button>`).join("") + `<button data-stop>Stop</button>`;
-    box.onclick = (ev) => { const b = ev.target.closest("button"); if (!b) return; b.dataset.stop != null ? stop(null, true) : play(b.dataset.e); };
+    const list = [["fire", "🔥 Fire"], ["ice", "🧊 Ice"], ["zap", "⚡ Lightning"], ["smoke", "💨 Smoke"], ["sparks", "✨ Sparks"], ["trash", "🗑️ Trash take"], ["facts", "💯 Facts"], ["cooking", "👨‍🍳 Cooking"],
+      ["cap", "🧢 Cap"], ["bricked", "🧱 Bricked"], ["airball", "🌬️ Air ball"], ["technical", "🟥 Technical"], ["posterized", "💥 Posterized"],
+      ["onfire", "🔥 On fire"], ["clown", "🤡 Clown take"], ["shake", "💥 Shake"]];
+    box.innerHTML = list.map(([e, n]) => `<button data-e="${e}">${n}</button>`).join("") + `<button data-stop>Stop</button><button data-talk>🎙 Talk 4 s</button>`;
+    box.onclick = (ev) => { const b = ev.target.closest("button"); if (!b) return;
+      if (b.dataset.talk != null) { let n = 0; const iv = setInterval(() => { talkFx.set(++n < 40, 0.4 + 0.6 * Math.abs(Math.sin(n / 3))); if (n >= 40) clearInterval(iv); }, 100); return; }
+      b.dataset.stop != null ? stop(null, true) : play(b.dataset.e); };
   }
-  window.AWYM_FX = { play, stop, playing, busy };   // for tests
+  window.AWYM_FX = { play, stop, playing, busy, talk: talkFx, tune: () => TUNE, P };   // for tests
 })();
 </script>
 </body>

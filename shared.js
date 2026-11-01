@@ -86,10 +86,15 @@
  *       id: "1".."4" | "*" | "floor" (whoever has the spotlight, or every frame if nobody does)
  *       cmd: play {effect: fire|ice|zap|smoke|sparks|shake, dur: seconds, 0 = until stopped}
  *            stop {effect?} | ping
+ *            tune {tune: {fire|ice|zap|smoke|sparks: {amount, size, speed, bright}, shake: {strength, length},
+ *                         talk: {spread, fade, rate, bright, halo}}}  (multipliers, 1 = as designed; any id)
  *   from: "fx"        → {id, playing:[effects]} whenever that changes
  *   to: "frame"       cmd: shake {ms} (from frame-fx.html) · talk {on, lvl 0–1} (speaking light,
  *                     from show-runner.html's Talk time) · from: "frame" also carries {shape}
  *   to: "debate"      also: talk {data} (talk-time card, sent again to update) | hideTalk
+ *   to: "avatar"      (avatar.html, faces instead of a live camera) ← show-runner.html, hotkeys.html
+ *       id: "1".."4" | "*"   cmd: face {n (1-based) | name} | on {on} | toggle | next | prev | ping
+ *   from: "avatar"    → {id, on, face, faces:[names]}
  *
  * A "hello" lets a dock re-send whatever was on screen, so an overlay that
  * reloads (or that OBS restarts) comes back exactly as it was.

@@ -9,7 +9,7 @@
   in the browser, nothing for guests to install).
   Open it in your normal browser to set up (or add it as an OBS dock, which also
   lets "Send names to the Control Panel" fill in the lower thirds).
-    1. Pick which seats (People slots 1–4) are remote guests and type their names.
+    1. Pick which seats (People slots 1–6) are remote guests and type their names.
     2. Send each guest their invite link.
     3. Put each guest's OBS address into a Browser source behind their camera
        frame, or let the setup script do it (type the room name, password and
@@ -93,7 +93,7 @@
   </div>
 
   <div class="card">
-    <h2>2. Who sits in each seat <small>seats = People slots 1–4 in the Control Panel</small></h2>
+    <h2>2. Who sits in each seat <small>seats = People slots 1–6 in the Control Panel</small></h2>
     <div class="seats" id="seats"></div>
     <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
       <button class="primary" id="sendNames">Send names to the Control Panel</button>
@@ -144,6 +144,7 @@
   S.pass = S.pass ?? rand(10, LOWER);
   S.novideo = S.novideo !== false;
   S.seats = S.seats || { 1: { who: "local", name: "", role: "Moderator" }, 2: { who: "remote", name: "", role: "Guest" }, 3: { who: "empty", name: "", role: "" }, 4: { who: "empty", name: "", role: "" } };
+  [5, 6].forEach((n) => { if (!S.seats[n]) S.seats[n] = { who: "empty", name: "", role: "" }; });   // seats 5–6: the bigger moderator layouts
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
 
   /* ---------- the links (same rules as the setup script) ---------- */
@@ -155,7 +156,7 @@
   const view = (n) => `https://vdo.ninja/?room=${room()}&view=${sid(n)}&solo${pw()}`;
   const host = () => `https://vdo.ninja/?room=${room()}&push=${room()}host&label=Host${pw()}${S.novideo ? "&novideo" : ""}`;
   const director = () => `https://vdo.ninja/?director=${room()}${pw()}`;
-  const remoteSeats = () => [1, 2, 3, 4].filter((n) => S.seats[n].who === "remote");
+  const remoteSeats = () => [1, 2, 3, 4, 5, 6].filter((n) => S.seats[n].who === "remote");
 
   /** One copyable address box. */
   function addr(title, kind, value, notes, chips, key) {
@@ -169,7 +170,7 @@
   /** Draw the seats, links and setup-script values. */
   function paint() {
     $("room").value = S.room; $("pass").value = S.pass; $("novideo").checked = S.novideo;
-    $("seats").innerHTML = [1, 2, 3, 4].map((n) => {
+    $("seats").innerHTML = [1, 2, 3, 4, 5, 6].map((n) => {
       const s = S.seats[n];
       return `<div class="seat ${s.who === "remote" ? "remote" : ""}" data-n="${n}">
         <div class="head"><span class="badge">${n}</span>
@@ -184,7 +185,7 @@
     $("hostLinks").innerHTML = addr("Your link", "Open in your browser", host(), "Your stream ID is <b>" + esc(room()) + "host</b>.") + addr("Director link (optional)", "Open in your browser", director());
     const seats = remoteSeats().join(",");
     $("scriptBox").innerHTML = addr("Guest room name", "Setup script box", room()) + addr("Room password", "Setup script box", S.pass || "(none)") +
-      addr("Remote guest seats", "Setup script box", seats || "(none yet: pick Remote guest above)", "Also set <b>People on the show</b> to at least " + (Math.max(0, ...remoteSeats()) || 1) + " so those seats have frames.");
+      addr("Remote guest seats", "Setup script box", seats || "(none yet: pick Remote guest above)", "Also pick a <b>Main Show layout</b> with at least " + (Math.max(0, ...remoteSeats()) || 1) + " seats, so those seats have frames (the moderator layouts count the moderator as seat 1).");
   }
   document.addEventListener("click", async (e) => {
     const b = e.target.closest("button.copy"); if (!b) return;
@@ -212,7 +213,7 @@
   $("sendNames").onclick = () => {
     const acks = new Set(), sent = [];
     const nonces = {};
-    [1, 2, 3, 4].forEach((n) => {
+    [1, 2, 3, 4, 5, 6].forEach((n) => {
       const s = S.seats[n]; if (s.who === "empty" || !s.name.trim()) return;
       nonces[n] = Math.random().toString(36).slice(2); sent.push(n);
       AWYM.send({ to: "control", cmd: "person", id: String(n), data: { name: s.name.trim(), role: s.role.trim() }, nonce: nonces[n] });

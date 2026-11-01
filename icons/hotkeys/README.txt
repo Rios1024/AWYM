@@ -72,9 +72,35 @@ Frame effects
   45-fx-shake.png           Frame effect: Shake         Ctrl + Alt + Shift + B
   46-fx-stop.png            Stop frame effects          Ctrl + Alt + Shift + U
 
+Verdicts
+  47-fx-trash.png           Verdict: Trash take         Ctrl + Alt + Shift + ,
+  48-fx-facts.png           Verdict: 100% Facts         Ctrl + Alt + Shift + .
+  49-fx-cooking.png         Verdict: Cooking            Ctrl + Alt + Shift + /
+  50-fx-cap.png             Verdict: Cap                Ctrl + Alt + Shift + -
+  51-fx-bricked.png         Verdict: Bricked            Ctrl + Alt + Shift + =
+  52-fx-airball.png         Verdict: Air ball           Ctrl + Alt + Shift + `
+  53-fx-technical.png       Verdict: Technical foul     Ctrl + Alt + Shift + Insert
+  54-fx-posterized.png      Verdict: Posterized         Ctrl + Alt + Shift + Home
+  55-fx-onfire.png          Verdict: On fire            Ctrl + Alt + Shift + Page Up
+  56-fx-clown.png           Verdict: Clown take         Ctrl + Alt + Shift + End
+
 Mute
-  47-mute-1.png             Mute seat 1 on/off          Ctrl + Alt + Shift + [
-  48-mute-2.png             Mute seat 2 on/off          Ctrl + Alt + Shift + ]
-  49-mute-3.png             Mute seat 3 on/off          Ctrl + Alt + Shift + ;
-  50-mute-4.png             Mute seat 4 on/off          Ctrl + Alt + Shift + '
-  51-unmute-all.png         Unmute everyone             Ctrl + Alt + Shift + \
+  57-mute-1.png             Mute seat 1 on/off          Ctrl + Alt + Shift + [
+  58-mute-2.png             Mute seat 2 on/off          Ctrl + Alt + Shift + ]
+  59-mute-3.png             Mute seat 3 on/off          Ctrl + Alt + Shift + ;
+  60-mute-4.png             Mute seat 4 on/off          Ctrl + Alt + Shift + '
+  61-unmute-all.png         Unmute everyone             Ctrl + Alt + Shift + \
+
+Faces (seat 1)
+  62-face-1.png             Seat 1 face: Smile          Ctrl + Alt + Shift + F13
+  63-face-2.png             Seat 1 face: Skeptical      Ctrl + Alt + Shift + F14
+  64-face-3.png             Seat 1 face: Shocked        Ctrl + Alt + Shift + F15
+  65-face-4.png             Seat 1 face: Thinking       Ctrl + Alt + Shift + F16
+  66-face-5.png             Seat 1 face: Happy          Ctrl + Alt + Shift + F17
+  67-face-6.png             Seat 1 face: Cringe         Ctrl + Alt + Shift + F18
+  68-face-7.png             Seat 1 face: Unimpressed    Ctrl + Alt + Shift + F19
+  69-face-8.png             Seat 1 face: Starstruck     Ctrl + Alt + Shift + F20
+  70-face-9.png             Seat 1 face: Facepalm       Ctrl + Alt + Shift + F21
+  71-face-10.png            Seat 1 face: Smug           Ctrl + Alt + Shift + F22
+  72-avatar-toggle.png      Seat 1: face / live camera  Ctrl + Alt + Shift + D
+  73-face-next.png          Seat 1: next face           Ctrl + Alt + Shift + J
