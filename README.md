@@ -10,7 +10,7 @@ It's all plain HTML, CSS and JavaScript (OBS browser sources and custom browser 
 
 1. **Download** this repository (green **Code** button → **Download ZIP**) and unzip it somewhere permanent, e.g. `Documents`.
 2. **Open `START-HERE.html`** in your browser. It walks you through every step and gives you the exact addresses for your folder, ready to copy.
-3. In OBS: **Tools → Scripts → +** → pick `awym-obs-setup.lua` → **Build my scenes**. You get Starting Soon, Main Show, Be Right Back, Technical Difficulties, Halftime and Thanks for Watching, with every overlay in place.
+3. In OBS: **Tools → Scripts → +** → pick `awym-obs-setup.lua` → **Build my scenes**. You get Starting Soon, Main Show, a scene for every layout (1–4 people, 2–5 + moderator), Be Right Back, Technical Difficulties, Halftime and Thanks for Watching, with every overlay in place. Each person's camera, avatar, frame and frame effects are grouped as **Seat N** and color-coded in the Sources list.
 4. Add the docks (**Docks → Custom Browser Docks…**): Control Panel, Stats Desk, Theme Panel, Content Panel and Show Runner. START-HERE has the addresses.
 
 Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. An internet connection is only needed for web fonts, live NBA stats and remote guests.
@@ -20,16 +20,18 @@ Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. 
 | | |
 |---|---|
 | **Scenes and screens** | Starting Soon / Be Right Back / Halftime / Thanks for Watching screens with countdowns; 30+ animated backgrounds (court, arena, Tin Foil conspiracy board, vaporwave…). |
+| **Layouts** | Ready-made scenes for 1, 2, 3 or 4 people and 2–5 people + a moderator (the moderator a bit smaller), with color-coded groups per seat. |
 | **People** | Camera frames (circle, rounded, hexagon) with name plates and a "has the floor" spotlight; lower thirds; remote guests through [VDO.Ninja](https://vdo.ninja/). |
 | **Shot clock** | Arena-style segment timer with buzzer and a Tin Foil alert. |
 | **Stats Desk** | Live NBA scores, box scores, player lines, standings and a ticker (ESPN's public data). |
 | **Show Runner** | Rundown with segment intros, debate scoreboard and winner, hot-take receipts, sound board, clips and instant replay, backups. |
-| **Frame effects** | 🔥 fire, 🧊 ice, ⚡ lightning, 💨 smoke, ✨ sparks and 💥 shake around a camera frame. The camera itself is never covered. |
+| **Frame effects** | 🔥 fire, 🧊 ice, ⚡ lightning, 💨 smoke, ✨ sparks and 💥 shake around a camera frame, plus ten verdicts (🗑️ trash take, 💯 100% facts, 👨‍🍳 cooking, 🧢 cap, 🧱 bricked, 🌬️ air ball, 🟥 technical foul, 💥 posterized, 🔥 on fire, 🤡 clown take), each with sliders for amount, size, speed and brightness. The camera itself is never covered. |
 | **Talk time** | A speaking light on whoever's talking, talk time per person, time spent talking over each other, cut-ins, and an on-screen card. |
 | **Mute** | One mute button per person (dock, hotkeys, stream deck) with a MUTED tag on their frame. |
+| **Faces** | Swap a live camera for a set of prebuilt faces (cartoon you, reactions…), switched from the dock, hotkeys or a stream deck's Faces page; the face bobs along while you talk. |
 | **Content Panel** | Rich on-screen text with photos and emojis, or **import a whole show script** from Google Docs / Word ([template](templates/)). |
 | **Theme** | Colors, fonts and glow change live on every overlay; 80 color presets including all 30 NBA teams. |
-| **Hotkeys** | 51 OBS hotkeys (Ctrl + Alt + Shift + …) with key pictures for stream controllers. |
+| **Hotkeys** | 73 OBS hotkeys (Ctrl + Alt + Shift + …) with key pictures for stream controllers. |
 
 <p>
   <img src="docs/images/speaking-light.png" alt="Speaking light: the frame of the person talking glows" width="49%">
@@ -38,9 +40,9 @@ Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. 
 
 ## Stream controllers
 
-Ready-made layouts in [`stream-controller/`](stream-controller/), all 51 actions with their pictures:
+Ready-made layouts in [`stream-controller/`](stream-controller/), all 73 actions with their pictures:
 
-- **VSD M18** (VSD Craft): `VSD-M18/AWYM-Show.SDProfile` (5 pages) plus one-page Run of Show, Scoreboard, Frame FX and Sound Board scenes.
+- **VSD M18** (VSD Craft): `VSD-M18/AWYM-Show.SDProfile`, one file with everything on 7 pages.
 - **Elgato Stream Deck** 15-key (MK.2 / original), XL, Mini, Neo and +: `Elgato-Stream-Deck/*.streamDeckProfile`.
 - Anything else (Mirabox/Ajazz Stream Dock, Loupedeck, Razer, Touch Portal, a macro pad): START-HERE step 10 has step-by-step instructions, and `icons/hotkeys/` has every key picture.
 
@@ -57,6 +59,7 @@ The Elgato profiles follow the Stream Deck app's V3 profile format but haven't b
 | `README.txt` | The full manual |
 | `stream-controller/` | VSD M18 and Elgato Stream Deck layouts |
 | `icons/hotkeys/` | Key pictures, 144 × 144 PNG |
+| `avatars/` | Faces that can replace a live camera (`avatars.js` lists them) |
 | `sounds/` | Drop your own sound files here to replace any sound; `sounds/kit/` holds the bundled recordings |
 | `templates/` | Show-script template for writers (Word + Markdown) |
 | `masks/` | Circle / rounded / hexagon camera masks |

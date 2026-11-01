@@ -19,13 +19,15 @@ SERIAL = ""   # left blank in shared files (VSD Craft fills in your own device)
 src = open(os.path.join(KIT, "hotkeys.js"), encoding="utf-8").read()
 icons = sorted(f for f in os.listdir(os.path.join(KIT, "icons/hotkeys")) if f.endswith(".png"))
 ICON = {re.sub(r"^\d+-|\.png$", "", f): f for f in icons}
-assert len(ICON) == 51, len(ICON)
+assert len(ICON) == 73, len(ICON)
 KEYS = {"next": "N", "prev": "P", "clear": "X", "clock-toggle": "S", "clock-reset": "R", "clock-buzz": "Z",
         "clock-foil": "T", "clock-hide": "K", "score-a": "Q", "score-b": "W", "score-show": "E", "winner": "Y",
         "lt-1": "1", "lt-2": "2", "lt-3": "3", "lt-4": "4", "lt-hide": "5", "save-clip": "C", "replay": "V",
         "mark": "M", "hide-stats": "G", "hide-text": "H",
-        "fx-fire": "F", "fx-ice": "I", "fx-zap": "L", "fx-smoke": "O", "fx-sparks": "A", "fx-shake": "B", "fx-stop": "U",
-        "mute-1": "BRACKETLEFT", "mute-2": "BRACKETRIGHT", "mute-3": "SEMICOLON", "mute-4": "APOSTROPHE", "unmute-all": "BACKSLASH"}
+        "fx-fire": "F", "fx-ice": "I", "fx-zap": "L", "fx-smoke": "O", "fx-sparks": "A", "fx-trash": "COMMA", "fx-facts": "PERIOD", "fx-cooking": "SLASH", "fx-cap": "MINUS", "fx-bricked": "EQUAL",
+        "fx-airball": "QUOTELEFT", "fx-technical": "INSERT", "fx-posterized": "HOME", "fx-onfire": "PAGEUP", "fx-clown": "END", "fx-shake": "B", "fx-stop": "U",
+        "mute-1": "BRACKETLEFT", "mute-2": "BRACKETRIGHT", "mute-3": "SEMICOLON", "mute-4": "APOSTROPHE", "unmute-all": "BACKSLASH",
+        "avatar-toggle": "D", "face-next": "J", **{"face-%d" % n: "F%d" % (12 + n) for n in range(1, 11)}}
 SOUND_KEYS = ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "6", "7", "8", "9", "0"]
 SOUNDS = ["airhorn", "buzzer", "ding", "wrong", "rimshot", "drumroll", "ooh", "applause", "chaching", "sadtrombone",
           "scratch", "swoosh", "whistle", "gong", "boing", "micdrop", "tinfoil"]
@@ -33,11 +35,12 @@ for s, k in zip(SOUNDS, SOUND_KEYS): KEYS["snd-" + s] = k
 assert set(KEYS) == set(ICON), set(KEYS) ^ set(ICON)
 # cross-check against hotkeys.js / setup script so the deck can't drift from OBS
 for i, k in KEYS.items():
-    if not i.startswith(("snd-", "lt-", "mute-")) or i == "lt-hide":
+    if not i.startswith(("snd-", "lt-", "mute-", "face-")) or i in ("lt-hide", "face-next"):
         assert re.search(r'id: "%s".*?key: "%s"' % (re.escape(i), re.escape(k)), src), i
 lua = open(os.path.join(KIT, "awym-obs-setup.lua"), encoding="utf-8").read()
 
-OEM = {"BRACKETLEFT": 219, "BRACKETRIGHT": 221, "SEMICOLON": 186, "APOSTROPHE": 222, "BACKSLASH": 220}
+OEM = {"BRACKETLEFT": 219, "BRACKETRIGHT": 221, "SEMICOLON": 186, "APOSTROPHE": 222, "BACKSLASH": 220, "COMMA": 188, "PERIOD": 190, "SLASH": 191,
+       "MINUS": 189, "EQUAL": 187, "QUOTELEFT": 192, "INSERT": 45, "HOME": 36, "END": 35, "PAGEUP": 33}
 def vk(k):  # Windows virtual-key code (the sample stores N as 78)
     if k in OEM: return OEM[k]
     if re.fullmatch(r"F\d+", k): return 111 + int(k[1:])
@@ -46,9 +49,13 @@ def vk(k):  # Windows virtual-key code (the sample stores N as 78)
 SCOREBOARD = ["score-a", "score-b", "score-show", "winner", "snd-micdrop",
               "lt-1", "lt-2", "lt-3", "lt-4", "lt-hide",
               "snd-ding", "snd-wrong", "snd-buzzer", "snd-ooh", "snd-applause"]
+FACES = ["face-%d" % n for n in range(1, 11)] + ["avatar-toggle", "face-next", None, None, None]
 FRAME_FX = ["fx-fire", "fx-ice", "fx-zap", "fx-smoke", "fx-sparks",
             "fx-shake", "fx-stop", None, None, None,
             None, None, None, None, None]
+VERDICTS = ["fx-trash", "fx-facts", "fx-cooking", "fx-cap", "fx-bricked",
+            "fx-airball", "fx-technical", "fx-posterized", "fx-onfire", "fx-clown",
+            None, None, "fx-stop", None, None]
 # AWYM Show = the user's own paginated layout (pages 1–4) plus Frame FX (page 5) (their export, 2026-10-29). None = empty key.
 PAGES = [  # (name, 15 keys top row first, left→right)
     ("Show", ["next", "prev", "clock-toggle", "clock-reset", "clear",
@@ -60,6 +67,8 @@ PAGES = [  # (name, 15 keys top row first, left→right)
                        "clock-toggle", "clock-reset", None, "snd-tinfoil", "clock-foil",
                        "save-clip", "replay", "mark", None, None]),
     ("Frame FX", FRAME_FX),
+    ("Verdicts", VERDICTS),
+    ("Faces", FACES),
 ]
 BUTTONS = ["page-prev", "clear", "page-next"]  # left, middle, right on every page
 covered = {i for _, ks in PAGES for i in ks if i}
@@ -132,19 +141,9 @@ def build(top_row, name, fname, seed, PAGES=PAGES, BUTTONS=BUTTONS):
 os.makedirs(OUT, exist_ok=True)
 for f in os.listdir(OUT):
     if f.endswith(".SDProfile"): os.remove(os.path.join(OUT, f))
-SEG = ["prev", "clear", "next"]  # plain buttons on the one-page scenes: prev segment, clear, next segment
+# One file holds everything: AWYM Show, all 73 actions on 7 pages (◀ page · Clear · page ▶ on the plain buttons).
 SCENES = [
     ("AWYM Show", "AWYM-Show.SDProfile", PAGES, BUTTONS),
-    ("AWYM Run of Show", "AWYM-Run-of-Show.SDProfile", [("Run of show", [
-        "prev", "next", "clear", "hide-stats", "hide-text",
-        "clock-toggle", "clock-reset", "clock-buzz", "clock-hide", "clock-foil",
-        "save-clip", "replay", "mark", "lt-hide", "snd-tinfoil"])], SEG),
-    ("AWYM Scoreboard", "AWYM-Scoreboard.SDProfile", [("Scoreboard", SCOREBOARD)], SEG),
-    ("AWYM Frame FX", "AWYM-Frame-FX.SDProfile", [("Frame FX", FRAME_FX)], SEG),
-    ("AWYM Sound Board", "AWYM-Sound-Board.SDProfile", [("Sound board", [
-        "snd-airhorn", "snd-buzzer", "snd-ding", "snd-wrong", "snd-rimshot",
-        "snd-drumroll", "snd-ooh", "snd-applause", "snd-chaching", "snd-sadtrombone",
-        "snd-scratch", "snd-swoosh", "snd-whistle", "snd-gong", "snd-boing"])], SEG),
 ]
 for n, (name, fname, pages, btns) in enumerate(SCENES):
     assert all(len(k) == 15 for _, k in pages), name
@@ -154,6 +153,6 @@ for n, (name, fname, pages, btns) in enumerate(SCENES):
 # the AWYM Show layout, for START-HERE's previews (make_elgato.py puts it in layouts.js)
 json.dump({"name": "VSD M18 (VSD Craft)", "file": "VSD-M18/AWYM-Show.SDProfile", "cols": 5, "rows": 3,
            "buttons": ["@prev", "clear", "@next"],
-           "extra": [{"name": n, "file": "VSD-M18/" + f} for n, f, _, _ in SCENES[1:]],
+           "extra": [],
            "pages": [{"name": n, "keys": k} for n, k in PAGES]},
           open(os.path.join(BUILD, "m18_layout.json"), "w"))

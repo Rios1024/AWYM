@@ -16,15 +16,10 @@ layouts here as a guide.
 
 VSD M18 (VSD Craft)
 -------------------
-  VSD-M18/AWYM-Show.SDProfile         all 51 keys on 5 pages
-  VSD-M18/AWYM-Run-of-Show.SDProfile  one page: segments, shot clock, clips, graphics
-  VSD-M18/AWYM-Scoreboard.SDProfile   one page: debate score, names, reaction sounds
-  VSD-M18/AWYM-Frame-FX.SDProfile     one page: the 7 frame effects
-  VSD-M18/AWYM-Sound-Board.SDProfile  one page: 15 sound effects
-  Import: in VSD Craft, the import button next to the scene list → pick a
-  file. Each file is its own scene; switch between them in the scene list.
-  The 3 plain buttons: AWYM Show = ◀ page · Clear screen · page ▶;
-  the one-page scenes = previous segment · Clear screen · next segment.
+  VSD-M18/AWYM-Show.SDProfile         the one file: all 73 keys on 7 pages
+  Import: in VSD Craft, the import button next to the scene list → pick the
+  file. A scene called AWYM Show appears.
+  The 3 plain buttons under the screen keys: ◀ page · Clear screen · page ▶.
 
 AWYM Show (top row first)
   Page 1 · Show
@@ -47,18 +42,26 @@ AWYM Show (top row first)
     Fire           Ice            Lightning      Smoke          Sparks
     Shake          Stop FX        (empty)        (empty)        (empty)
     (empty)        (empty)        (empty)        (empty)        (empty)
+  Page 6 · Verdicts
+    Trash take     100% Facts     Cooking        Cap            Bricked
+    Air ball       Technical      Posterized     On fire        Clown take
+    (empty)        (empty)        Stop FX        (empty)        (empty)
+  Page 7 · Faces
+    Smile          Skeptical      Shocked        Thinking       Happy
+    Cringe         Unimpressed    Starstruck     Facepalm       Smug
+    Face on/off    Next face      (empty)        (empty)        (empty)
 
 ELGATO STREAM DECK (Stream Deck app 6.0 or newer; made for 7.3+)
 -------------------------------------------------------------
   Double-click the file for your model (or in the Stream Deck app: profile
-  list → Import). A profile called "AWYM Show" appears with all 51 actions.
+  list → Import). A profile called "AWYM Show" appears with all 73 actions.
   ◀ / ▶ page keys sit in the bottom corners (the Neo uses its touch points
   instead). If a profile won't import on your app version, set keys by hand:
   drag System → Hotkey onto a key, press the keys, Set from File → the
   picture in icons/hotkeys/.
 
 Stream Deck (15 keys: MK.2, original, Scissor Keys)
-  Elgato-Stream-Deck/AWYM-Stream-Deck-15-key.streamDeckProfile  (4 pages)
+  Elgato-Stream-Deck/AWYM-Stream-Deck-15-key.streamDeckProfile  (6 pages)
   Page 1 · Run of show · Shot clock · Mute
     Next           Prev           Clear          Mark           Start/Pause
     Reset          Clock buzzer   Hide clock     Tin Foil       Unmute all
@@ -75,22 +78,35 @@ Stream Deck (15 keys: MK.2, original, Scissor Keys)
     Fire           Ice            Lightning      Smoke          Sparks
     Shake          Stop FX        Save clip      Replay         Hide stats
     ◀ page         Hide text      (empty)        (empty)        page ▶
+  Page 5 · Verdicts
+    Trash take     100% Facts     Cooking        Cap            Bricked
+    Air ball       Technical      Posterized     On fire        Clown take
+    ◀ page         (empty)        (empty)        (empty)        page ▶
+  Page 6 · Faces
+    Smile          Skeptical      Shocked        Thinking       Happy
+    Cringe         Unimpressed    Starstruck     Facepalm       Smug
+    ◀ page         Face on/off    Next face      (empty)        page ▶
 
 Stream Deck XL (32 keys)
-  Elgato-Stream-Deck/AWYM-Stream-Deck-XL.streamDeckProfile  (2 pages)
+  Elgato-Stream-Deck/AWYM-Stream-Deck-XL.streamDeckProfile  (3 pages)
   Page 1 · Run of show · Shot clock · Scoreboard · Names · Frame FX · Mute
     Next        Prev        Clear       Mark        Start/Pause Reset       Clock buzze Hide clock
     Tin Foil    Side A      Side B      Scoreboard  Winner      Name 1      Name 2      Name 3
     Name 4      Hide names  Fire        Ice         Lightning   Smoke       Sparks      Shake
     Mute 1      Mute 2      Mute 3      Mute 4      Unmute all  Stop FX     (empty)     page ▶
-  Page 2 · Sound board · Clips & graphics
+  Page 2 · Sound board · Verdicts
     Air horn    Buzzer      Correct     Wrong       Rimshot     Drumroll    Crowd ooh   Applause
     Cha-ching   Sad trombon Record scra Swoosh      Whistle     Gong        Boing       Mic drop
-    Tin Foil so Save clip   Replay      Hide stats  Hide text   (empty)     (empty)     (empty)
+    Tin Foil so Trash take  100% Facts  Cooking     Cap         Bricked     Air ball    Technical
+    ◀ page      Posterized  On fire     Clown take  (empty)     (empty)     (empty)     page ▶
+  Page 3 · Clips & graphics · Faces
+    Save clip   Replay      Hide stats  Hide text   Smile       Skeptical   Shocked     Thinking
+    Happy       Cringe      Unimpressed Starstruck  Facepalm    Smug        Face on/off Next face
+    (empty)     (empty)     (empty)     (empty)     (empty)     (empty)     (empty)     (empty)
     ◀ page      (empty)     (empty)     (empty)     (empty)     (empty)     (empty)     page ▶
 
 Stream Deck Mini (6 keys)
-  Elgato-Stream-Deck/AWYM-Stream-Deck-Mini.streamDeckProfile  (14 pages)
+  Elgato-Stream-Deck/AWYM-Stream-Deck-Mini.streamDeckProfile  (20 pages)
   Page 1 · Run of show · Mute
     Next           Prev           Clear
     Mute 1         Mute 2         page ▶
@@ -127,15 +143,33 @@ Stream Deck Mini (6 keys)
   Page 12 · Frame FX
     Sparks         Shake          Stop FX
     ◀ page         (empty)        page ▶
-  Page 13 · Clips & graphics
+  Page 13 · Verdicts
+    Trash take     100% Facts     Cooking
+    ◀ page         Cap            page ▶
+  Page 14 · Verdicts
+    Bricked        Air ball       Technical
+    ◀ page         Posterized     page ▶
+  Page 15 · Verdicts
+    On fire        Clown take     (empty)
+    ◀ page         (empty)        page ▶
+  Page 16 · Clips & graphics
     Save clip      Replay         Hide stats
     ◀ page         Hide text      page ▶
-  Page 14 · Mute
+  Page 17 · Faces
+    Smile          Skeptical      Shocked
+    ◀ page         Thinking       page ▶
+  Page 18 · Faces
+    Happy          Cringe         Unimpressed
+    ◀ page         Starstruck     page ▶
+  Page 19 · Faces
+    Facepalm       Smug           Face on/off
+    ◀ page         Next face      page ▶
+  Page 20 · Mute
     Mute 3         Mute 4         Unmute all
     ◀ page         (empty)        page ▶
 
 Stream Deck Neo (8 keys; its touch points change pages)
-  Elgato-Stream-Deck/AWYM-Stream-Deck-Neo.streamDeckProfile  (7 pages)
+  Elgato-Stream-Deck/AWYM-Stream-Deck-Neo.streamDeckProfile  (10 pages)
   Page 1 · Run of show · Mute
     Next           Prev           Clear          Mark
     Mute 1         Mute 2         Mute 3         Mute 4
@@ -154,12 +188,21 @@ Stream Deck Neo (8 keys; its touch points change pages)
   Page 6 · Frame FX
     Fire           Ice            Lightning      Smoke
     Sparks         Shake          Stop FX        (empty)
-  Page 7 · Clips & graphics
-    Save clip      Replay         Hide stats     Hide text
+  Page 7 · Verdicts
+    Trash take     100% Facts     Cooking        Cap
+    Bricked        Air ball       Technical      Posterized
+  Page 8 · Verdicts · Clips & graphics
+    On fire        Clown take     Save clip      Replay
+    Hide stats     Hide text      (empty)        (empty)
+  Page 9 · Faces
+    Smile          Skeptical      Shocked        Thinking
+    Happy          Cringe         Unimpressed    Starstruck
+  Page 10 · Faces
+    Facepalm       Smug           Face on/off    Next face
     (empty)        (empty)        (empty)        (empty)
 
 Stream Deck + (8 keys)
-  Elgato-Stream-Deck/AWYM-Stream-Deck-Plus.streamDeckProfile  (9 pages)
+  Elgato-Stream-Deck/AWYM-Stream-Deck-Plus.streamDeckProfile  (13 pages)
   Page 1 · Run of show · Mute
     Next           Prev           Clear          Mark
     Mute 1         Mute 2         Mute 3         page ▶
@@ -184,6 +227,18 @@ Stream Deck + (8 keys)
   Page 8 · Frame FX
     Fire           Ice            Lightning      Smoke
     ◀ page         Sparks         Shake          page ▶
-  Page 9 · Frame FX · Clips & graphics
-    Stop FX        Save clip      Replay         Hide stats
-    ◀ page         Hide text      (empty)        page ▶
+  Page 9 · Frame FX · Verdicts
+    Stop FX        Trash take     100% Facts     Cooking
+    ◀ page         Cap            Bricked        page ▶
+  Page 10 · Verdicts
+    Air ball       Technical      Posterized     On fire
+    ◀ page         Clown take     (empty)        page ▶
+  Page 11 · Clips & graphics
+    Save clip      Replay         Hide stats     Hide text
+    ◀ page         (empty)        (empty)        page ▶
+  Page 12 · Faces
+    Smile          Skeptical      Shocked        Thinking
+    ◀ page         Happy          Cringe         page ▶
+  Page 13 · Faces
+    Unimpressed    Starstruck     Facepalm       Smug
+    ◀ page         Face on/off    Next face      page ▶

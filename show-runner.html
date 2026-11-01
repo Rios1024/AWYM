@@ -14,6 +14,7 @@
     Sound board  air horn, rimshot, sad trombone… and your own sounds
     Frame FX     set a camera frame on fire, freeze it, zap it… (the camera stays clear)
     Mute         a mute button per seat (top of the dock and in Talk time), on hotkeys too
+    Faces        swap a seat's live camera for one of their prebuilt faces (avatars/)
     Talk time    who's talking (a speaking light on their frame), how long each person
                  talked, how much you talked over each other, and who cut in; on screen too
                  (needs the OBS connection: it reads each mic's level)
@@ -160,10 +161,23 @@
   .tkstats:empty { display: none; }
   #tkTrack.on { background: var(--warning); color: #fff; border-color: transparent; }
 
+  /* faces (avatars) */
+  .faces { display: grid; grid-template-columns: repeat(auto-fill, minmax(62px, 1fr)); gap: 5px; }
+  .faces button { padding: 3px 2px 4px; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; text-transform: none; letter-spacing: 0; line-height: 1.1; }
+  .faces img { width: 52px; height: 52px; border-radius: 50%; object-fit: cover; object-position: 50% 40%; background: #c7c7c7; }
+  .faces button.on { background: var(--primary); color: var(--dark); }
+  .faces button.on img { box-shadow: 0 0 0 3px var(--dark); }
+  .facestate { font-size: 14px; margin: 6px 0 2px; }
+
   /* frame effects */
   .fxbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 6px; text-transform: none; font-size: 13px; letter-spacing: 0; }
   .fxbtn .ic { font-size: 24px; line-height: 1; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
   .fxbtn.live { outline: 2px solid #3DDC84; outline-offset: 1px; }
+  details.tune { margin-top: 10px; border: 1px solid rgba(255,255,255,.12); border-radius: 10px; padding: 6px 10px 10px; }
+  details.tune > summary { cursor: pointer; font-size: 14px; font-weight: 700; padding: 4px 0; }
+  #tuneFx button { text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #tuneSliders label b { float: right; text-transform: none; letter-spacing: 0; }
+  #tuneSliders input[type=range] { margin: 0; }
   #fxSeat button { text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
   /* clips */
@@ -277,15 +291,35 @@
     <label>Whose frame</label>
     <div class="grid g3 seg" id="fxSeat"></div>
     <div class="grid g3" id="fxBtns" style="margin-top:8px"></div>
+    <label>Verdicts <small style="text-transform:none;letter-spacing:0">a strip across the camera, and a gag round the frame</small></label>
+    <div class="grid g3" id="fxVerdicts"></div>
     <label>How long</label>
     <div class="grid g3 seg" id="fxLen">
       <button data-len="short" title="About 3 seconds">Quick</button>
-      <button data-len="normal" title="Fire 8 s, ice 7 s, smoke 6 s, lightning 2.5 s">Normal</button>
+      <button data-len="normal" title="Fire 8 s, ice 7 s, smoke 6 s, verdicts 5–6 s, lightning 2.5 s">Normal</button>
       <button data-len="hold" title="Keeps going until you press Stop">Until stopped</button>
     </div>
     <button id="fxStop" style="width:100%;margin-top:8px">🧯 Stop effects</button>
     <div class="msg" id="fxMsg"></div>
-    <p class="hint"><b>★ Floor</b> means whoever has the spotlight (Control Panel's ★ button); if nobody does, every frame. The FX hotkeys (Ctrl+Alt+Shift+F, I, L, O, A, B, U) use whatever you pick here. 🚨 Clear stops them all.</p>
+    <details class="tune" id="tuneBox">
+      <summary>🎚 Fine-tune the look</summary>
+      <div class="grid g3 seg" id="tuneFx"></div>
+      <div id="tuneSliders"></div>
+      <div class="grid g2" style="margin-top:10px"><button id="tuneTry">▶ Try it</button><button id="tuneReset">↺ Reset this one</button></div>
+      <p class="hint">Changes reach every camera frame straight away and are kept. 100% is the built-in look. <b>Try it</b> plays the effect (or a few seconds of talking) on the frame picked above.</p>
+    </details>
+    <p class="hint"><b>★ Floor</b> means whoever has the spotlight (Control Panel's ★ button); if nobody does, every frame. The FX hotkeys (Ctrl+Alt+Shift+F, I, L, O, A, B, U and the verdicts' keys) use whatever you pick here. 🚨 Clear stops them all.</p>
+  </section>
+
+  <!-- ================= FACES ================= -->
+  <section data-fold="faces">
+    <h2><span class="ttl">Faces</span> <small>instead of the live camera</small></h2>
+    <div class="grid g4 seg" id="faceSeat"></div>
+    <div class="facestate" id="faceState"></div>
+    <div class="faces" id="faceGrid"></div>
+    <div class="grid g2" style="margin-top:6px"><button id="faceLive">📷 Live camera</button><button id="faceNext">Next face ▶</button></div>
+    <div class="msg" id="faceMsg"></div>
+    <p class="hint">Click a face to put it over that seat's camera (inside the frame); <b>Live camera</b> switches back. Seat 1's faces are on hotkeys too (Ctrl+Alt+Shift+F13…F22, D = face on/off, J = next face) and on the stream decks' Faces page. Add faces for anyone in <b>avatars/</b> (see avatars/README.txt).</p>
   </section>
 
   <!-- ================= TALK TIME ================= -->
@@ -304,9 +338,9 @@
     <input type="range" id="tkThr" min="-60" max="-15" step="1">
     <label for="tkGap">Ignore mic bleed <b id="tkGapVal" style="float:right"></b></label>
     <input type="range" id="tkGap" min="0" max="30" step="1">
-    <label class="check"><input type="checkbox" id="tkLight"> Speaking light on the camera frames</label>
+    <label class="check"><input type="checkbox" id="tkLight"> Speaking light on the camera frames <small style="opacity:.7;text-transform:none">(its look: Frame effects → 🎚 Fine-tune → 🎙 Speaking)</small></label>
     <label class="check"><input type="checkbox" id="tkLive"> Only count while streaming or recording</label>
-    <p class="hint">Pick each person's mic (remote guests: their <b>AWYM Guest Seat</b> source). The bar shows their level; the yellow line is the <b>Sensitivity</b>. A person is talking when their bar crosses it. Mics in the same room hear each other: <b>Ignore mic bleed</b> skips a mic that's this many dB quieter than the loudest one, so only real talking over each other counts. One mic shared by two people counts as one. Needs the OBS connection (Clips &amp; replays).</p>
+    <p class="hint">Pick each person's mic (remote guests: their <b>Guest Seat</b> source). The bar shows their level; the yellow line is the <b>Sensitivity</b>. A person is talking when their bar crosses it. Mics in the same room hear each other: <b>Ignore mic bleed</b> skips a mic that's this many dB quieter than the loudest one, so only real talking over each other counts. One mic shared by two people counts as one. Needs the OBS connection (Clips &amp; replays).</p>
   </section>
 
   <!-- ================= CLIPS & REPLAYS ================= -->
@@ -324,7 +358,7 @@
     <h3>Replay buffer <span class="status" id="rbStatus" style="display:inline-flex;margin-left:6px;text-transform:none;letter-spacing:0"><i></i><span>—</span></span></h3>
     <div class="grid g2"><button class="needobs" id="rbToggle">Start buffer</button><button class="primary needobs" id="rbSave">💾 Save clip</button></div>
     <div class="grid g2" style="margin-top:6px"><button class="accent needobs" id="rbReplay">🎬 Instant replay</button><button class="needobs" id="rbStopReplay">Stop replay</button></div>
-    <label for="rbSource">Media source for instant replays</label><input type="text" id="rbSource" value="AWYM Instant Replay">
+    <label for="rbSource">Media source for instant replays</label><input type="text" id="rbSource" value="Instant Replay">
     <div class="clist" id="clipList"></div>
 
     <h3>Recording <span class="status" id="recStatus" style="display:inline-flex;margin-left:6px;text-transform:none;letter-spacing:0"><i></i><span>—</span></span></h3>
@@ -351,6 +385,7 @@
 
 <script src="shared.js"></script>
 <script src="sfx.js"></script>
+<script src="avatars/avatars.js"></script>
 <script src="obs-ws.js"></script>
 <script>
 (function () {
@@ -689,7 +724,8 @@
      CLIPS & REPLAYS (OBS WebSocket)
      ===================================================================== */
   const obs = new window.AWYMObs();
-  S.obs = Object.assign({ url: "ws://127.0.0.1:4455", auto: true, source: "AWYM Instant Replay" }, S.obs || {});
+  S.obs = Object.assign({ url: "ws://127.0.0.1:4455", auto: true, source: "Instant Replay" }, S.obs || {});
+  if (S.obs.source === "AWYM Instant Replay") S.obs.source = "Instant Replay";   // sources lost their "AWYM " prefix
   S.clips = S.clips || []; S.marks = S.marks || [];
   const rec = { active: false }, rb = { active: false }, stream = { active: false };
   obs.meters(true);   // every mic's level, for Talk time
@@ -736,7 +772,7 @@
   $("obsConnect").onclick = () => connect(false);
   $("obsDisconnect").onclick = () => obs.close();
   $("obsAuto").onchange = () => { S.obs.auto = $("obsAuto").checked; save(); };
-  $("rbSource").addEventListener("input", () => { S.obs.source = $("rbSource").value.trim() || "AWYM Instant Replay"; save(); });
+  $("rbSource").addEventListener("input", () => { S.obs.source = $("rbSource").value.trim() || "Instant Replay"; save(); });
   /** Fill the rundown's scene picker from OBS (when connected). */
   async function fillScenes(keep) {
     let names = [];
@@ -784,18 +820,39 @@
     playReplay(path);
   };
   /** Instant replay: load the clip into the media source, show it, tag it REPLAY, hide it when it ends. */
+  /** Where a source sits in a scene: the scene itself, or a group / scene shown inside it (e.g. Show
+      Overlays → Show Tools). @return {scene, id} for SetSceneItemEnabled, or null. */
+  async function findSceneItem(scene, src, isGroup, depth) {
+    depth = depth || 0;
+    try { return { scene, id: (await obs.req("GetSceneItemId", { sceneName: scene, sourceName: src })).sceneItemId }; } catch (e) {}
+    if (depth > 3) return null;
+    let items = [];
+    try { items = (await obs.req(isGroup ? "GetGroupSceneItemList" : "GetSceneItemList", { sceneName: scene })).sceneItems || []; } catch (e) { return null; }
+    for (const it of items) {
+      const inner = it.isGroup ? true : (it.sourceType === "OBS_SOURCE_TYPE_SCENE" ? false : null);
+      if (inner === null) continue;
+      const hit = await findSceneItem(it.sourceName, src, inner, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  }
   async function playReplay(path) {
-    const src = S.obs.source;
+    let src = S.obs.source;
     try {
-      await obs.req("SetInputSettings", { inputName: src, inputSettings: { is_local_file: true, local_file: path, looping: false, restart_on_activate: true, close_when_inactive: true }, overlay: true });
+      const settings = { inputSettings: { is_local_file: true, local_file: path, looping: false, restart_on_activate: true, close_when_inactive: true }, overlay: true };
+      try { await obs.req("SetInputSettings", Object.assign({ inputName: src }, settings)); }
+      catch (e) {   // the old name (before sources lost "AWYM "), or the new one
+        const other = src.startsWith("AWYM ") ? src.slice(5) : "AWYM " + src;
+        await obs.req("SetInputSettings", Object.assign({ inputName: other }, settings)); src = other;
+      }
       const cur = await obs.req("GetCurrentProgramScene");
       const scene = cur.currentProgramSceneName || cur.sceneName;
-      let item;
-      try { item = (await obs.req("GetSceneItemId", { sceneName: scene, sourceName: src })).sceneItemId; }
-      catch (e) { note("obsMsg", `Add the media source "${src}" to the "${scene}" scene first (the setup script adds it to Main Show).`, true); return; }
-      await obs.req("SetSceneItemEnabled", { sceneName: scene, sceneItemId: item, sceneItemEnabled: true });
+      const hit = await findSceneItem(scene, src, false);
+      if (!hit) { note("obsMsg", `Add the media source "${src}" to the "${scene}" scene first (the setup script puts it in Show Overlays, which every show scene has).`, true); return; }
+      const item = hit.id;
+      await obs.req("SetSceneItemEnabled", { sceneName: hit.scene, sceneItemId: item, sceneItemEnabled: true });
       await obs.req("TriggerMediaInputAction", { inputName: src, mediaAction: "OBS_WEBSOCKET_MEDIA_INPUT_ACTION_RESTART" }).catch(() => {});
-      replayItem = { scene, id: item };
+      replayItem = { scene: hit.scene, id: item };
       debate("replay", { on: true });
       note("obsMsg", "Instant replay rolling.");
     } catch (e) {
@@ -982,6 +1039,9 @@
      FRAME EFFECTS (frame-fx.html over each camera frame)
      ===================================================================== */
   const FX_LIST = [["fire", "🔥", "Fire"], ["ice", "🧊", "Ice"], ["zap", "⚡", "Lightning"], ["smoke", "💨", "Smoke"], ["sparks", "✨", "Sparks"], ["shake", "💥", "Shake"]];
+  const FX_VERDICTS = [["trash", "🗑️", "Trash take"], ["facts", "💯", "100% Facts"], ["cooking", "👨‍🍳", "Cooking"], ["cap", "🧢", "Cap"],
+    ["bricked", "🧱", "Bricked"], ["airball", "🌬️", "Air ball"], ["technical", "🟥", "Technical foul"], ["posterized", "💥", "Posterized"],
+    ["onfire", "🔥", "On fire"], ["clown", "🤡", "Clown take"]];
   const FX_LEN = { short: 3, normal: null, hold: 0 };
   S.fx = Object.assign({ target: "floor", len: "normal" }, S.fx || {});
   const fxPlaying = {};   // seat → [effects playing]
@@ -991,23 +1051,91 @@
     const nameOf = (n) => ((names[n] || names[String(n)] || {}).name || "").trim();
     const seat = (n) => nameOf(n) ? esc(nameOf(n)) : `Seat ${n}`;
     const tip = { floor: "Whoever has the floor (★ spotlight); everyone if nobody does", "*": "Every camera frame" };
-    $("fxSeat").innerHTML = [["floor", "★ Floor"], ["*", "Everyone"], ["1", seat(1)], ["2", seat(2)], ["3", seat(3)], ["4", seat(4)]]
+    $("fxSeat").innerHTML = [["floor", "★ Floor"], ["*", "Everyone"], ["1", seat(1)], ["2", seat(2)], ["3", seat(3)], ["4", seat(4)], ["5", seat(5)], ["6", seat(6)]]
       .map(([v, l]) => `<button data-t="${v}" class="${S.fx.target === v ? "on" : ""}" title="${esc(tip[v] || ("Seat " + v + (nameOf(v) ? " · " + nameOf(v) : "")))}">${l}</button>`).join("");
     const live = new Set(S.fx.target === "*" || S.fx.target === "floor" ? Object.values(fxPlaying).flat() : (fxPlaying[S.fx.target] || []));
-    $("fxBtns").innerHTML = FX_LIST.map(([id, ic, nm]) => `<button class="fxbtn${live.has(id) ? " live" : ""}" data-fx="${id}"><span class="ic">${ic}</span>${nm}</button>`).join("");
+    const btn = ([id, ic, nm]) => `<button class="fxbtn${live.has(id) ? " live" : ""}" data-fx="${id}"><span class="ic">${ic}</span>${nm}</button>`;
+    $("fxBtns").innerHTML = FX_LIST.map(btn).join("");
+    $("fxVerdicts").innerHTML = FX_VERDICTS.map(btn).join("");
     document.querySelectorAll("#fxLen button").forEach((b) => b.classList.toggle("on", b.dataset.len === S.fx.len));
   }
   function fxPlay(effect) {
     AWYM.send({ to: "fx", id: S.fx.target, cmd: "play", effect, dur: FX_LEN[S.fx.len] });
-    if (Date.now() - heard.fx > 3500) note("fxMsg", "No Frame FX source answered. In OBS: Tools → Scripts → awym-obs-setup.lua → Build my scenes (it adds one above each camera frame, also inside groups; the status line says what it added). If they're already in Main Show, right-click one → Refresh.", true);
+    if (Date.now() - heard.fx > 3500) note("fxMsg", "No Frame FX source answered. In OBS: Tools → Scripts → awym-obs-setup.lua → Build my scenes (it adds one above each camera frame, also inside groups; the status line says what it added). If they're already in your show scenes, right-click one → Refresh.", true);
   }
   function fxStop() { AWYM.send({ to: "fx", id: S.fx.target === "floor" ? "*" : S.fx.target, cmd: "stop" }); }
   $("fxSeat").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.fx.target = b.dataset.t; save(); paintFx(); };
-  $("fxBtns").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) fxPlay(b.dataset.fx); };
+  $("fxBtns").onclick = $("fxVerdicts").onclick = (e) => { const b = e.target.closest("[data-fx]"); if (b) fxPlay(b.dataset.fx); };
   $("fxLen").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; S.fx.len = b.dataset.len; save(); paintFx(); };
   $("fxStop").onclick = fxStop;
+
+  /* Fine-tune: multipliers per effect (1 = as designed), sent to every Frame FX layer */
+  const TUNE_KNOBS = {
+    fire:   [["amount", "Amount of flame", .25, 2.5], ["size", "Flame size", .5, 1.8], ["speed", "Speed", .4, 2], ["bright", "Brightness", .2, 1.6]],
+    ice:    [["amount", "Frost spikes", .3, 2.5], ["size", "Spike length", .5, 2], ["speed", "Speed (glints, drips)", .4, 2], ["bright", "Brightness", .2, 1.6]],
+    zap:    [["amount", "Strikes", .3, 2.5], ["size", "Bolt reach", .5, 1.8], ["speed", "Speed", .4, 2], ["bright", "Brightness", .2, 1.6]],
+    smoke:  [["amount", "Thickness", .3, 2.5], ["size", "Puff size", .5, 1.8], ["speed", "Speed", .4, 2.5], ["bright", "Opacity", .2, 1.6]],
+    sparks: [["amount", "Amount", .3, 2.5], ["size", "Reach", .5, 1.6], ["speed", "Speed", .4, 2], ["bright", "Brightness", .2, 1.6]],
+    trash:  [["amount", "Flies and paper", .3, 2.5], ["size", "Size (strip and can)", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    facts:  [["amount", "Sparkles", .3, 2.5], ["size", "Size (strip and seal)", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    cooking: [["amount", "Steam and flames", .3, 2], ["size", "Size (strip, hat, flames)", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    cap:    [["amount", "Caps", .3, 2.5], ["size", "Size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    bricked: [["amount", "Cracks and rubble", .3, 2], ["size", "Size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    airball: [["amount", "Tumbleweed speed", .5, 2], ["size", "Size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    technical: [["size", "Size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    posterized: [["amount", "Shards", .3, 2], ["size", "Strip size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    onfire: [["size", "Size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    clown:  [["amount", "Confetti", .3, 2.5], ["size", "Size", .6, 1.4], ["speed", "Speed", .5, 2], ["bright", "Brightness", .3, 1]],
+    shake:  [["strength", "Strength", .3, 2.5], ["length", "Length", .4, 2.5]],
+    talk:   [["spread", "Ripple distance", .3, 2.2], ["fade", "Fade time", .5, 2.5], ["rate", "Ripples per second", .4, 2.5], ["bright", "Brightness", .2, 1.6], ["halo", "Halo size", .3, 2]],
+  };
+  const TUNE_NAMES = [["fire", "🔥 Fire"], ["ice", "🧊 Ice"], ["zap", "⚡ Lightning"], ["smoke", "💨 Smoke"], ["sparks", "✨ Sparks"], ["trash", "🗑️ Trash"], ["facts", "💯 Facts"], ["cooking", "👨‍🍳 Cooking"], ["cap", "🧢 Cap"], ["bricked", "🧱 Bricked"],
+    ["airball", "🌬️ Air ball"], ["technical", "🟥 Technical"], ["posterized", "💥 Poster"], ["onfire", "🔥 On fire"], ["clown", "🤡 Clown"], ["shake", "💥 Shake"], ["talk", "🎙 Speaking"]];
+  const TUNE_KEY = "awym-fx-tune-v1";
+  S.fxTune = Object.assign({}, (() => { try { return JSON.parse(localStorage.getItem(TUNE_KEY) || "{}"); } catch (e) { return {}; } })(), S.fxTune || {});
+  let tunePick = S.fxTunePick && TUNE_KNOBS[S.fxTunePick] ? S.fxTunePick : "fire";
+  const tuneVal = (fxn, knob) => { const v = Number((S.fxTune[fxn] || {})[knob]); return isFinite(v) && v > 0 ? v : 1; };
+  function sendTune() {
+    try { localStorage.setItem(TUNE_KEY, JSON.stringify(S.fxTune)); } catch (e) {}
+    AWYM.send({ to: "fx", id: "*", cmd: "tune", tune: S.fxTune });
+  }
+  function paintTune() {
+    $("tuneFx").innerHTML = TUNE_NAMES.map(([v, l]) => {
+      const changed = TUNE_KNOBS[v].some(([k]) => Math.abs(tuneVal(v, k) - 1) > .001);
+      return `<button data-v="${v}" class="${v === tunePick ? "on" : ""}" title="${changed ? "Changed from the built-in look" : ""}">${l}${changed ? " •" : ""}</button>`;
+    }).join("");
+    $("tuneSliders").innerHTML = TUNE_KNOBS[tunePick].map(([k, label, lo, hi]) => {
+      const v = tuneVal(tunePick, k);
+      return `<label for="tn_${k}">${label} <b id="tv_${k}">${Math.round(v * 100)}%</b></label>
+        <input type="range" id="tn_${k}" data-k="${k}" min="${lo}" max="${hi}" step="0.05" value="${v}">`;
+    }).join("");
+  }
+  $("tuneFx").onclick = (e) => { const b = e.target.closest("button"); if (!b) return; tunePick = b.dataset.v; S.fxTunePick = tunePick; save(); paintTune(); };
+  $("tuneSliders").addEventListener("input", (e) => {
+    const r = e.target.closest("input[type=range]"); if (!r) return;
+    const v = Math.round(Number(r.value) * 100) / 100;
+    S.fxTune[tunePick] = Object.assign({}, S.fxTune[tunePick] || {}, { [r.dataset.k]: v });
+    $("tv_" + r.dataset.k).textContent = Math.round(v * 100) + "%";
+    save(); sendTune();
+  });
+  $("tuneSliders").addEventListener("change", paintTune);   // updates the • on the effect buttons
+  $("tuneReset").onclick = () => { delete S.fxTune[tunePick]; save(); sendTune(); paintTune(); };
+  let tryTalk = 0;
+  $("tuneTry").onclick = () => {
+    if (tunePick !== "talk") { fxPlay(tunePick); return; }
+    const id = S.fx.target === "floor" ? "*" : S.fx.target;
+    clearInterval(tryTalk); let n = 0;
+    tryTalk = setInterval(() => {   // 4 s of pretend talking (frames and Frame FX layers both show it)
+      n++; const on = n < 40;
+      AWYM.send({ to: "frame", id, cmd: "talk", on, lvl: .45 + .55 * Math.abs(Math.sin(n / 2.6)) });
+      if (!on) clearInterval(tryTalk);
+    }, 100);
+  };
+  paintTune(); sendTune();
+
   AWYM.listen((m) => {
     if (m.from !== "fx" || m.id == null) return;
+    if (!fxSeen[m.id]) AWYM.send({ to: "fx", id: "*", cmd: "tune", tune: S.fxTune });   // a Frame FX layer just appeared
     heard.fx = Date.now(); fxSeen[m.id] = Date.now();
     if (Array.isArray(m.playing)) { fxPlaying[m.id] = m.playing; paintFx(); }
   });
@@ -1019,7 +1147,8 @@
   S.talk = Object.assign({ seats: {}, thr: -40, gap: 15, light: true, onlyLive: false, tracking: false, shown: false, pos: "right", auto: {} }, S.talk || {});
   const freshTotals = () => ({ secs: {}, talk: 0, overlap: 0, quiet: 0, pairs: {}, cutins: {} });
   S.talk.totals = Object.assign(freshTotals(), S.talk.totals || {});
-  const SEATS = [1, 2, 3, 4];
+  const SEATS = [1, 2, 3, 4, 5, 6];
+  const guestName = (n, list) => ["Guest Seat " + n, "AWYM Guest Seat " + n].find((g) => list.includes ? list.includes(g) : list[g] != null);
   const TK = { lv: {}, on: {}, since: {}, lastRaw: {}, raw: {}, lastSent: {}, lastMeter: 0, inputs: [], dirty: true, last: performance.now(), lastSave: 0, lastCard: 0 };
   const seatName = (n) => { try { const c = JSON.parse(localStorage.getItem("awym-control-v1") || "{}"); const nm = ((c.slots || {})[n] || {}).name; if (nm && nm.trim()) return nm.trim(); } catch (e) {} return "Seat " + n; };
   const mmss = (x) => { x = Math.round(x || 0); return Math.floor(x / 60) + ":" + String(x % 60).padStart(2, "0"); };
@@ -1044,8 +1173,8 @@
     });
     const names = Object.keys(lv).sort();
     if (names.join("|") !== TK.inputs.join("|")) { TK.inputs = names; TK.dirty = true; }
-    // remote guests: their AWYM Guest Seat source is their mic
-    SEATS.forEach((n) => { const g = "AWYM Guest Seat " + n; if (!S.talk.seats[n] && !S.talk.auto[n] && lv[g] != null) { S.talk.seats[n] = g; S.talk.auto[n] = true; TK.dirty = true; save(); } });
+    // remote guests: their Guest Seat source is their mic
+    SEATS.forEach((n) => { const g = guestName(n, lv); if (g && !S.talk.seats[n] && !S.talk.auto[n] && lv[g] != null) { S.talk.seats[n] = g; S.talk.auto[n] = true; TK.dirty = true; save(); } });
     const act = used();
     act.forEach((n) => { TK.lv[n] = lv[S.talk.seats[n]] != null ? lv[S.talk.seats[n]] : -100; });
     const loud = Math.max(-100, ...act.map((n) => TK.lv[n]));
@@ -1111,7 +1240,8 @@
     if (document.activeElement && document.activeElement.closest && document.activeElement.closest("#tkSeats")) return;
     TK.dirty = false;
     const opts = (cur) => `<option value="">— no mic —</option>` + [...new Set(TK.inputs.concat(cur ? [cur] : []))].map((i) => `<option${i === cur ? " selected" : ""}>${esc(i)}</option>`).join("");
-    $("tkSeats").innerHTML = SEATS.map((n) => `<div class="tkseat" data-n="${n}"><div class="t1"><span class="dot"></span><span class="nm">${esc(seatName(n))}</span><span class="tm"></span><span class="pc"></span><button class="mute" data-m="${n}" title="Mute or unmute this mic in OBS">🔇</button></div>
+    // seats 5 and 6 (the bigger moderator layouts) only once they have a name or a mic
+    $("tkSeats").innerHTML = SEATS.filter((n) => n <= 4 || S.talk.seats[n] || seatName(n) !== "Seat " + n).map((n) => `<div class="tkseat" data-n="${n}"><div class="t1"><span class="dot"></span><span class="nm">${esc(seatName(n))}</span><span class="tm"></span><span class="pc"></span><button class="mute" data-m="${n}" title="Mute or unmute this mic in OBS">🔇</button></div>
       <select data-n="${n}" title="This person's mic in OBS">${opts(S.talk.seats[n] || "")}</select>
       <div class="tkmeter"><i></i><b></b></div></div>`).join("");
     $("tkThr").value = S.talk.thr; $("tkGap").value = S.talk.gap; $("tkLight").checked = S.talk.light; $("tkLive").checked = S.talk.onlyLive;
@@ -1166,7 +1296,7 @@
   /* ---------- mute (each seat's mic, in OBS) ---------- */
   TK.muted = {};
   /** The OBS input that is seat n's mic: the one picked in Talk time, or their guest source. */
-  const micOf = (n) => S.talk.seats[n] || (TK.inputs.includes("AWYM Guest Seat " + n) ? "AWYM Guest Seat " + n : "");
+  const micOf = (n) => S.talk.seats[n] || guestName(n, TK.inputs) || "";
   const tellFrame = (n) => AWYM.send({ to: "frame", id: String(n), cmd: "mute", on: !!TK.muted[n] });
   /** Ask OBS which mics are muted (after connecting or picking a mic). */
   async function refreshMutes() {
@@ -1225,6 +1355,35 @@
   addEventListener("storage", (e) => { if (e.key === "awym-control-v1") TK.dirty = true; });   // names changed in the Control Panel
   paintTalk();
 
+  /* =====================================================================
+     FACES (avatar.html between each camera and its frame)
+     ===================================================================== */
+  const AV = window.AWYM_AVATARS || {};
+  const avSeats = Object.keys(AV).filter((k) => (AV[k].faces || []).length).sort();
+  const avState = {};      // seat → {on, face, at}
+  S.faces = Object.assign({ seat: avSeats[0] || "1" }, S.faces || {});
+  if (!avSeats.includes(S.faces.seat)) S.faces.seat = avSeats[0] || "1";
+  function paintFaces() {
+    const seat = S.faces.seat, set = AV[seat] || { faces: [] }, st = avState[seat];
+    $("faceSeat").innerHTML = avSeats.length > 1 ? avSeats.map((k) => `<button data-s="${k}" class="${k === seat ? "on" : ""}">${esc(seatName(k))}</button>`).join("") : "";
+    $("faceSeat").style.display = avSeats.length > 1 ? "" : "none";
+    if (!avSeats.length) { $("faceGrid").innerHTML = `<div class="empty">No faces yet. Put pictures in avatars/ and list them in avatars/avatars.js.</div>`; $("faceState").textContent = ""; return; }
+    $("faceGrid").innerHTML = set.faces.map((f, i) => `<button data-n="${i + 1}" class="${st && st.on && st.face === i ? "on" : ""}" title="${esc(f.name)}"><img src="avatars/${esc(f.file)}" alt="">${esc(f.name)}</button>`).join("");
+    const here = st && Date.now() - st.at < 6000;
+    $("faceState").innerHTML = !here ? `<b>${esc(seatName(seat))}</b>: Avatar source not found (click Build my scenes in the setup script)` :
+      st.on ? `<b>${esc(seatName(seat))}</b>: showing <b>${esc(set.faces[st.face] ? set.faces[st.face].name : "")}</b>` : `<b>${esc(seatName(seat))}</b>: live camera`;
+    $("faceLive").classList.toggle("on", !!(here && !st.on));
+  }
+  const avSend = (cmd, extra) => AWYM.send(Object.assign({ to: "avatar", id: S.faces.seat, cmd }, extra || {}));
+  $("faceSeat").onclick = (e) => { const b = e.target.closest("button[data-s]"); if (!b) return; S.faces.seat = b.dataset.s; save(); paintFaces(); };
+  $("faceGrid").onclick = (e) => { const b = e.target.closest("button[data-n]"); if (b) avSend("face", { n: Number(b.dataset.n) }); };
+  $("faceLive").onclick = () => avSend("on", { on: false });
+  $("faceNext").onclick = () => avSend("next");
+  AWYM.listen((m) => { if (m.from === "avatar" && m.id != null) { avState[String(m.id)] = { on: !!m.on, face: m.face | 0, at: Date.now() }; paintFaces(); } });
+  setInterval(() => { AWYM.send({ to: "avatar", id: "*", cmd: "ping" }); paintFaces(); }, 3000);
+  AWYM.send({ to: "avatar", id: "*", cmd: "ping" });
+  paintFaces();
+
   /* OBS hotkeys / stream-deck keys (relayed by hotkeys.html): do the action, then say we did */
   const HOTKEY = {
     next: () => { if (RD.items[RD.current + 1]) goTo(RD.current + 1); },
@@ -1240,7 +1399,7 @@
     "unmute-all": () => unmuteAll()
   };
   [1, 2, 3, 4].forEach((n) => { HOTKEY["mute-" + n] = () => toggleMute(n); });
-  FX_LIST.forEach(([id]) => { HOTKEY["fx-" + id] = () => fxPlay(id); });
+  FX_LIST.concat(FX_VERDICTS).forEach(([id]) => { HOTKEY["fx-" + id] = () => fxPlay(id); });
   AWYM.listen((m) => {
     if (m.to !== "runner" || m.cmd !== "hotkey") return;
     const a = String(m.action || "");

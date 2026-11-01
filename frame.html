@@ -23,7 +23,8 @@
   ── For developers ─────────────────────────────────────────────
   Type:      OBS browser source, designed at 600 × 660 (ring 600 × 600 + name plate).
   Uses:      theme.css, shared.js.
-  Messages:  listens  to:"frame" spotlight {on} | shake {ms} | talk {on, lvl 0–1} | mute {on} | ping   ·  to:"lower" update {data} (same id → name plate)
+  Messages:  (also sends from:"frame" {id, plate:[x,y,w,h] | null} when the name plate changes, for the Frame FX layer)
+             listens  to:"frame" spotlight {on} | shake {ms, amp} | talk {on, lvl 0–1} | mute {on} | ping   ·  to:"lower" update {data} (same id → name plate)
              sends    from:"frame" {id, spot, shape} · {id, cmd:"hello", shape}
              (frame-fx.html, its effects layer, sends the shake and reads spot + shape)
   Geometry:  ring centred at (300, 300); the open hole has radius ≈ 262 (87% of the width),
@@ -51,9 +52,11 @@
 
   /* speaking light (Show Runner → Talk time): a bright ring that follows the voice, and a
      little level meter on the name plate */
-  .talk { fill: none; stroke: var(--light); stroke-width: calc(10px + 8px * var(--glow-k, 1)); opacity: 0;
-          filter: blur(calc(3px + 6px * var(--glow-k, 1))); transition: opacity .14s; }
-  .talking .talk { opacity: calc(.35 + .65 * var(--lvl, .6)); }
+  .talk { fill: none; stroke: var(--light); stroke-width: calc(10px + (6px + 8px * var(--lvl, .6)) * var(--glow-k, 1)); opacity: 0;
+          filter: blur(calc(3px + 6px * var(--glow-k, 1))); transition: opacity .9s ease-out, stroke-width .12s; }
+  .talking .talk { opacity: calc(.5 + .5 * var(--lvl, .6)); transition: opacity .12s, stroke-width .12s; }
+  /* the wider halo and the ripples that spread out and fade are drawn by the Frame FX layer,
+     which has room outside the ring */
   .talking .inner { stroke: var(--light); }
   .eq { display: none; gap: 4px; align-items: flex-end; height: 30px; margin-right: 12px; vertical-align: middle; }
   .eq i { width: 7px; background: var(--accent); border-radius: 2px; height: 30%; animation: eq .5s ease-in-out infinite alternate; }
@@ -159,6 +162,19 @@
     document.getElementById("role").textContent = data.role || "";
     document.getElementById("badge").textContent = String(data.number || "").trim().slice(0, 2);
     document.querySelector(".plate").style.display = (data.name || data.role) && AWYM.param("plate") !== "0" ? "" : "none";
+    sendPlate();
+  }
+  /** Tell the Frame FX layer where the name plate is (design px), so the speaking ripples go round it. */
+  let lastPlate = "";
+  function plateBox() {
+    const el = document.querySelector(".plate");
+    if (!el || el.style.display === "none" || !el.offsetWidth) return null;
+    return [Math.round((600 - el.offsetWidth) / 2), el.offsetTop, el.offsetWidth, el.offsetHeight];
+  }
+  function sendPlate(force) {
+    const b = plateBox(), k = JSON.stringify(b);
+    if (!force && k === lastPlate) return;
+    lastPlate = k; AWYM.send({ from: "frame", id, plate: b });
   }
   /** Turn the "Has the floor" glow on/off and tell the Control Panel. */
   function spotlight(on) { document.body.classList.toggle("spot", !!on); AWYM.send({ from: "frame", id, spot: !!on, shape }); }
@@ -170,8 +186,8 @@
     clearTimeout(talkOff); if (on) talkOff = setTimeout(() => talk(false), 3000);   // the dock went quiet: switch off
   }
   /** A jolt that settles (the 💥 Shake frame effect); the effects layer shakes in step. */
-  function shake(ms) {
-    const amp = 9 * Math.min(innerWidth / 600, innerHeight / 660), keys = [];
+  function shake(ms, k) {
+    const amp = 9 * (isFinite(k) && k > 0 ? Math.min(5, k) : 1) * Math.min(innerWidth / 600, innerHeight / 660), keys = [];
     for (let i = 0; i <= 10; i++) { const a = amp * (1 - i / 10); keys.push({ transform: `translate(${(Math.random() * 2 - 1) * a}px, ${(Math.random() * 2 - 1) * a}px) rotate(${(Math.random() * 2 - 1) * a * 0.12}deg)` }); }
     keys[10] = { transform: "translate(0,0) rotate(0deg)" };
     try { document.body.animate(keys, { duration: Math.max(200, Math.min(3000, Number(ms) || 650)), easing: "linear" }); } catch (e) {}
@@ -182,16 +198,17 @@
     if (m.to === "lower" && (m.id === id) && m.data) { data = Object.assign({}, data, m.data); apply(); }
     if (m.to === "frame" && (m.id === id || m.id === "*")) {
       if (m.cmd === "spotlight") spotlight(m.on);
-      else if (m.cmd === "shake") shake(m.ms);
+      else if (m.cmd === "shake") shake(m.ms, Number(m.amp));
       else if (m.cmd === "talk") talk(m.on, m.lvl);
       else if (m.cmd === "mute") document.body.classList.toggle("muted", !!m.on);
-      else if (m.cmd === "ping") AWYM.send({ from: "frame", id, spot: document.body.classList.contains("spot"), shape });
+      else if (m.cmd === "ping") AWYM.send({ from: "frame", id, spot: document.body.classList.contains("spot"), shape, plate: plateBox() });
     }
   });
   AWYM.onClear(() => { if (document.body.classList.contains("spot")) spotlight(false); talk(false); });   // 🚨 Clear
   document.addEventListener("click", () => spotlight(!document.body.classList.contains("spot")));
 
   apply();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => sendPlate());
   spotlight(AWYM.param("spotlight") === "1");
   AWYM.send({ from: "frame", id, cmd: "hello", shape });
 })();

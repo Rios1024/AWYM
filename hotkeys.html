@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>AWYM Hotkey Relay</title>
 <!--
-  HOTKEY RELAY — a tiny invisible OBS browser source (named "AWYM Hotkeys").
+  HOTKEY RELAY — a tiny invisible OBS browser source (named "Hotkeys").
   When you press one of the kit's OBS hotkeys (or a stream-deck key set to it),
   the setup script (awym-obs-setup.lua) points this source at an address like
       hotkeys.html#next~1767039600~12
@@ -16,7 +16,7 @@
   ── For developers ─────────────────────────────────────────────
   Type:      OBS browser source, 16 × 16, transparent. Reloaded for every key press
              (OBS rebuilds a browser source when its address changes).
-  Uses:      hotkeys.js (the action list). It does NOT load shared.js, so a key press
+  Uses:      hotkeys.js (the action list) and avatars/avatars.js (seat 1's faces). It does NOT load shared.js, so a key press
              doesn't make the Theme Panel count a new overlay; it opens its own
              BroadcastChannel("awym-control").
   Address:   #<action id>~<unix time in seconds>~<press number>. Presses older than
@@ -39,6 +39,7 @@
 </head>
 <body>
 <div class="test" id="test"><div id="log"></div></div>
+<script src="avatars/avatars.js"></script>
 <script src="hotkeys.js"></script>
 <script>
 (function () {
@@ -64,6 +65,9 @@
       else if (id === "lt-hide") send({ to: "lower", id: "*", cmd: "hide" });
       else if (id === "hide-stats") send({ to: "stats", cmd: "hide" });
       else if (id === "hide-text") send({ to: "content", cmd: "hide" });
+      else if (/^face-\d+$/.test(id)) send({ to: "avatar", id: "1", cmd: "face", n: a.face });   // seat 1's faces
+      else if (id === "avatar-toggle") send({ to: "avatar", id: "1", cmd: "toggle" });
+      else if (id === "face-next") send({ to: "avatar", id: "1", cmd: "next" });
       return;
     }
     // actions the Show Runner dock carries out

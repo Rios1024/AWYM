@@ -9,7 +9,7 @@ async def main():
         b = await p.chromium.launch(); pg = await b.new_page(); errs = []
         pg.on("pageerror", lambda e: errs.append(str(e)))
         await pg.goto(pathlib.Path(ROOT, "hotkey-icons.html").as_uri()); await asyncio.sleep(1)
-        files = await pg.evaluate("AWYM_ICONS.render(144, {font: 'clean', shape: 'round'})")
+        files = await pg.evaluate("AWYM_ICONS.ready.then(() => AWYM_ICONS.render(144, {font: 'clean', shape: 'round'}))")
         for f in os.listdir(OUT):
             if f.endswith(".png"): os.remove(os.path.join(OUT, f))
         for f in files: open(os.path.join(OUT, f["name"]), "wb").write(base64.b64decode(f["dataURL"].split(",")[1]))

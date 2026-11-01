@@ -12,10 +12,52 @@ ARGUE WITH YO MOMMA! — OBS OVERLAY KIT
 >>> Scripts window) and put your cameras behind the frames. Leave the
 >>> script loaded: it also provides the AWYM hotkeys.
 
+WHAT "BUILD MY SCENES" MAKES
+----------------------------
+  Scenes (in this order): Starting Soon · Main Show · Show: 1 Person ·
+  Show: 2 People · Show: 3 People · Show: 4 People · Show: 2 + Moderator ·
+  Show: 3 + Moderator · Show: 4 + Moderator · Show: 5 + Moderator ·
+  Be Right Back · Technical Difficulties · Halftime · Thanks for Watching ·
+  Show Overlays.
+    Main Show uses the layout picked in the script ("Main Show layout");
+    the Show: … scenes are every layout, ready to switch to (untick "Also
+    make a scene for every layout" to skip them). In the moderator layouts
+    seat 1 is the moderator, a bit smaller (on the left, or in the middle
+    for 2 + Moderator).
+  Sources have plain names (Frame 1, Shot Clock…). Older kits called them
+    "AWYM …": Build my scenes renames those (unless the plain name is
+    already taken).
+  Groups, each its own color in the Sources list:
+    Seat 1 … Seat 6 (Moderator in the moderator layouts)
+        Camera N (or Guest Seat N), Avatar N, Frame N, Frame FX N
+        Click a group's eye to hide that person; drag the group to move
+        them (the effects and avatar follow their frame anyway).
+    Names        the lower thirds
+    Background   (no group; locked)
+    Show Overlays  a scene shown on top of every show scene, so the
+        graphics are set up once:
+        Graphics    Shot Clock, On-Screen Text, Stats Overlay, Debate Overlay
+        Show Tools  Instant Replay (hidden until a replay), Sound Effects,
+                    Hotkeys
+    Groups in the Show: … scenes end in the layout, e.g. "Seat 2 (3+M)":
+    OBS needs every group name to be different.
+  Cameras: each seat gets "Camera N", a Video Capture Device with no device
+    picked yet: double-click it and choose the camera. It's cut to a circle
+    with masks/circle-16x9.png, which fits 16:9 cameras (1920x1080,
+    1280x720). For a 4:3 camera, open its Filters → Circle cutout and pick
+    masks/circle-4x3.png. Untick "Add a camera…" to place cameras yourself.
+    Same camera in every scene: it's one source, shown in each.
+  An existing Main Show is never rebuilt (only missing overlays are
+    added). For the grouped version, rename it (e.g. "Main Show old") and
+    click Build my scenes; delete the old one when you're happy.
+  Seats 5 and 6 (4 + / 5 + Moderator) have names in the Control Panel and
+    mics in the Show Runner's Talk time like the others; the hotkeys and
+    stream-deck keys cover seats 1–4.
+
 What's in this folder
 ---------------------
   START-HERE.html     Step-by-step OBS setup with copy-ready addresses
-  awym-obs-setup.lua  OBS script (Tools → Scripts) that builds all scenes and overlays
+  awym-obs-setup.lua  OBS script (Tools → Scripts) that builds all scenes, layouts and overlays
   background.html     Full-screen animated show background with the show title
   background-gallery.html  Pick a background scene, mix effects, copy the OBS address
   backgrounds.js      The background scenes (no need to touch)
@@ -28,6 +70,8 @@ What's in this folder
   shot-clock.html     Segment timer styled like an arena shot clock (buzzer included)
   lower-third.html    Name / role / handle / jersey-number graphic
   frame.html          Themed ring + name plate for circle-cutout cameras
+  avatar.html         Faces instead of a live camera (between the camera and its frame)
+  avatars/            The faces (avatars.js lists them; seat 1 has ten)
   frame-fx.html       Effects around a camera frame: fire, ice, lightning, smoke,
                       sparks, shake (the camera stays clear)
   stats-card.html     NBA stats overlay (score cards, player lines, standings, ticker)
@@ -51,8 +95,8 @@ What's in this folder
                       (sounds/README.txt); sounds/kit/ has the real recordings
   lib/                anime.js (animation library, MIT licence) for the effects
   obs-ws.js           Talks to OBS's WebSocket server for clips/replays (no need to touch)
-  hotkeys.html        Invisible source that carries out OBS hotkeys (AWYM Hotkeys)
-  hotkeys.js          The 51 hotkey actions and their suggested keys
+  hotkeys.html        Invisible source that carries out OBS hotkeys (Hotkeys)
+  hotkeys.js          The 73 hotkey actions and their suggested keys
   hotkey-icons.html   Make stream-deck key pictures in your show colors
   stream-controller/  Ready-made setups: VSD M18 scenes and Elgato Stream Deck
                       profiles (15-key, XL, Mini, Neo, +)
@@ -385,7 +429,7 @@ SHOW PACKS (for your other shows)
   a) Add the overlays (Main Show, top of the Sources list):
        .../debate.html   Size: 1920 x 1080
        .../sfx.html      Size: 100 x 100, tick "Control audio via OBS"
-       A Media Source named exactly "AWYM Instant Replay" (no file), hidden
+       A Media Source named exactly "Instant Replay" (no file), hidden
      The setup script adds all three (also to a Main Show you built earlier).
   b) Add the dock:  Docks → Custom Browser Docks… → .../show-runner.html
 
@@ -428,22 +472,39 @@ SHOW PACKS (for your other shows)
     dock is clicked. Sounds play through the Sound Effects source so they're
     in the stream; "Preview here only" plays them just in the dock.
 
+  FACES — swap someone's live camera for one of their prebuilt faces (seat 1:
+    Smile, Skeptical, Shocked, Thinking, Happy, Cringe, Unimpressed,
+    Starstruck, Facepalm, Smug). Click a face to put it over their camera,
+    inside the frame (the name plate, speaking light and effects stay on
+    top, and the face bobs along while they talk); Live camera switches
+    back. Hotkeys for seat 1: Ctrl+Alt+Shift+F13…F22 pick a face, D toggles
+    face / live camera, J = next face; the stream-deck layouts have a Faces
+    page. Each frame needs its
+    avatar layer, .../avatar.html?id=1 (600 x 660), same box as the frame,
+    between the camera and the frame: Build my scenes adds it and keeps it
+    lined up. Faces for other seats: avatars/README.txt.
+
   MUTE — a button per person at the top of the Show Runner (and next to each
     seat in Talk time) mutes or unmutes their mic in OBS; red = muted, and
     their camera frame shows a red MUTED tag. "Unmute all" appears while
     anyone is muted. Hotkeys: Ctrl+Alt+Shift+[ ] ; ' for seats 1–4 and \ to
     unmute everyone (on page 1 of every ready-made Stream Deck / M18 setup).
     It uses the mic picked for each seat in Talk time (remote guests: their
-    AWYM Guest Seat source is picked for you) and needs the OBS connection.
+    Guest Seat source is picked for you) and needs the OBS connection.
     Muting in OBS itself shows up here too.
 
   TALK TIME — who's talking, and for how long. Needs the OBS connection
     (Clips & replays): it reads each mic's level from OBS.
-    1. Pick each person's mic (remote guests get their AWYM Guest Seat
+    1. Pick each person's mic (remote guests get their Guest Seat
        source picked for you). Talk: the bar moves; the yellow line is
        Sensitivity. Move it so the bar only crosses it when they speak.
     2. Speaking light: whoever is talking gets a glowing ring and a little
        level meter on their camera frame's name plate (untick to turn off).
+       Their Frame FX layer adds a soft halo and rings that ripple outward
+       and fade (louder = stronger and quicker); when they stop, the glow
+       fades out over a second or two. The ripples need the "Frame FX"
+       layers (Build my scenes adds them); add &talk=0 to a Frame FX
+       layer's address to keep just the ring.
     3. ● Track counts (❚❚ pauses; "Only count while streaming or recording"
        waits for OBS). It counts each person's talk time and share, time
        spent TALKING AT THE SAME TIME (and for each pair), CUT-INS (someone
@@ -456,11 +517,52 @@ SHOW PACKS (for your other shows)
     doesn't count for both. Two people on one mic count as one.
 
   FRAME EFFECTS — 🔥 fire, 🧊 ice, ⚡ lightning, 💨 smoke, ✨ sparks and 💥 shake
-    around a camera frame. The middle of the frame is never covered, so the
+    around a camera frame, plus the VERDICTS (their own row of buttons):
+    🗑️ trash take, 💯 100% facts, 👨‍🍳 cooking, 🧢 cap, 🧱 bricked, 🌬️ air ball,
+    🟥 technical foul, 💥 posterized, 🔥 on fire, 🤡 clown take.
+    🗑️ Trash take: a grimy "TRASH TAKE" strip slaps across the lower part of
+    the camera at an angle and a dented metal trash can pops up under the
+    frame (lid flapping, stink lines, flies, paper balls). When it ends,
+    the strip is tossed into the can, the lid bangs shut and the can drops
+    away (🧯 Stop just fades it out).
+    💯 100% Facts: a gold "100% FACTS" strip stamps across the camera, a gold
+    "100% CERTIFIED" seal thuds onto the frame's top-right corner, the ring
+    glows gold and sparkles. It lifts off at the end.
+    👨‍🍳 Cooking: a chef's hat drops onto the top of the frame, blue gas-burner
+    flames light along the lower sides, steam curls up, and a hot "COOKING"
+    strip lies across the camera. At the end the hat flies off and the
+    burner clicks off.
+    🧢 Cap: "THAT'S CAP". Baseball caps rain down and bounce off the frame,
+    and a lie-detector tape under it scribbles wildly.
+    🧱 Bricked: a brick drops onto the frame (CLANK!), the ring cracks where
+    it hit, rubble and dust fall, and the brick tumbles off.
+    🌬️ Air ball: a basketball sails clean over the frame, missing
+    everything, then a tumbleweed rolls past underneath.
+    🟥 Technical foul: the ring flashes referee red, a striped "T" badge
+    stamps onto the top-left corner and the strip lands with a jolt.
+    💥 Posterized: the picture shatters like a backboard, white cracks
+    from the impact, then the glass falls away and the camera's clear.
+    🔥 On fire: arcade style. The frame catches fire (the Fire effect), a
+    flaming basketball laps the ring, "ON FIRE!".
+    🤡 Clown take: a red clown nose boings onto the middle of the picture
+    (HONK!), rainbow wig tufts pop out of the frame's top corners and
+    confetti bursts.
+    The verdicts are the only effects that cover part of the picture (a
+    strip across the lower part; the clown nose and the posterized glass),
+    on purpose. Otherwise the
+    middle of the frame is never covered, so the
     camera stays clear. Pick whose frame (★ Floor = whoever has the
     spotlight, or everyone if nobody does; Everyone; or a seat), how long
     (Quick, Normal, Until stopped), then click an effect. 🧯 Stop effects
     ends them; 🚨 Clear stops everything.
+    🎚 Fine-tune the look (under Stop): pick an effect and drag its sliders,
+    100% = the built-in look. Fire, ice, lightning, smoke and sparks: how
+    much (amount), size or reach, speed and brightness. Shake: strength
+    and length. 🎙 Speaking (the speaking light): ripple distance, fade
+    time, ripples per second, brightness and halo size. Changes show on
+    every frame straight away and are kept (also for the hotkeys and
+    stream decks); ▶ Try it previews on the frame picked above, ↺ Reset
+    puts that effect back.
     Each camera frame needs its effects layer, a Browser source
     .../frame-fx.html?id=1 (1000 x 1100) just above the frame with the same
     id (frame.html?id=1), in the same group if you grouped your camera and
@@ -507,7 +609,7 @@ SHOW PACKS (for your other shows)
 
 5d) HOTKEYS AND STREAM CONTROLLERS (VSD M18, Stream Deck, Loupedeck, macro pads)
 ---------------------------------------------------------------------------------
-  The setup script (awym-obs-setup.lua) adds 51 actions to OBS → Settings →
+  The setup script (awym-obs-setup.lua) adds 73 actions to OBS → Settings →
   Hotkeys, all named "AWYM: …". KEEP THE SCRIPT LOADED in Tools → Scripts,
   or they disappear. The first time, it fills in a key for each, always
   Ctrl + Alt + Shift plus one key (change them in Settings → Hotkeys):
@@ -524,24 +626,28 @@ SHOW PACKS (for your other shows)
     Clips          Save clip C · Instant replay V · Mark moment M
     Graphics       Hide stats card G · Hide on-screen text H
     Frame effects  Fire F · Ice I · Lightning L · Smoke O · Sparks A ·
-                   Shake B · Stop effects U   (on the frame picked in the
+                   Shake B · Stop effects U
+    Verdicts       Trash take , · 100% Facts . · Cooking / · Cap - ·
+                   Bricked = · Air ball ` · Technical foul Insert ·
+                   Posterized Home · On fire Page Up · Clown take End   (on the frame picked in the
                    Show Runner; without it, whoever has the floor)
+    Faces (seat 1) Faces 1–10 F13–F22 · Face on/off D · Next face J
+                   (F13–F22 are for stream decks; most keyboards don't have them)
     Mute           Seat 1 [ · Seat 2 ] · Seat 3 ; · Seat 4 ' · Unmute all \
                    (the keys right of L and P on a US keyboard; they need the
                    Show Runner open and connected to OBS)
 
   Also set Settings → Advanced → Hotkeys → Hotkey Focus Behavior → "Never
   disable hotkeys", so they work while another window is in front.
-  How it works: a hotkey points the invisible "AWYM Hotkeys" source (in
+  How it works: a hotkey points the invisible "Hotkeys" source (in
   Main Show; the script adds it) at hotkeys.html#action, which tells the
   overlays and docks. Rundown, scoreboard and clip actions need the Show
   Runner dock open; sounds still play without it (at 80%).
 
   READY-MADE CONTROLLER SETUPS (stream-controller/; START-HERE step 10 has a
   folded section per model with its layout):
-    VSD-M18/              VSD Craft scenes for the VSD M18: AWYM-Show (all
-                          51 keys on 5 pages) plus one-page Run of Show,
-                          Scoreboard, Frame FX and Sound Board scenes
+    VSD-M18/              AWYM-Show.SDProfile: one VSD Craft scene for the
+                          VSD M18 with all 73 keys on 7 pages
     Elgato-Stream-Deck/   Stream Deck profiles for the 15-key (MK.2 /
                           original), XL, Mini, Neo and + : double-click to
                           import
@@ -566,9 +672,9 @@ SHOW PACKS (for your other shows)
      text for you: link, use headphones, keep the tab open).
   3. Get them into Main Show:
        Automatic: Tools → Scripts → awym-obs-setup.lua → "Remote guests"
-       boxes: room name, password, seats (e.g. 2,3) → Build my scenes (tick
+       boxes: room name, password, seats 1–6 (e.g. 2,3) → Build my scenes (tick
        "add the overlays it's missing" if Main Show exists). Each guest
-       ("AWYM Guest Seat 2" …) lands behind their camera frame, cropped
+       ("Guest Seat 2" …) lands behind their camera frame, cropped
        square and cut out with the circle mask, with its own audio slider.
        By hand: each guest's OBS address as a Browser source, 1280 x 720,
        "Control audio via OBS" ticked, then crop + mask like a camera.

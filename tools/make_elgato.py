@@ -18,16 +18,18 @@ KIT = ROOT
 OUT = os.path.join(KIT, "stream-controller", "Elgato-Stream-Deck")
 ICONS = os.path.join(KIT, "icons", "hotkeys")   # 144 x 144: twice a standard key
 
-H = json.loads(subprocess.run(["node", "-e", "global.window={}; require(%s); console.log(JSON.stringify(window.AWYM_HOTKEYS))" % json.dumps(os.path.join(KIT, "hotkeys.js"))],
+H = json.loads(subprocess.run(["node", "-e", "global.window={}; require(%s); require(%s); console.log(JSON.stringify(window.AWYM_HOTKEYS))" % (json.dumps(os.path.join(KIT, "avatars", "avatars.js")), json.dumps(os.path.join(KIT, "hotkeys.js")))],
                               capture_output=True, text=True, check=True).stdout)
 BY = {h["id"]: h for h in H}
 FILE = {h["id"]: "%02d-%s.png" % (i + 1, h["id"]) for i, h in enumerate(H)}
-assert len(H) == 51
+assert len(H) == 73
 
-VK = {**{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}, **{"F%d" % n: 111 + n for n in range(1, 13)},
-      "BRACKETLEFT": 219, "BRACKETRIGHT": 221, "SEMICOLON": 186, "APOSTROPHE": 222, "BACKSLASH": 220}
-QT = {**{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}, **{"F%d" % n: 16777263 + n for n in range(1, 13)},
-      "BRACKETLEFT": 91, "BRACKETRIGHT": 93, "SEMICOLON": 59, "APOSTROPHE": 39, "BACKSLASH": 92}   # Qt key = the character
+VK = {**{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}, **{"F%d" % n: 111 + n for n in range(1, 25)},
+      "BRACKETLEFT": 219, "BRACKETRIGHT": 221, "SEMICOLON": 186, "APOSTROPHE": 222, "BACKSLASH": 220, "COMMA": 188, "PERIOD": 190, "SLASH": 191,
+      "MINUS": 189, "EQUAL": 187, "QUOTELEFT": 192, "INSERT": 45, "HOME": 36, "END": 35, "PAGEUP": 33}
+QT = {**{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}, **{"F%d" % n: 16777263 + n for n in range(1, 25)},
+      "BRACKETLEFT": 91, "BRACKETRIGHT": 93, "SEMICOLON": 59, "APOSTROPHE": 39, "BACKSLASH": 92, "COMMA": 44, "PERIOD": 46, "SLASH": 47,
+      "MINUS": 45, "EQUAL": 61, "QUOTELEFT": 96, "INSERT": 16777222, "HOME": 16777232, "END": 16777233, "PAGEUP": 16777238}   # Qt key = the character
 
 SECTIONS = [
     ("Run of show", ["next", "prev", "clear", "mark"]),
@@ -35,9 +37,11 @@ SECTIONS = [
     ("Scoreboard", ["score-a", "score-b", "score-show", "winner"]),
     ("Sound board", [h["id"] for h in H if h["group"] == "sound"]),
     ("Names", ["lt-1", "lt-2", "lt-3", "lt-4", "lt-hide"]),
-    ("Frame FX", [h["id"] for h in H if h["group"] == "fx"]),
+    ("Frame FX", [h["id"] for h in H if h["group"] == "fx" and not h.get("verdict")]),
+    ("Verdicts", [h["id"] for h in H if h.get("verdict")]),
     ("Clips & graphics", ["save-clip", "replay", "hide-stats", "hide-text"]),
     ("Mute", ["mute-1", "mute-2", "mute-3", "mute-4", "unmute-all"]),
+    ("Faces", [h["id"] for h in H if h["group"] == "face"]),
 ]
 assert sorted(i for _, s in SECTIONS for i in s) == sorted(BY), set(BY) ^ {i for _, s in SECTIONS for i in s}
 

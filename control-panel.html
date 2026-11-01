@@ -254,8 +254,8 @@
   $("segChips").addEventListener("click", (e) => { if (e.target.tagName === "BUTTON") setSeg(e.target.textContent); });
 
   /* ---------- lower thirds ---------- */
-  /* ---------- people: lower thirds + camera frames, slots 1–4 ---------- */
-  const SLOTS = ["1", "2", "3", "4"];
+  /* ---------- people: lower thirds + camera frames, slots 1–6 (5 and 6 for the bigger moderator layouts) ---------- */
+  const SLOTS = ["1", "2", "3", "4", "5", "6"];
   const ROLE_HINT = { "1": "Moderator", "2": "Host", "3": "Host", "4": "Guest" };
   const EMPTY = { name: "", role: "", handle: "", number: "" };
   saved.slots = saved.slots || {};
@@ -272,7 +272,7 @@
     return out;
   }
 
-  /** Draw the four people slots and wire up their inputs, Show/Hide and ★ buttons. */
+  /** Draw the six people slots and wire up their inputs, Show/Hide and ★ buttons. */
   function buildSlots() {
     $("slots").innerHTML = SLOTS.map((id) => {
       const d = slotData(id);

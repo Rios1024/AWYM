@@ -5,7 +5,7 @@ BUILD = _os.path.join(ROOT, "tools", ".build"); _os.makedirs(BUILD, exist_ok=Tru
 KIT = ROOT
 js = open(KIT + "/stream-controller/layouts.js", encoding="utf-8").read()
 L = json.loads(js[js.index("{"):js.rstrip().rstrip(";").rindex("}") + 1])
-H = json.loads(subprocess.run(["node", "-e", "global.window={}; require(%s); console.log(JSON.stringify(window.AWYM_HOTKEYS))" % json.dumps(os.path.join(KIT, "hotkeys.js"))], capture_output=True, text=True, check=True).stdout)
+H = json.loads(subprocess.run(["node", "-e", "global.window={}; require(%s); require(%s); console.log(JSON.stringify(window.AWYM_HOTKEYS))" % (json.dumps(os.path.join(KIT, "avatars", "avatars.js")), json.dumps(os.path.join(KIT, "hotkeys.js")))], capture_output=True, text=True, check=True).stdout)
 NAME = {h["id"]: h["label"] for h in H}
 NAME.update({"@prev": "◀ page", "@next": "page ▶", None: "(empty)"})
 def grid(l, ind="    "):
@@ -38,15 +38,10 @@ m = L["m18"]
 t.append("""
 VSD M18 (VSD Craft)
 -------------------
-  VSD-M18/AWYM-Show.SDProfile         all 51 keys on 5 pages
-  VSD-M18/AWYM-Run-of-Show.SDProfile  one page: segments, shot clock, clips, graphics
-  VSD-M18/AWYM-Scoreboard.SDProfile   one page: debate score, names, reaction sounds
-  VSD-M18/AWYM-Frame-FX.SDProfile     one page: the 7 frame effects
-  VSD-M18/AWYM-Sound-Board.SDProfile  one page: 15 sound effects
-  Import: in VSD Craft, the import button next to the scene list → pick a
-  file. Each file is its own scene; switch between them in the scene list.
-  The 3 plain buttons: AWYM Show = ◀ page · Clear screen · page ▶;
-  the one-page scenes = previous segment · Clear screen · next segment.
+  VSD-M18/AWYM-Show.SDProfile         the one file: all 73 keys on 7 pages
+  Import: in VSD Craft, the import button next to the scene list → pick the
+  file. A scene called AWYM Show appears.
+  The 3 plain buttons under the screen keys: ◀ page · Clear screen · page ▶.
 
 AWYM Show (top row first)
 """ + grid(m))
@@ -55,7 +50,7 @@ t.append("""
 ELGATO STREAM DECK (Stream Deck app 6.0 or newer; made for 7.3+)
 -------------------------------------------------------------
   Double-click the file for your model (or in the Stream Deck app: profile
-  list → Import). A profile called "AWYM Show" appears with all 51 actions.
+  list → Import). A profile called "AWYM Show" appears with all 73 actions.
   ◀ / ▶ page keys sit in the bottom corners (the Neo uses its touch points
   instead). If a profile won't import on your app version, set keys by hand:
   drag System → Hotkey onto a key, press the keys, Set from File → the

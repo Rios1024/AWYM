@@ -57,6 +57,8 @@
   <div id="groups"></div>
 </div>
 <script src="shared.js"></script>
+<script src="avatars/avatars.js"></script>
+<script src="avatars/thumbs.js"></script>
 <script src="hotkeys.js"></script>
 <script>
 (function () {
@@ -68,6 +70,13 @@
   const EMOJI = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 
   /** Draw one key icon. opts: {font: "theme"|"clean", shape: "round"|"square"} */
+  /* face pictures (seat 1's faces): embedded thumbnails, so the canvas can still be saved */
+  const FACE = {};
+  const faceReady = Promise.all(ACTIONS.filter((a) => a.img).map((a) => new Promise((res) => {
+    const src = (window.AWYM_AVATAR_THUMBS || {})[a.img.replace(/^avatars\//, "")];
+    if (!src) return res();
+    const im = new Image(); im.onload = () => { FACE[a.img] = im; res(); }; im.onerror = () => res(); im.src = src;
+  })));
   function drawIcon(ctx, a, S, opts) {
     opts = opts || {};
     const C = { dark: color("--dark"), sec: color("--secondary"), light: color("--light"), primary: color("--primary"), accent: color("--accent"), warn: color("--warning") };
@@ -90,7 +99,14 @@
     // glyph
     ctx.textAlign = "center"; ctx.textBaseline = "middle";
     const gy = S * 0.43;
-    if (a.text) {
+    if (a.img && FACE[a.img]) {   // a face: round photo with a ring in the group color
+      const im = FACE[a.img], r = S * 0.3, cx = S / 2, cy = gy + S * 0.01;
+      ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+      const k = (2 * r) / Math.min(im.width, im.height) * 1.55;   // zoomed in on the face (about 45% down the picture)
+      ctx.drawImage(im, cx - im.width * k / 2, cy - im.height * 0.45 * k, im.width * k, im.height * k);
+      ctx.restore();
+      ctx.strokeStyle = g; ctx.lineWidth = Math.max(2, S * 0.025); ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+    } else if (a.text) {
       const col = a.side === "b" ? C.accent : a.side === "a" ? C.primary : g;
       let fs = S * (a.icon.length > 1 ? 0.46 : 0.56);
       ctx.font = `${weight}${fs}px ${fontName}`;
@@ -143,7 +159,7 @@
     const ctx = c.getContext("2d");
     return ACTIONS.map((a, i) => { drawIcon(ctx, a, size, o || opts()); return { name: fileName(a, i), dataURL: c.toDataURL("image/png") }; });
   }
-  window.AWYM_ICONS = { render, drawIcon };
+  window.AWYM_ICONS = { render, drawIcon, ready: faceReady };
 
   /** The preview grid, by group. */
   function paint() {
@@ -188,7 +204,7 @@
     save(url, `awym-key-icons-${size}px.zip`); setTimeout(() => URL.revokeObjectURL(url), 10000);
     $("toast").textContent = "Saved " + files.length + " icons."; setTimeout(() => $("toast").textContent = "", 2500);
   };
-  paint();
+  paint(); faceReady.then(paint);   // again once the face pictures have loaded
   if (document.fonts) document.fonts.ready.then(paint);
 })();
 </script>
