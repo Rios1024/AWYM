@@ -46,6 +46,14 @@ WHAT "BUILD MY SCENES" MAKES
     with masks/circle-16x9.png, which fits 16:9 cameras (1920x1080,
     1280x720). For a 4:3 camera, open its Filters → Circle cutout and pick
     masks/circle-4x3.png. Untick "Add a camera…" to place cameras yourself.
+    Everything in a seat is centred on the ring's centre (alignment
+    "Center"), so the camera stays in the middle of its frame whatever its
+    resolution. If cameras and frames ever drift apart (or in scenes built
+    with an older version), click "Line up cameras with their frames" in
+    the script panel: every "Camera N" / "Guest Seat N" (or the only camera
+    in a frame's group) is centred on its frame again, in every scene.
+    To frame your face differently inside the circle, use the camera's
+    Crop/Pad filter or Edit Transform → Crop afterwards.
     Same camera in every scene: it's one source, shown in each.
   An existing Main Show is never rebuilt (only missing overlays are
     added). For the grouped version, rename it (e.g. "Main Show old") and
@@ -665,9 +673,20 @@ SHOW PACKS (for your other shows)
   link: free, no account, nothing to install. Each one becomes their own
   Browser source in OBS, so they get a camera frame, a lower third and the
   ★ spotlight like anyone in the studio.
-  1. Open guests.html. Pick which seats (People slots 1–4) are remote, type
+  1. Open guests.html. Pick which seats (People slots 1–6) are remote, type
      names. The room name and password are made for you; keep them the same
      every week and every link stays the same.
+     Badge picture (optional): "Upload badge" (or drop a picture on the
+     circle) puts a logo or photo on that person's camera frame (in the
+     name plate, right of the name and role; the jersey number stays in
+     the corner) and in their lower third's number box. Logos with a
+     see-through background are kept whole; photos are cropped to the
+     middle. "Send names and badges to the Control Panel" puts them on
+     screen (the Control Panel's slot shows the badge, with Remove).
+     Saved guests: "Save as guest" keeps a person (name, role, badge) for
+     future shows; next time pick them from a seat's "Load a saved guest"
+     list, or "Seat…" in Saved guests. They're kept with the page's other
+     settings (and in Show Runner backups).
   2. Send each guest their invite link ("Copy invite message" writes the
      text for you: link, use headphones, keep the tab open).
   3. Get them into Main Show:

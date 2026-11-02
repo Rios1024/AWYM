@@ -27,9 +27,13 @@
                director      https://vdo.ninja/?director=R[&password=P]
              The setup script (awym-obs-setup.lua) builds the same OBS addresses from the
              room name, password and seat list, so keep the two in step.
-  Sends:     to:"control" person {id, data:{name, role}, nonce} → Control Panel fills that
-             People slot (answers from:"control" {ack}).
-  Saved:     localStorage "awym-guests-v1" (included in Show Runner backups).
+  Sends:     to:"control" person {id, data:{name, role, badge}, nonce} → Control Panel fills that
+             People slot (answers from:"control" {ack}). badge = a small image (data: URL, about
+             200 × 200) shown in the camera frame's name plate (right of the name) and the
+             lower third's number box; "" = no picture.
+  Saved:     localStorage "awym-guests-v1" (included in Show Runner backups):
+             {room, pass, novideo, seats:{1..6: {who, name, role, badge}},
+              roster:[{id, name, role, badge, who}]}   ← "Saved guests"
 -->
 <link rel="stylesheet" href="theme.css">
 <style>
@@ -75,6 +79,23 @@
   .msg:empty { display: none; }
   .msg.err { background: rgba(255, 60, 60, .18); }
   ul.tips { margin: 6px 0 0; padding-left: 20px; } ul.tips li { margin: 3px 0; }
+  /* badge picture + saved guests */
+  .seatbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+  .bimg { width: 52px; height: 52px; border-radius: 50%; flex: none; background: var(--ui-bg) center / cover no-repeat; border: 2px dashed var(--ui-line);
+          display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--ui-dim); text-align: center; line-height: 1.1; cursor: pointer; }
+  .bimg.has { border: 2px solid var(--primary); font-size: 0; }
+  .bimg.drag { border-color: var(--accent); background-color: rgba(255,255,255,.08); }
+  .seatbar select { width: auto; flex: 1; min-width: 150px; }
+  .roster { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 10px; }
+  .guest { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center; border: 1px solid var(--ui-line); border-radius: 12px; padding: 8px 10px; background: rgba(0,0,0,.15); min-width: 0; }
+  .guest .who { flex: 1 1 calc(100% - 60px); min-width: 0; }
+  .guest select { flex: 1; }
+  .guest .who b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .guest .who small { color: var(--ui-dim); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .guest select { width: auto; padding: 5px 6px; font-size: 13px; }
+  .guest button { padding: 5px 8px; font-size: 13px; }
+  .guest button.sure { background: #e5484d; color: #fff; border-color: transparent; }
+  .empty { color: var(--ui-dim); font-size: 14px; }
   kbd { font: 12px ui-monospace, monospace; background: var(--ui-bg); border: 1px solid var(--ui-line); border-radius: 5px; padding: 1px 5px; }
 </style>
 </head>
@@ -96,11 +117,18 @@
     <h2>2. Who sits in each seat <small>seats = People slots 1–6 in the Control Panel</small></h2>
     <div class="seats" id="seats"></div>
     <div style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center">
-      <button class="primary" id="sendNames">Send names to the Control Panel</button>
+      <button class="primary" id="sendNames">Send names and badges to the Control Panel</button>
       <span class="note" style="margin:0">Works when this page is open as a dock in OBS. Otherwise, type the names in the Control Panel's People section.</span>
     </div>
     <div class="msg" id="namesMsg"></div>
   </div>
+
+  <div class="card">
+    <h2>Saved guests <small>people who come back: their name, role and badge picture</small></h2>
+    <div class="roster" id="roster"></div>
+    <p class="note">Fill in a seat (name, role, badge), then <b>Save as guest</b>. Next time, pick them from the seat's <b>Load a saved guest</b> list, or with <b>Seat…</b> here, and click <b>Send names and badges</b>. Saving someone with the same name again updates them.</p>
+  </div>
+<input type="file" id="badgeFile" accept="image/*" hidden>
 
   <div class="card">
     <h2>3. Your link <small>join the room so your guests can hear and see you</small></h2>
@@ -145,6 +173,8 @@
   S.novideo = S.novideo !== false;
   S.seats = S.seats || { 1: { who: "local", name: "", role: "Moderator" }, 2: { who: "remote", name: "", role: "Guest" }, 3: { who: "empty", name: "", role: "" }, 4: { who: "empty", name: "", role: "" } };
   [5, 6].forEach((n) => { if (!S.seats[n]) S.seats[n] = { who: "empty", name: "", role: "" }; });   // seats 5–6: the bigger moderator layouts
+  S.roster = Array.isArray(S.roster) ? S.roster : [];
+  Object.values(S.seats).forEach((x) => { if (typeof x.badge !== "string") x.badge = ""; });
   const save = () => { try { localStorage.setItem(STORE, JSON.stringify(S)); } catch (e) {} };
 
   /* ---------- the links (same rules as the setup script) ---------- */
@@ -177,11 +207,19 @@
           <select data-k="who"><option value="local" ${s.who === "local" ? "selected" : ""}>In the studio (local camera)</option><option value="remote" ${s.who === "remote" ? "selected" : ""}>Remote guest (VDO.Ninja)</option><option value="empty" ${s.who === "empty" ? "selected" : ""}>Nobody</option></select></div>
         <div class="row"><div><label>Name</label><input type="text" data-k="name" value="${esc(s.name)}" placeholder="Name"></div>
           <div><label>Role</label><input type="text" data-k="role" value="${esc(s.role)}" placeholder="e.g. Guest"></div></div>
+        <div class="seatbar">
+          <div class="bimg ${s.badge ? "has" : ""}" data-act="upload" title="Badge picture: click or drop an image here" style="${s.badge ? `background-image:url('${s.badge}')` : ""}">${s.badge ? "" : "No<br>badge"}</div>
+          <button data-act="upload">${s.badge ? "Change badge" : "Upload badge"}</button>
+          ${s.badge ? `<button data-act="clear" title="Back to the jersey number / icon">Remove</button>` : ""}
+          <select data-act="load"><option value="">Load a saved guest…</option>${S.roster.map((g) => `<option value="${esc(g.id)}">${esc(g.name)}${g.role ? " · " + esc(g.role) : ""}</option>`).join("")}</select>
+          <button data-act="save" ${s.name.trim() ? "" : "disabled"} title="Keep this person (name, role, badge) for future shows">Save as guest</button>
+        </div>
         <div class="links">
           ${addr("Invite link for " + (s.name || "guest " + n), "Send to the guest", invite(n), `<button class="copy invmsg" data-v="${esc(inviteText(n))}">Copy invite message</button> a ready-to-send text with the link and what to do.`, null, "invite")}
           ${addr("OBS address for seat " + n, "Browser source", view(n), "In Main Show: Sources → + → Browser → paste as the URL → Width <b>1280</b>, Height <b>720</b> → tick <b>Control audio via OBS</b>. Then put it behind camera frame " + n + " with the same crop and mask as a camera (START-HERE step 5).", ["Width 1280", "Height 720", "☑ Control audio via OBS"])}
         </div></div>`;
     }).join("");
+    paintRoster();
     $("hostLinks").innerHTML = addr("Your link", "Open in your browser", host(), "Your stream ID is <b>" + esc(room()) + "host</b>.") + addr("Director link (optional)", "Open in your browser", director());
     const seats = remoteSeats().join(",");
     $("scriptBox").innerHTML = addr("Guest room name", "Setup script box", room()) + addr("Room password", "Setup script box", S.pass || "(none)") +
@@ -216,17 +254,104 @@
     [1, 2, 3, 4, 5, 6].forEach((n) => {
       const s = S.seats[n]; if (s.who === "empty" || !s.name.trim()) return;
       nonces[n] = Math.random().toString(36).slice(2); sent.push(n);
-      AWYM.send({ to: "control", cmd: "person", id: String(n), data: { name: s.name.trim(), role: s.role.trim() }, nonce: nonces[n] });
+      AWYM.send({ to: "control", cmd: "person", id: String(n), data: { name: s.name.trim(), role: s.role.trim(), badge: s.badge || "" }, nonce: nonces[n] });
     });
     if (!sent.length) { msg("Type at least one name first.", true); return; }
     const onAck = (m) => { if (m.from === "control" && Object.values(nonces).includes(m.ack)) acks.add(m.ack); };
     AWYM.listen(onAck);
     setTimeout(() => {
-      if (acks.size) msg(`Sent ${acks.size} name${acks.size > 1 ? "s" : ""} to the Control Panel (People ${sent.join(", ")}).`);
+      if (acks.size) msg(`Sent ${acks.size} name${acks.size > 1 ? "s" : ""} (and badges) to the Control Panel (People ${sent.join(", ")}).`);
       else msg("The Control Panel didn't answer. Open this page as a dock in OBS (Docks → Custom Browser Docks…), or type the names into the Control Panel.", true);
     }, 900);
   };
   function msg(t, err) { $("namesMsg").textContent = t; $("namesMsg").className = "msg" + (err ? " err" : ""); }
+
+  /* ---------- badge pictures ---------- */
+  /** Shrink a picture to a small square for the badge: a logo with see-through parts is kept whole
+      (PNG), a photo is cropped to the middle (JPEG). @return Promise<data: URL> */
+  function badgeFrom(file) {
+    return new Promise((ok, fail) => {
+      if (!file || !/^image\//.test(file.type)) { fail(new Error("That isn't a picture.")); return; }
+      const r = new FileReader();
+      r.onerror = () => fail(new Error("Couldn't read that file."));
+      r.onload = () => {
+        const img = new Image();
+        img.onerror = () => fail(new Error("Couldn't open that picture."));
+        img.onload = () => {
+          const N = 200, c = document.createElement("canvas"); c.width = c.height = N;
+          const x = c.getContext("2d"), w = img.naturalWidth, h = img.naturalHeight;
+          // see-through pixels? (check a small copy)
+          const t = document.createElement("canvas"); t.width = t.height = 32; const tx = t.getContext("2d"); tx.drawImage(img, 0, 0, 32, 32);
+          let clear = false; try { const d = tx.getImageData(0, 0, 32, 32).data; for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { clear = true; break; } } catch (e) {}
+          if (clear) { const k = Math.min(N / w, N / h); x.drawImage(img, (N - w * k) / 2, (N - h * k) / 2, w * k, h * k); }
+          else { const k = Math.max(N / w, N / h); x.drawImage(img, (N - w * k) / 2, (N - h * k) / 2, w * k, h * k); }
+          ok(clear ? c.toDataURL("image/png") : c.toDataURL("image/jpeg", 0.88));
+        };
+        img.src = r.result;
+      };
+      r.readAsDataURL(file);
+    });
+  }
+  let pickFor = null;
+  async function setBadge(n, file) {
+    try { S.seats[n].badge = await badgeFrom(file); save(); paint(); msg(`Badge set for seat ${n}. Click "Send names and badges" to put it on screen.`); }
+    catch (err) { msg(err.message, true); }
+  }
+  $("badgeFile").onchange = () => { const f = $("badgeFile").files[0]; if (f && pickFor) setBadge(pickFor, f); $("badgeFile").value = ""; };
+  $("seats").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-act]"); if (!b || b.tagName === "SELECT") return;
+    const n = b.closest(".seat").dataset.n, act = b.dataset.act;
+    if (act === "upload") { pickFor = n; $("badgeFile").click(); }
+    else if (act === "clear") { S.seats[n].badge = ""; save(); paint(); }
+    else if (act === "save") saveGuest(n);
+  });
+  $("seats").addEventListener("change", (e) => {
+    const el = e.target.closest("select[data-act=load]"); if (!el || !el.value) return;
+    loadGuest(el.value, el.closest(".seat").dataset.n);
+  });
+  // drop a picture on a seat's badge circle
+  $("seats").addEventListener("dragover", (e) => { const b = e.target.closest(".bimg"); if (!b) return; e.preventDefault(); b.classList.add("drag"); });
+  $("seats").addEventListener("dragleave", (e) => { const b = e.target.closest(".bimg"); if (b) b.classList.remove("drag"); });
+  $("seats").addEventListener("drop", (e) => {
+    const b = e.target.closest(".bimg"); if (!b) return; e.preventDefault(); b.classList.remove("drag");
+    const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setBadge(b.closest(".seat").dataset.n, f);
+  });
+
+  /* ---------- saved guests ---------- */
+  function saveGuest(n) {
+    const s = S.seats[n], name = s.name.trim(); if (!name) return;
+    let g = S.roster.find((x) => x.name.trim().toLowerCase() === name.toLowerCase());
+    const was = !!g;
+    if (!g) { g = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) }; S.roster.push(g); }
+    Object.assign(g, { name, role: s.role.trim(), badge: s.badge || "", who: s.who === "empty" ? "remote" : s.who });
+    S.roster.sort((a, b) => a.name.localeCompare(b.name));
+    if (!persist()) return;
+    paint(); msg(`${was ? "Updated" : "Saved"} ${name} in Saved guests.`);
+  }
+  function loadGuest(gid, n) {
+    const g = S.roster.find((x) => x.id === gid); if (!g) return;
+    Object.assign(S.seats[n], { name: g.name, role: g.role || "", badge: g.badge || "", who: S.seats[n].who === "empty" ? (g.who || "remote") : S.seats[n].who });
+    save(); paint(); msg(`${g.name} is in seat ${n}. Click "Send names and badges" to put them on screen.`);
+  }
+  /** Save, and say so if the browser's storage is full (badge pictures are small, but it can happen). */
+  function persist() {
+    try { localStorage.setItem(STORE, JSON.stringify(S)); return true; }
+    catch (e) { msg("Couldn't save: this page's storage is full. Remove a saved guest or two (or use smaller badge pictures).", true); return false; }
+  }
+  function paintRoster() {
+    $("roster").innerHTML = S.roster.length ? S.roster.map((g) => `<div class="guest" data-g="${esc(g.id)}">
+        <div class="bimg ${g.badge ? "has" : ""}" style="width:40px;height:40px;cursor:default;${g.badge ? `background-image:url('${g.badge}')` : ""}">${g.badge ? "" : "—"}</div>
+        <div class="who"><b>${esc(g.name)}</b><small>${esc(g.role || (g.who === "local" ? "In the studio" : "Remote guest"))}</small></div>
+        <select data-act="seat" title="Put them in a seat"><option value="">Seat…</option>${[1, 2, 3, 4, 5, 6].map((n) => `<option value="${n}">Seat ${n}${S.seats[n].name ? " (" + esc(S.seats[n].name) + ")" : ""}</option>`).join("")}</select>
+        <button data-act="del" title="Remove from Saved guests">✕</button></div>`).join("")
+      : `<div class="empty">Nobody saved yet.</div>`;
+  }
+  $("roster").addEventListener("change", (e) => { const el = e.target.closest("select[data-act=seat]"); if (el && el.value) loadGuest(el.closest(".guest").dataset.g, el.value); });
+  $("roster").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-act=del]"); if (!b) return;
+    if (!b.classList.contains("sure")) { b.classList.add("sure"); b.textContent = "Delete?"; setTimeout(() => { b.classList.remove("sure"); b.textContent = "✕"; }, 2500); return; }
+    const gid = b.closest(".guest").dataset.g; S.roster = S.roster.filter((x) => x.id !== gid); save(); paint();
+  });
 
   save(); paint();
 })();

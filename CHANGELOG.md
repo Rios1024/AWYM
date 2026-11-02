@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.0 (2026-11-02)
+
+- Guests page: badge pictures (a logo or photo in the camera frame's name plate, right of the name, and in the lower third) and Saved guests for people who come back.
+- Cameras are centred on their frames when the scenes are built (everything in a seat shares the ring's centre), and a new "Line up cameras with their frames" button fixes scenes built earlier.
+- The speaking-light level meter no longer shifts the name plate when it lights up.
+- Fixed: the Control Panel's ★ spotlight light could switch off by itself.
+
 ## 1.0.0 (2026-11-01)
 
 First release on GitHub.

@@ -12,7 +12,9 @@
     ?id=1               links to control-panel slot 1 (name + Spotlight button)
     &name=Big%20Mike    name on the plate   (%20 = space)
     &role=Moderator     small line under the name
-    &number=23          jersey number badge (optional)
+    &number=23          jersey number badge (optional). A badge picture from the Guests page
+                        (data.badge, via the Control Panel) shows in the name plate, right of
+                        the name and role.
     &shape=circle       circle (default), rounded, or hexagon — match your mask
     &plate=0            hide the name plate
     &spotlight=1        start with the "has the floor" glow on
@@ -58,11 +60,13 @@
   /* the wider halo and the ripples that spread out and fade are drawn by the Frame FX layer,
      which has room outside the ring */
   .talking .inner { stroke: var(--light); }
-  .eq { display: none; gap: 4px; align-items: flex-end; height: 30px; margin-right: 12px; vertical-align: middle; }
+  /* the level meter sits in the plate's left margin (out of the flow), so nothing moves when it lights up */
+  .eq { position: absolute; left: 7px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; align-items: flex-end; height: 30px;
+        opacity: 0; transition: opacity .15s; }
   .eq i { width: 7px; background: var(--accent); border-radius: 2px; height: 30%; animation: eq .5s ease-in-out infinite alternate; }
   .eq i:nth-child(2) { animation-delay: -.2s; } .eq i:nth-child(3) { animation-delay: -.35s; }
   @keyframes eq { to { height: 100%; } }
-  .talking .eq { display: inline-flex; }
+  .talking .eq { opacity: 1; }
   /* muted (Show Runner mute buttons / hotkeys): a red tag on the name plate */
   .mutetag { position: absolute; left: 50%; bottom: 96px; transform: translateX(-50%) scale(.6); opacity: 0; z-index: 2;
     font-family: var(--font-heading); font-size: 22px; letter-spacing: 2px; text-transform: uppercase; color: #fff; background: var(--warning);
@@ -80,13 +84,19 @@
     box-shadow: 0 4px 0 rgba(0,0,0,.25);
   }
   .badge:empty { display: none; }
+  /* a badge picture (Guests page) sits in the name plate, right of the name and role */
+  .plate { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .plate .txt { min-width: 0; text-align: center; }
+  .pimg { display: none; width: 66px; height: 66px; flex: none; border-radius: 50%; background: var(--primary) center / cover no-repeat;
+          border: 3px solid var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,.35); margin-right: -12px; }
+  .haspic .pimg { display: block; }
   .hex .badge, .rounded .badge { right: 8px; top: 8px; }
 
   .plate {
     position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
     min-width: 300px; max-width: 580px; box-sizing: border-box;
     background: var(--secondary); border: 4px solid var(--primary); border-radius: 18px;
-    padding: 8px 26px 10px; text-align: center; box-shadow: 0 10px 24px rgba(0,0,0,.35);
+    padding: 8px 40px 10px; text-align: center; box-shadow: 0 10px 24px rgba(0,0,0,.35);
   }
   .plate .name { font-family: var(--font-heading); font-size: 46px; line-height: 1.05; color: var(--light); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .plate .role { font-weight: 700; font-size: 22px; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; }
@@ -114,7 +124,7 @@
     <div class="badge" id="badge"></div>
     <div class="floor">Has the floor</div>
     <div class="mutetag">🔇 Muted</div>
-    <div class="plate"><div class="name"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><span id="name"></span></div><div class="role" id="role"></div></div>
+    <div class="plate"><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span><div class="txt"><div class="name"><span id="name"></span></div><div class="role" id="role"></div></div><span class="pimg" id="pimg"></span></div>
   </div>
 
 <script src="shared.js"></script>
@@ -160,6 +170,10 @@
   function apply() {
     document.getElementById("name").textContent = data.name || "";
     document.getElementById("role").textContent = data.role || "";
+    // the jersey number stays in the corner badge; a badge picture goes in the name plate
+    const pic = typeof data.badge === "string" && /^data:image\//.test(data.badge);
+    document.body.classList.toggle("haspic", pic);
+    document.getElementById("pimg").style.backgroundImage = pic ? `url("${data.badge}")` : "";
     document.getElementById("badge").textContent = String(data.number || "").trim().slice(0, 2);
     document.querySelector(".plate").style.display = (data.name || data.role) && AWYM.param("plate") !== "0" ? "" : "none";
     sendPlate();

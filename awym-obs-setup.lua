@@ -511,6 +511,21 @@ local function avatar_line_up(av, fr)
   if obs.obs_sceneitem_visible(av) ~= vis then obs.obs_sceneitem_set_visible(av, vis) end
 end
 
+--- Where a camera frame's ring centre is on the canvas (the frame is 600×660 with the ring
+-- centred at 300,300; it's drawn fitted inside its box). Handles any alignment and rotation.
+-- @return x, y, ring width (the frame's drawn width), or nil
+local function ring_center(fr)
+  local bw, bh = item_box(fr)
+  if bw <= 0 or bh <= 0 then return nil end
+  local p = obs.vec2(); obs.obs_sceneitem_get_pos(fr, p)
+  local ax, ay = align_frac(obs.obs_sceneitem_get_alignment(fr))
+  local k = math.min(bw / 600, bh / 660)
+  local lx = -ax * bw + (bw - 600 * k) / 2 + 300 * k
+  local ly = -ay * bh + (bh - 660 * k) / 2 + 300 * k
+  local r = math.rad(obs.obs_sceneitem_get_rot(fr))
+  return p.x + lx * math.cos(r) - ly * math.sin(r), p.y + lx * math.sin(r) + ly * math.cos(r), 600 * k
+end
+
 --- Which seat a scene item is a camera frame or an effects layer for, from its
 -- Browser source address (frame.html?id=2 / frame-fx.html?id=2), whatever the
 -- source is called. Cached by source name; the cache is emptied every few seconds.
@@ -567,6 +582,60 @@ local function frame_items(scene)
   end
   walk(scene)
   return found
+end
+
+--- Put every camera (and remote guest) right in the middle of its camera frame, in every scene:
+-- centre on the ring's centre (alignment "center"), and the kit's own cameras sized to the
+-- ring again. A camera belongs to a frame when it's called "Camera N" / "Guest Seat N", or it's
+-- the only video capture device in the frame's group. Rotation is left alone.
+-- @return how many were lined up
+local CAPTURE = { dshow_input = true, av_capture_input = true, ["macos-avcapture"] = true, v4l2_input = true }
+local function line_up_cameras()
+  local n = 0
+  local scenes = obs.obs_frontend_get_scenes()
+  if scenes == nil then return 0 end
+  for _, s in ipairs(scenes) do
+    local sc = obs.obs_scene_from_source(s)
+    if sc ~= nil then
+      local top = obs.obs_source_get_name(s)
+      for key, box in pairs(frame_items(sc)) do
+        for seat, fr in pairs(box.frame) do
+          local cx, cy, fw = ring_center(fr)
+          local cam, kind = nil, nil
+          for _, nm in ipairs({ "Camera " .. seat, "Guest Seat " .. seat, OLD_PREFIX .. "Guest Seat " .. seat }) do
+            cam = obs.obs_scene_find_source(box.scene, nm)
+            if cam ~= nil then kind = nm:find("Guest") and "guest" or "camera"; break end
+          end
+          if cam == nil and key ~= top then                    -- a group: its one video capture device
+            local items, found, count = obs.obs_scene_enum_items(box.scene), nil, 0
+            for _, it in ipairs(items or {}) do
+              local src = obs.obs_sceneitem_get_source(it)
+              if src ~= nil and CAPTURE[obs.obs_source_get_unversioned_id(src)] then found = it; count = count + 1 end
+            end
+            if items ~= nil then obs.sceneitem_list_release(items) end
+            if count == 1 then cam, kind = found, "other" end
+          end
+          if cam ~= nil and cx ~= nil then
+            obs.obs_sceneitem_set_alignment(cam, 0)            -- 0 = centre
+            local v = obs.vec2(); v.x = cx; v.y = cy; obs.obs_sceneitem_set_pos(cam, v)
+            local src = obs.obs_sceneitem_get_source(cam)
+            local masked = false
+            if kind == "camera" then local flt = obs.obs_source_get_filter_by_name(src, "Circle cutout"); if flt ~= nil then masked = true; obs.obs_source_release(flt) end end
+            if masked or kind == "guest" then                  -- the kit's own: size it to the ring again
+              local ch = fw * 0.93
+              local b = obs.vec2(); b.x = kind == "guest" and ch or ch * 16 / 9; b.y = ch
+              obs.obs_sceneitem_set_bounds_type(cam, obs.OBS_BOUNDS_SCALE_INNER)
+              obs.obs_sceneitem_set_bounds_alignment(cam, 0)
+              obs.obs_sceneitem_set_bounds(cam, b)
+            end
+            n = n + 1
+          end
+        end
+      end
+    end
+  end
+  obs.source_list_release(scenes)
+  return n
 end
 
 --- Timer: keep every scene's effects layers lined up with their frames
@@ -644,6 +713,15 @@ local function build()
     obs.obs_source_release(src)
     return item
   end
+  -- place by its centre (alignment "center"), so the camera, avatar, frame and effects share one
+  -- centre whatever size each source turns out to be, and stay together when OBS fits a group round them
+  local function addc(scene, src, cx, cy, w, h)
+    if src == nil then return nil end
+    local item = place(scene, src, cx * f, cy * f, w * f, h * f)
+    if item ~= nil then obs.obs_sceneitem_set_alignment(item, 0); obs.obs_sceneitem_set_bounds_alignment(item, 0) end
+    obs.obs_source_release(src)
+    return item
+  end
 
   -- the Show Runner's sources: instant replay (hidden until used), debate graphics, sound effects
   local function replay(scene)
@@ -682,16 +760,17 @@ local function build()
       local x, y, w = seat[1], seat[2], seat[3]
       local h = w * 660 / 600
       local items = {}
+      local rx, ry = x + w / 2, y + w / 2          -- the ring's centre: everything in the seat is centred on it
       if remote[i] then           -- remote guest: square crop + circle cutout, 93% of the frame
-        items[#items + 1] = add(sc, guest_source(i), x + w * 0.035, y + w * 0.035, w * 0.93, w * 0.93)
-      elseif cfg.cameras then     -- camera: 16:9, the circle (93% of the frame) centred on the ring
-        local ch = w * 0.93; local cw = ch * 16 / 9
-        items[#items + 1] = add(sc, camera_source(i), x + w / 2 - cw / 2, y + w / 2 - ch / 2, cw, ch)
+        items[#items + 1] = addc(sc, guest_source(i), rx, ry, w * 0.93, w * 0.93)
+      elseif cfg.cameras then     -- camera: 16:9, its circle (93% of the frame) on the ring
+        local ch = w * 0.93
+        items[#items + 1] = addc(sc, camera_source(i), rx, ry, ch * 16 / 9, ch)
       end
-      if cfg.frames then
-        items[#items + 1] = add(sc, avatar_source(i), x, y, w, h)
-        items[#items + 1] = add(sc, frame_source(i), x, y, w, h)
-        items[#items + 1] = add(sc, fx_source(i), x - w / 3, y - w / 3, w * FX_GROW, h * FX_GROW)
+      if cfg.frames then          -- frame / avatar 600×660 (ring 30 px above the middle); effects 1000×1100 (50 px)
+        items[#items + 1] = addc(sc, avatar_source(i), rx, ry + w * 30 / 600, w, h)
+        items[#items + 1] = addc(sc, frame_source(i), rx, ry + w * 30 / 600, w, h)
+        items[#items + 1] = addc(sc, fx_source(i), rx, ry + w * 50 / 600, w * FX_GROW, h * FX_GROW)
       end
       local label = (L.mod and i == 1) and "Moderator" or ("Seat " .. i)
       make_group(sc, label .. suffix, items, COLORS.seat[i])
@@ -739,16 +818,14 @@ local function build()
               if find_item(msc, "Guest Seat " .. seat) == nil then
                 local src = guest_source(seat)
                 if src ~= nil then
-                  local x, y, size = 0, 0, 372 * f
+                  local cx, cy, size = 186 * f, 186 * f, 372 * f
                   local fr = nil
                   for _, box in pairs(boxes) do if box.frame[seat] ~= nil and box.scene == msc then fr = box.frame[seat] end end
-                  if fr ~= nil then
-                    local p, b = obs.vec2(), obs.vec2()
-                    obs.obs_sceneitem_get_pos(fr, p); obs.obs_sceneitem_get_bounds(fr, b)
-                    local fwid = (b.x > 0) and b.x or 400 * f
-                    x, y, size = p.x + fwid * 0.035, p.y + fwid * 0.035, fwid * 0.93
-                  end
-                  local item = place(msc, src, x, y, size, size)
+                  local rcx, rcy, rw = nil, nil, nil
+                  if fr ~= nil then rcx, rcy, rw = ring_center(fr) end
+                  if rcx ~= nil then cx, cy, size = rcx, rcy, rw * 0.93 end
+                  local item = place(msc, src, cx, cy, size, size)
+                  if item ~= nil then obs.obs_sceneitem_set_alignment(item, 0) end
                   if item ~= nil then
                     obs.obs_sceneitem_set_order(item, obs.OBS_ORDER_MOVE_BOTTOM)
                     obs.obs_sceneitem_set_order(item, obs.OBS_ORDER_MOVE_UP)
@@ -919,6 +996,17 @@ end
 
 --- "Build my scenes" button: run build() safely and show the result in the panel.
 -- @return true so OBS redraws the panel (to show the new status text)
+local function on_line_up(props, prop)
+  local ok, n = pcall(line_up_cameras)
+  cfg.status = ok and (n > 0 and ("Lined up " .. n .. " camera" .. (n == 1 and "" or "s") .. " with their frames (centred on the ring).")
+    or "No cameras found next to a camera frame (they need to be called Camera 1, 2… or be the only camera in the frame's group).")
+    or ("Something went wrong: " .. tostring(n))
+  log(cfg.status)
+  local st = obs.obs_properties_get(props, "status")
+  if st ~= nil then obs.obs_property_set_description(st, cfg.status) end
+  return true
+end
+
 local function on_build(props, prop)
   local ok, result = pcall(build)
   cfg.status = ok and result or ("Something went wrong: " .. tostring(result))
@@ -947,6 +1035,7 @@ function script_properties()
   obs.obs_properties_add_bool(p, "screens", "Add the stream screen scenes (Starting Soon, Be Right Back, …)")
   obs.obs_properties_add_bool(p, "halftime", "Include a Halftime scene")
   obs.obs_properties_add_button(p, "build", "Build my scenes", on_build)
+  obs.obs_properties_add_button(p, "lineup", "Line up cameras with their frames", on_line_up)
   obs.obs_properties_add_text(p, "status", cfg.status ~= "" and cfg.status or "Ready.", obs.OBS_TEXT_INFO or obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_control", "Control Panel dock URL (copy)", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_stats", "Stats Desk dock URL (copy)", obs.OBS_TEXT_DEFAULT)
