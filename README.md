@@ -21,7 +21,7 @@ Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. 
 |---|---|
 | **Scenes and screens** | Starting Soon / Be Right Back / Halftime / Thanks for Watching screens with countdowns; 30+ animated backgrounds (court, arena, Tin Foil conspiracy board, vaporwave…). |
 | **Layouts** | Ready-made scenes for 1, 2, 3 or 4 people and 2–5 people + a moderator (the moderator a bit smaller), with color-coded groups per seat. |
-| **People** | Camera frames (circle, rounded, hexagon) with name plates and a "has the floor" spotlight; lower thirds; remote guests through [VDO.Ninja](https://vdo.ninja/). |
+| **People** | Camera frames (circle, rounded, hexagon) with name plates and a "has the floor" spotlight; lower thirds; remote guests through [VDO.Ninja](https://vdo.ninja/), with badge pictures and saved guests. |
 | **Shot clock** | Arena-style segment timer with buzzer and a Tin Foil alert. |
 | **Stats Desk** | Live NBA scores, box scores, player lines, standings and a ticker (ESPN's public data). |
 | **Show Runner** | Rundown with segment intros, debate scoreboard and winner, hot-take receipts, sound board, clips and instant replay, backups. |

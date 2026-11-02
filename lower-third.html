@@ -14,7 +14,8 @@
     name      their name                  (%20 = space)
     role      e.g. Host, Guest, Moderator
     handle    social handle (optional)
-    number    jersey number or any 1–2 characters (optional)
+    number    jersey number or any 1–2 characters (optional; a badge picture sent from
+              the Guests page, data.badge, takes its place)
     icon      badge shown when there's no number: ball, star, controller,
               note, dice, card, d20, sword, mic, bolt, crystal, vinyl, or none
               (leave it out to use the icon set in theme.css)
@@ -82,6 +83,7 @@
   .num svg .s { fill: none; stroke: var(--dark); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
   .num svg .h { fill: var(--primary); }
   .nobadge .num { display: none; }
+  .num.pic { background: var(--primary) center / cover no-repeat; }   /* a badge picture (Guests page) */
   .nobadge .panel { border-radius: 18px; }
 
   .panel {
@@ -211,8 +213,12 @@
     if (h && !h.startsWith("@") && !h.includes("/") && !h.includes(".")) h = "@" + h;
     els.handle.textContent = h;
     const n = String(data.number || "").trim().slice(0, 2);
-    document.body.classList.toggle("nobadge", !n && iconName === "none");
-    if (n) { els.num.textContent = n; els.num.style.fontSize = n.length > 1 ? "96px" : "108px"; }
+    const pic = typeof data.badge === "string" && /^data:image\//.test(data.badge);
+    document.body.classList.toggle("nobadge", !pic && !n && iconName === "none");
+    els.num.classList.toggle("pic", pic);
+    els.num.style.backgroundImage = pic ? `url("${data.badge}")` : "";
+    if (pic) els.num.textContent = "";
+    else if (n) { els.num.textContent = n; els.num.style.fontSize = n.length > 1 ? "96px" : "108px"; }
     else els.num.innerHTML = ICONS[iconName] || ICONS.ball;
   }
 
