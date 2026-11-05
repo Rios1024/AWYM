@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.1 (2026-11-05)
+
+- Chalk Talk background: the court lines are redrawn smoothly (the three-point corners meet the arc cleanly; dashed top half on the free-throw circle, restricted area added).
+
 ## 1.2.0 (2026-11-05)
 
 - Show Runner: Layouts section to switch between Main Show and the layout scenes (works with Studio Mode), with a ★ suggestion based on who's in the seats.
