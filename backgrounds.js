@@ -11,7 +11,8 @@
  *
  * A scene object:
  *   name   shown in pickers, e.g. "Fight Night"
- *   group  "Shows" | "Style" | "Abstract" (how pickers group them)
+ *   group  "Shows" | "Style" | "Abstract" | "Light" (how pickers group them)
+ *   light  (optional) true = a bright scene: the title switches to dark lettering
  *   desc   one-line description for pickers
  *   title  title style on the background: "block" | "neon" | "pixel"
  *   persistent  (optional) true = don't clear the canvas between frames (trails)
@@ -1493,6 +1494,291 @@
           ctx.restore();
           const v = ctx.createRadialGradient(960, 540, 300, 960, 540, 1100); v.addColorStop(0, "rgba(0,0,0,0)"); v.addColorStop(1, rgba(C.dark, .75));
           ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+        }
+      };
+    }
+  };
+
+  /* =====================================================================
+     LIGHT — bright backgrounds (light: true → background.html switches the
+     title to dark lettering and softens the vignette).
+     ===================================================================== */
+  /** A near-white paper tone with a hint of the theme's primary color. */
+  const paper = (C, k) => mix("#fbfaf6", C.primary, k == null ? .035 : k);
+
+  /* ---------- Daylight Court ---------- */
+  S.daycourt = {
+    name: "Daylight Court", group: "Light", light: true, title: "block",
+    desc: "Light maple hardwood in daytime, sun shafts from high windows, dust in the light",
+    build(env) {
+      const { C, rnd } = env;
+      const floor = env.layer((c) => {
+        const tones = ["#ecd0a6", "#e7c79a", "#efd6b0", "#e3c195", "#ead0aa"];
+        for (let x = 0, i = 0; x < W; x += 64, i++) {
+          c.fillStyle = tones[(i * 7 + (i >> 2)) % tones.length]; c.fillRect(x, 0, 64, H);
+          for (let y = -rnd() * 400; y < H; y += 380 + rnd() * 260) { c.fillStyle = "rgba(120,80,40,.18)"; c.fillRect(x, y, 64, 2); }   // plank ends
+          c.fillStyle = "rgba(120,80,40,.16)"; c.fillRect(x, 0, 2, H);
+          for (let k = 0; k < 7; k++) { c.strokeStyle = "rgba(140,95,50,.07)"; c.lineWidth = 1.5; c.beginPath(); const gx = x + 6 + rnd() * 52; c.moveTo(gx, 0);
+            for (let y = 0; y <= H; y += 60) c.lineTo(gx + Math.sin(y * .01 + k) * 3, y); c.stroke(); }
+        }
+        const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, "rgba(255,255,255,.18)"); g.addColorStop(1, "rgba(120,80,40,.10)"); c.fillStyle = g; c.fillRect(0, 0, W, H);
+        // court markings in the theme colour
+        c.strokeStyle = rgba(C.primary, .55); c.lineWidth = 7;
+        c.fillStyle = rgba(C.primary, .13); c.fillRect(0, 400, 380, 320); c.fillRect(1540, 400, 380, 320);
+        c.beginPath(); c.arc(960, 560, 180, 0, TAU); c.fill();
+        c.beginPath(); c.moveTo(960, 0); c.lineTo(960, H); c.stroke();
+        c.beginPath(); c.arc(960, 560, 180, 0, TAU); c.stroke(); c.beginPath(); c.arc(960, 560, 60, 0, TAU); c.stroke();
+        c.strokeRect(-10, 400, 390, 320); c.strokeRect(1540, 400, 390, 320);
+        c.beginPath(); c.arc(380, 560, 160, -Math.PI / 2, Math.PI / 2); c.stroke(); c.beginPath(); c.arc(1540, 560, 160, Math.PI / 2, Math.PI * 1.5); c.stroke();
+        c.beginPath(); c.moveTo(0, 90); c.lineTo(150, 90); c.arc(150, 560, 470, -Math.PI / 2, Math.PI / 2); c.lineTo(0, 1030); c.stroke();
+        c.beginPath(); c.moveTo(W, 90); c.lineTo(1770, 90); c.arc(1770, 560, 470, -Math.PI / 2, Math.PI / 2, true); c.lineTo(W, 1030); c.stroke();
+      });
+      const motes = Array.from({ length: 90 }, () => ({ x: rnd() * W, y: rnd() * H, r: lerp(1, 3.2, rnd()), v: lerp(4, 14, rnd()), p: rnd() * TAU }));
+      return {
+        draw(ctx, t, dt) {
+          ctx.drawImage(floor, 0, 0, W, H);
+          // sun shafts from high windows, slowly sliding
+          ctx.save(); ctx.globalCompositeOperation = "lighter";
+          for (let i = 0; i < 4; i++) {
+            const x = ((i * 560 + t * 9) % 2600) - 500, a = .07 * env.amt * (.75 + .25 * Math.sin(t * .3 + i));
+            const g = ctx.createLinearGradient(x, 0, x + 520, H); g.addColorStop(0, `rgba(255,248,225,${a * 1.6})`); g.addColorStop(1, "rgba(255,248,225,0)");
+            ctx.fillStyle = g; ctx.beginPath(); ctx.moveTo(x, -20); ctx.lineTo(x + 170, -20); ctx.lineTo(x + 690, H + 20); ctx.lineTo(x + 420, H + 20); ctx.closePath(); ctx.fill();
+          }
+          ctx.restore();
+          for (const m of motes) {
+            m.y -= m.v * dt; m.x += Math.sin(t * .4 + m.p) * 6 * dt; if (m.y < -10) { m.y = H + 10; m.x = rnd() * W; }
+            ctx.fillStyle = `rgba(255,252,240,${.55 * Math.min(1.4, env.amt) * (.5 + .5 * Math.sin(t + m.p))})`; ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, TAU); ctx.fill();
+          }
+        }
+      };
+    }
+  };
+
+  /* ---------- Studio White ---------- */
+  S.studio = {
+    name: "Studio White", group: "Light", light: true, title: "block",
+    desc: "A bright TV-studio cyclorama with soft coloured light pools drifting across it",
+    build(env) {
+      const { C, rnd } = env;
+      const base = env.layer((c) => {
+        const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, paper(C, .02)); g.addColorStop(.62, paper(C, .05)); g.addColorStop(.63, mix(paper(C, .05), "#000000", .04)); g.addColorStop(1, mix(paper(C, .08), "#000000", .08));
+        c.fillStyle = g; c.fillRect(0, 0, W, H);
+        const h = c.createRadialGradient(960, 670, 10, 960, 670, 900); h.addColorStop(0, "rgba(255,255,255,.75)"); h.addColorStop(1, "rgba(255,255,255,0)"); c.fillStyle = h; c.fillRect(0, 0, W, H);   // the floor's soft hot spot
+        c.fillStyle = "rgba(0,0,0,.035)"; c.fillRect(0, 668, W, 2);
+      });
+      const pools = [C.primary, C.accent, C.secondary, C.primary].map((col, i) => ({ col, x: rnd() * W, y: 200 + rnd() * 500, r: lerp(380, 620, rnd()), sx: lerp(.05, .11, rnd()), sy: lerp(.04, .09, rnd()), p: rnd() * TAU }));
+      return {
+        draw(ctx, t) {
+          ctx.drawImage(base, 0, 0, W, H);
+          ctx.save();
+          for (const q of pools) {
+            const x = q.x + Math.sin(t * q.sx + q.p) * 420, y = q.y + Math.cos(t * q.sy + q.p) * 160;
+            const g = ctx.createRadialGradient(x, y, 0, x, y, q.r); g.addColorStop(0, rgba(mix(q.col, "#ffffff", .4), .3 * Math.min(1.3, env.amt))); g.addColorStop(1, rgba(mix(q.col, "#ffffff", .4), 0));
+            ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+          }
+          ctx.restore();
+        }
+      };
+    }
+  };
+
+  /* ---------- Sports Page ---------- */
+  S.sportspage = {
+    name: "Sports Page", group: "Light", light: true, title: "block",
+    desc: "Newspaper columns, headlines and halftone box scores, slowly scrolling",
+    build(env) {
+      const { C, rnd } = env;
+      const PH = 1600;                                         // one page tall, tiled
+      const page = (() => { const c = document.createElement("canvas"); c.width = W; c.height = PH; const x = c.getContext("2d");
+        x.fillStyle = "#f3efe4"; x.fillRect(0, 0, W, PH);
+        for (let i = 0; i < 9000; i++) { x.fillStyle = `rgba(90,70,40,${rnd() * .05})`; x.fillRect(rnd() * W, rnd() * PH, 2, 2); }
+        const cols = 6, gw = 36, cw = (W - 120 - gw * (cols - 1)) / cols;
+        for (let k = 0; k < cols; k++) {
+          const x0 = 60 + k * (cw + gw); let y = 40;
+          while (y < PH - 60) {
+            const r = rnd();
+            if (r < .14) {                                     // headline
+              x.fillStyle = "rgba(30,30,30,.72)"; for (let l = 0; l < 2; l++) x.fillRect(x0, y + l * 34, cw * (l ? lerp(.5, .9, rnd()) : 1), 24); y += 84;
+            } else if (r < .24) {                              // halftone photo
+              const h = lerp(150, 230, rnd()); x.fillStyle = "rgba(0,0,0,.05)"; x.fillRect(x0, y, cw, h);
+              for (let yy = 6; yy < h; yy += 9) for (let xx = 6; xx < cw; xx += 9) { const d = .5 + .5 * Math.sin(xx * .03 + yy * .02 + k) * Math.cos(yy * .025 - k); x.fillStyle = "rgba(25,25,25,.55)"; x.beginPath(); x.arc(x0 + xx, y + yy, 3.6 * d, 0, TAU); x.fill(); }
+              y += h + 26;
+            } else if (r < .3) {                               // box score
+              x.strokeStyle = "rgba(30,30,30,.45)"; x.lineWidth = 2; const h = 150; x.strokeRect(x0, y, cw, h);
+              for (let l = 1; l < 7; l++) { x.fillStyle = "rgba(30,30,30,.35)"; x.fillRect(x0 + 8, y + l * 20, cw * .45, 7); for (let n = 0; n < 4; n++) x.fillRect(x0 + cw * .55 + n * cw * .11, y + l * 20, cw * .06, 7); }
+              y += h + 26;
+            } else {                                           // body text
+              for (let l = 0, n = 6 + (rnd() * 10 | 0); l < n; l++) { x.fillStyle = "rgba(40,40,40,.32)"; x.fillRect(x0 + (l ? 0 : 14), y, cw * (l === n - 1 ? lerp(.3, .8, rnd()) : 1) - (l ? 0 : 14), 6); y += 15; }
+              y += 18;
+            }
+          }
+          if (k < cols - 1) { x.fillStyle = "rgba(30,30,30,.15)"; x.fillRect(x0 + cw + gw / 2, 30, 1.5, PH - 60); }
+        }
+        return c; })();
+      return {
+        draw(ctx, t) {
+          const off = (t * 14) % PH;
+          ctx.drawImage(page, 0, -off); ctx.drawImage(page, 0, PH - off);
+          // a wash of the theme colour, like coloured newsprint, and a soft fold shadow
+          ctx.fillStyle = rgba(C.primary, .06); ctx.fillRect(0, 0, W, H);
+          const g = ctx.createLinearGradient(900, 0, 1020, 0); g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(.5, "rgba(0,0,0,.07)"); g.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g; ctx.fillRect(900, 0, 120, H);
+        }
+      };
+    }
+  };
+
+  /* ---------- Clear Sky ---------- */
+  S.sky = {
+    name: "Clear Sky", group: "Light", light: true, title: "block",
+    desc: "Bright blue sky, a soft sun glow and fluffy clouds drifting by",
+    build(env) {
+      const { C, rnd } = env;
+      const sky = env.layer((c) => { const g = c.createLinearGradient(0, 0, 0, H); g.addColorStop(0, mix("#6fb4f0", C.secondary, .12)); g.addColorStop(.7, "#cfe8fb"); g.addColorStop(1, "#f2f8fd"); c.fillStyle = g; c.fillRect(0, 0, W, H); });
+      const puff = (cx, s) => { const c = document.createElement("canvas"); c.width = 520 * s; c.height = 260 * s; const x = c.getContext("2d"); x.scale(s, s);
+        x.filter = "blur(6px)";
+        [[110, 160, 70], [190, 120, 90], [290, 110, 100], [380, 150, 75], [250, 170, 85], [160, 185, 60], [340, 185, 65]].forEach(([px, py, r]) => {
+          const g = x.createRadialGradient(px, py - r * .3, r * .2, px, py, r); g.addColorStop(0, "rgba(255,255,255,1)"); g.addColorStop(1, "rgba(235,242,250,.92)"); x.fillStyle = g; x.beginPath(); x.arc(px, py, r, 0, TAU); x.fill(); });
+        return c; };
+      const clouds = Array.from({ length: 7 }, (_, i) => ({ img: puff(0, lerp(.6, 1.2, rnd())), x: rnd() * W, y: lerp(60, 640, rnd()), v: lerp(6, 18, rnd()), a: lerp(.75, 1, rnd()) })).sort((a, b) => a.v - b.v);
+      return {
+        draw(ctx, t, dt) {
+          ctx.drawImage(sky, 0, 0, W, H);
+          const s = ctx.createRadialGradient(1500, 170, 20, 1500, 170, 520); s.addColorStop(0, "rgba(255,253,235,.95)"); s.addColorStop(.25, "rgba(255,248,210,.45)"); s.addColorStop(1, "rgba(255,248,210,0)");
+          ctx.fillStyle = s; ctx.fillRect(0, 0, W, H);
+          for (const c of clouds) { c.x += c.v * dt; if (c.x > W + 40) c.x = -c.img.width; ctx.globalAlpha = c.a; ctx.drawImage(c.img, c.x, c.y); }
+          ctx.globalAlpha = 1;
+        }
+      };
+    }
+  };
+
+  /* ---------- Confetti ---------- */
+  S.confetti = {
+    name: "Confetti", group: "Light", light: true, title: "block",
+    desc: "Bright paper with theme-coloured confetti tumbling gently down",
+    build(env) {
+      const { C, rnd } = env;
+      const cols = [C.primary, C.accent, C.secondary, C.digit, mix(C.primary, C.accent, .5)];
+      const bits = Array.from({ length: 170 }, () => ({ x: rnd() * W, y: rnd() * H, w: lerp(10, 22, rnd()), h: lerp(5, 11, rnd()), c: cols[rnd() * cols.length | 0], v: lerp(30, 80, rnd()), sw: lerp(20, 60, rnd()), p: rnd() * TAU, r: rnd() * TAU, vr: lerp(-2, 2, rnd()), spin: lerp(2, 6, rnd()), round: rnd() < .25 }));
+      const bg = env.layer((c) => { const g = c.createRadialGradient(960, 480, 100, 960, 540, 1150); g.addColorStop(0, "#ffffff"); g.addColorStop(1, paper(C, .07)); c.fillStyle = g; c.fillRect(0, 0, W, H); });
+      return {
+        draw(ctx, t, dt) {
+          ctx.drawImage(bg, 0, 0, W, H);
+          for (const b of bits) {
+            b.y += b.v * dt; b.r += b.vr * dt; if (b.y > H + 20) { b.y = -20; b.x = rnd() * W; }
+            const x = b.x + Math.sin(t * .8 + b.p) * b.sw, flip = Math.cos(t * b.spin + b.p);
+            ctx.save(); ctx.translate(x, b.y); ctx.rotate(b.r); ctx.scale(1, flip);
+            ctx.fillStyle = rgba(b.c, Math.min(1, .85 * env.amt)); if (b.round) { ctx.beginPath(); ctx.arc(0, 0, b.h, 0, TAU); ctx.fill(); } else ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+            ctx.restore();
+          }
+        }
+      };
+    }
+  };
+
+  /* ---------- Whiteboard ---------- */
+  S.whiteboard = {
+    name: "Whiteboard", group: "Light", light: true, title: "block",
+    desc: "A coach's whiteboard: half court in marker, plays drawing themselves, then wiped",
+    build(env) {
+      const { C, rnd } = env;
+      const board = env.layer((c) => {
+        const g = c.createLinearGradient(0, 0, W, H); g.addColorStop(0, "#fbfcfd"); g.addColorStop(1, "#eef1f4"); c.fillStyle = g; c.fillRect(0, 0, W, H);
+        for (let i = 0; i < 40; i++) { c.fillStyle = `rgba(120,130,150,${rnd() * .04})`; c.beginPath(); c.ellipse(rnd() * W, rnd() * H, lerp(80, 260, rnd()), lerp(20, 60, rnd()), rnd(), 0, TAU); c.fill(); }   // old eraser smudges
+        c.strokeStyle = "rgba(40,45,55,.55)"; c.lineWidth = 6; c.lineCap = "round";
+        c.strokeRect(160, 120, 1600, 860);                       // half court, baseline at the bottom
+        c.strokeRect(760, 600, 400, 380); c.beginPath(); c.arc(960, 600, 120, Math.PI, TAU); c.stroke();
+        c.beginPath(); c.moveTo(300, 980); c.lineTo(300, 800); c.arc(960, 800, 660, Math.PI, TAU); c.lineTo(1620, 980); c.stroke();
+        c.beginPath(); c.arc(960, 120, 120, 0, Math.PI); c.stroke();
+        c.beginPath(); c.arc(960, 920, 22, 0, TAU); c.stroke(); c.beginPath(); c.moveTo(900, 950); c.lineTo(1020, 950); c.stroke();
+        c.fillStyle = "rgba(60,60,70,.25)"; c.fillRect(1780, 1000, 80, 22); c.fillRect(60, 1004, 120, 16);   // marker tray bits
+      });
+      const pos = () => [lerp(360, 1560, rnd()), lerp(260, 860, rnd())];
+      let plays = [], next = 0, wipe = -1;
+      function newPlay() {
+        const ink = [C.primary, "#1f6fd1", "#d12a2a"][plays.length % 3];
+        const pts = Array.from({ length: 5 }, pos), arrows = [];
+        for (let i = 0; i < 4; i++) { const a = pts[i], b = Math.random() < .5 ? pts[i + 1] : [lerp(260, 1660, rnd()), lerp(180, 900, rnd())]; arrows.push({ a, b, bend: lerp(-160, 160, rnd()), dash: rnd() < .35 }); }
+        plays.push({ ink, pts, arrows, t: 0 });
+      }
+      return {
+        draw(ctx, t, dt) {
+          ctx.drawImage(board, 0, 0, W, H);
+          next -= dt; if (next <= 0 && wipe < 0) { if (plays.length >= 3) wipe = 0; else newPlay(); next = 6; }
+          if (wipe >= 0) { wipe += dt / 1.6; if (wipe >= 1) { plays = []; wipe = -1; next = .5; } }
+          ctx.save(); ctx.lineCap = "round"; ctx.lineJoin = "round";
+          for (const p of plays) {
+            p.t += dt; const ink = rgba(p.ink, .85);
+            ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 7;
+            p.pts.forEach(([x, y], i) => { const u = Math.min(1, p.t * 2 - i * .25); if (u <= 0) return;
+              if (i % 2) { ctx.beginPath(); ctx.arc(x, y, 26, -Math.PI / 2, -Math.PI / 2 + TAU * u); ctx.stroke(); }
+              else { ctx.beginPath(); ctx.moveTo(x - 22, y - 22); ctx.lineTo(x - 22 + 44 * Math.min(1, u * 2), y - 22 + 44 * Math.min(1, u * 2)); if (u > .5) { const v = (u - .5) * 2; ctx.moveTo(x + 22, y - 22); ctx.lineTo(x + 22 - 44 * v, y - 22 + 44 * v); } ctx.stroke(); } });
+            p.arrows.forEach((r, i) => {
+              const u = Math.max(0, Math.min(1, (p.t - 1.2 - i * .8) / 1.1)); if (u <= 0) return;
+              const [ax, ay] = r.a, [bx, by] = r.b, mx = (ax + bx) / 2 + (by - ay) / Math.hypot(bx - ax, by - ay || 1) * r.bend, my = (ay + by) / 2 - (bx - ax) / Math.hypot(bx - ax, by - ay || 1) * r.bend;
+              ctx.setLineDash(r.dash ? [18, 16] : []); ctx.beginPath(); ctx.moveTo(ax, ay);
+              const N = 30; let ex = ax, ey = ay, px = ax, py = ay;
+              for (let k = 1; k <= N * u; k++) { const s = k / N; px = ex; py = ey; ex = (1 - s) * (1 - s) * ax + 2 * (1 - s) * s * mx + s * s * bx; ey = (1 - s) * (1 - s) * ay + 2 * (1 - s) * s * my + s * s * by; ctx.lineTo(ex, ey); }
+              ctx.stroke(); ctx.setLineDash([]);
+              if (u >= 1) { const an = Math.atan2(ey - py, ex - px); ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - 26 * Math.cos(an - .45), ey - 26 * Math.sin(an - .45)); ctx.moveTo(ex, ey); ctx.lineTo(ex - 26 * Math.cos(an + .45), ey - 26 * Math.sin(an + .45)); ctx.stroke(); }
+            });
+          }
+          ctx.restore();
+          if (wipe >= 0) {                                    // the eraser sweeps across
+            const x = -300 + wipe * (W + 600);
+            ctx.save(); ctx.globalCompositeOperation = "source-over"; ctx.drawImage(board, 0, 0, Math.max(0, x), H, 0, 0, Math.max(0, x), H);
+            ctx.fillStyle = "#3a3f48"; ctx.fillRect(x - 60, 420, 120, 240); ctx.fillStyle = "#d9b25a"; ctx.fillRect(x - 60, 430, 120, 40); ctx.restore();
+          }
+        }
+      };
+    }
+  };
+
+  /* ---------- Pastel Mesh ---------- */
+  S.pastel = {
+    name: "Pastel Mesh", group: "Light", light: true, title: "block",
+    desc: "Soft pastel versions of the theme colours melting slowly into each other on white",
+    build(env) {
+      const { C, rnd } = env;
+      const blobs = [C.primary, C.accent, C.secondary, C.digit, C.primary].map((c, i) => ({ c: mix(c, "#ffffff", .62), x: rnd() * W, y: rnd() * H, r: lerp(520, 820, rnd()), sx: lerp(.04, .09, rnd()), sy: lerp(.03, .08, rnd()), p: rnd() * TAU }));
+      const small = document.createElement("canvas"); small.width = 192; small.height = 108; const s = small.getContext("2d");
+      return {
+        draw(ctx, t) {
+          s.fillStyle = paper(C, .02); s.fillRect(0, 0, 192, 108);
+          for (const b of blobs) {
+            const x = (b.x + Math.sin(t * b.sx + b.p) * 500) / 10, y = (b.y + Math.cos(t * b.sy + b.p) * 300) / 10, r = b.r / 10;
+            const g = s.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(b.c, Math.min(1, .9 * env.amt))); g.addColorStop(1, rgba(b.c, 0)); s.fillStyle = g; s.fillRect(0, 0, 192, 108);
+          }
+          ctx.imageSmoothingEnabled = true; ctx.drawImage(small, 0, 0, W, H);
+        }
+      };
+    }
+  };
+
+  /* ---------- Home Jersey ---------- */
+  S.jersey = {
+    name: "Home Jersey", group: "Light", light: true, title: "block",
+    desc: "White mesh jersey fabric with team-colour pinstripes and a slow ripple of light",
+    build(env) {
+      const { C, rnd } = env;
+      const cloth = env.layer((c) => {
+        c.fillStyle = "#f7f7f5"; c.fillRect(0, 0, W, H);
+        for (let y = 0; y < H; y += 9) for (let x = (y / 9 % 2) * 4.5; x < W; x += 9) { c.fillStyle = "rgba(0,0,0,.07)"; c.beginPath(); c.arc(x, y, 2.2, 0, TAU); c.fill(); }   // mesh holes
+        for (let x = 40; x < W; x += 96) { c.fillStyle = rgba(C.primary, .28); c.fillRect(x, 0, 5, H); }                                                                    // pinstripes
+        c.fillStyle = rgba(C.primary, .9); c.fillRect(0, 0, 70, H); c.fillRect(W - 70, 0, 70, H);                                                                              // side panels
+        c.fillStyle = rgba(C.accent, .9); c.fillRect(70, 0, 14, H); c.fillRect(W - 84, 0, 14, H);
+      });
+      return {
+        draw(ctx, t) {
+          ctx.drawImage(cloth, 0, 0, W, H);
+          // folds: soft light and shade bands moving across, like fabric in a breeze
+          for (let i = 0; i < 5; i++) {
+            const x = ((i * 520 + t * 40) % (W + 800)) - 400, w = 260 + 60 * Math.sin(t * .3 + i);
+            const g = ctx.createLinearGradient(x - w, 0, x + w, 0);
+            g.addColorStop(0, "rgba(0,0,0,0)"); g.addColorStop(.35, `rgba(0,0,0,${.07 * env.amt})`); g.addColorStop(.6, `rgba(255,255,255,${.18 * env.amt})`); g.addColorStop(1, "rgba(255,255,255,0)");
+            ctx.fillStyle = g; ctx.fillRect(x - w, 0, w * 2, H);
+          }
         }
       };
     }

@@ -19,6 +19,8 @@
                                    chalktalk, vhs
                          Abstract: aurora, waves, shapes, lowpoly, flow, warp, halftone,
                                    lava, ribbons, plexus, topo, bokeh, truchet, kaleido
+                         Light:    daycourt, studio, sportspage, sky, confetti, whiteboard,
+                                   pastel, jersey
                          (leave it out to use the scene set in theme.css)
     &foilbg=0            don't switch to the Tin Foil board while the Tin Foil alert is on
     &anim=arena          extra effects on top. Mix with commas, e.g. &anim=drift,flashes
@@ -122,6 +124,11 @@
 
   canvas#fx { position: absolute; inset: 0; width: 1920px; height: 1080px; }
   .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55)); }
+  /* bright scenes (scene.light): dark lettering with a white halo, a much softer vignette */
+  .lightbg .vignette { background: radial-gradient(ellipse at center, transparent 62%, rgba(0,0,0,.14)); }
+  .lightbg .name { color: var(--dark); text-shadow: 4px 4px 0 var(--primary), 0 0 28px rgba(255,255,255,.9), 0 0 60px rgba(255,255,255,.7); }
+  .lightbg.title-neon .name { color: var(--dark); text-shadow: 0 0 12px #fff, 0 0 28px rgba(255,255,255,.9), 4px 4px 0 var(--primary); }
+  .lightbg .tagline { color: var(--primary); text-shadow: 0 0 14px #fff, 0 0 4px #fff; }
 
   /* ---------- title ---------- */
   .title { position: absolute; left: 0; right: 0; text-align: center; padding: 0 80px; }
@@ -212,6 +219,7 @@
   const scene = SCENES[sceneKey];
   const isCourt = sceneKey === "court";
   if (!isCourt) document.body.classList.add("scene-canvas");
+  if (scene.light) document.body.classList.add("lightbg");
   document.body.classList.add("title-" + (scene.title || "block"));
 
   const EFFECTS = isCourt ? ["spotlights", "sheen", "pulse", "lines", "drift", "bounce", "flashes"] : ["spotlights", "sheen", "drift", "flashes"];

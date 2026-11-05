@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-11-05)
+
+- Show Runner: Layouts section to switch between Main Show and the layout scenes (works with Studio Mode), with a ★ suggestion based on who's in the seats.
+- Eight light backgrounds (Daylight Court, Studio White, Sports Page, Clear Sky, Confetti, Whiteboard, Pastel Mesh, Home Jersey) in a new "Light & bright" group; the title switches to dark lettering on them.
+
 ## 1.1.0 (2026-11-02)
 
 - Guests page: badge pictures (a logo or photo in the camera frame's name plate, right of the name, and in the lower third) and Saved guests for people who come back.
