@@ -200,7 +200,7 @@
   function buildThumbs() {
     const groups = {};
     Object.entries(SCENES).forEach(([k, sc]) => (groups[sc.group] = groups[sc.group] || []).push([k, sc]));
-    $("groups").innerHTML = Object.entries(groups).map(([g, list]) => `<h3>${g === "Shows" ? "Show themes" : g === "Style" ? "Styles" : "Abstract art"}</h3>
+    $("groups").innerHTML = Object.entries(groups).map(([g, list]) => `<h3>${g === "Shows" ? "Show themes" : g === "Style" ? "Styles" : g === "Light" ? "Light &amp; bright" : "Abstract art"}</h3>
       <div class="thumbs">${list.map(([k, sc]) => {
         const pack = packFor(k), themeQ = state.colors === "pack" && pack ? "&theme=" + packTheme(pack) : "";
         const extra = k === "court" ? "&anim=arena" : "";

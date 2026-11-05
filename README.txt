@@ -181,6 +181,15 @@ only talk to overlays added this way, not ones added with "Local file".
       bokeh      soft out-of-focus lights drifting
       truchet    Truchet Tiles — a maze of curved tiles flipping
       kaleido    Kaleidoscope — shapes in a turning twelve-way mirror
+    Light & bright (the title switches to dark lettering on these)
+      daycourt   Daylight Court — light maple hardwood, sun shafts, dust in the light
+      studio     Studio White — bright TV-studio cyclorama, soft coloured light pools
+      sportspage Sports Page — newspaper columns, headlines, halftone box scores
+      sky        Clear Sky — blue sky, sun glow, fluffy clouds drifting
+      confetti   Confetti — bright paper with theme-coloured confetti falling
+      whiteboard Whiteboard — coach's whiteboard, marker plays drawing themselves
+      pastel     Pastel Mesh — pastel theme colours melting together on white
+      jersey     Home Jersey — white mesh jersey with team-colour pinstripes
 
   TIN FOIL TAKEOVER: while the Tin Foil alert is on (Control Panel 🛸
   button, F on the clock, or the hotkey), the Main Show background fades to
@@ -491,6 +500,18 @@ SHOW PACKS (for your other shows)
     avatar layer, .../avatar.html?id=1 (600 x 660), same box as the frame,
     between the camera and the frame: Build my scenes adds it and keeps it
     lined up. Faces for other seats: avatars/README.txt.
+
+  LAYOUTS — buttons for Main Show and every layout scene (1–4 people, 2–5 +
+    moderator), each with a little picture of the layout. Click one to put
+    that scene on air (in OBS Studio Mode it goes to Preview first; click it
+    again, or Transition, to take it live). The one on air has a red
+    outline. ★ marks the layout that fits who's in the seats right now (the
+    names in the Control Panel's People slots), with a "Switch to ★" button:
+    a guest drops out, the ★ moves, one click. "Seat 1 is the moderator"
+    decides between e.g. 4 People and 3 + Moderator (it's ticked by itself
+    when seat 1's role says Moderator). If a seat in the middle is empty
+    (say 1, 2 and 4 are filled), it tells you: the layouts use seats in
+    order, so move the person up. Needs OBS connected.
 
   MUTE — a button per person at the top of the Show Runner (and next to each
     seat in Talk time) mutes or unmutes their mic in OBS; red = muted, and

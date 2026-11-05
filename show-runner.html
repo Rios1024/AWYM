@@ -26,6 +26,9 @@
   ── For developers ─────────────────────────────────────────────
   Type:      OBS Custom Browser Dock.
   Uses:      theme.css, shared.js, sfx.js (sound list + dock preview), obs-ws.js (OBS WebSocket).
+  Layouts:   Main Show and the "Show: …" layout scenes, switched over obs-websocket
+             (SetCurrentProgramScene, or Preview + TriggerStudioModeTransition in Studio Mode);
+             ★ = suggestLayout() from the Control Panel's names (localStorage "awym-control-v1").
   Sends:     from:"runner" {cmd:"segment", index, name} when a segment starts (the Content Panel follows) ·
              to:"debate" (debate.html) · to:"sfx" (sfx.html) · to:"fx" (frame-fx.html) · to:"clock" set/label/start ·
              to:"docks" reload (after a restore). See shared.js for every message.
@@ -170,6 +173,20 @@
   .facestate { font-size: 14px; margin: 6px 0 2px; }
 
   /* frame effects */
+  /* layouts */
+  .lay { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 4px 5px; text-transform: none; letter-spacing: 0; font-size: 12px; position: relative; }
+  .lay svg { width: 100%; max-width: 92px; height: auto; display: block; }
+  .lay svg rect { fill: rgba(255,255,255,.06); }
+  .lay svg circle { fill: none; stroke: currentColor; stroke-width: 9; opacity: .85; }
+  .lay svg circle.m { stroke-dasharray: 14 9; }
+  .lay.live { outline: 2px solid #e5484d; outline-offset: 1px; }
+  .lay.prev { outline: 2px dashed #3DDC84; outline-offset: 1px; }
+  .lay.sug::after { content: "★"; position: absolute; top: 2px; right: 5px; color: var(--accent, #ffc94d); font-size: 13px; }
+  .lay .tag { font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+  .lay.live .tag { color: #ff6b6f; }
+  .laysug { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 13px; }
+  .laysug span { flex: 1; min-width: 0; }
+  .laysug button { flex: none; }
   .fxbtn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px 6px; text-transform: none; font-size: 13px; letter-spacing: 0; }
   .fxbtn .ic { font-size: 24px; line-height: 1; font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif; }
   .fxbtn.live { outline: 2px solid #3DDC84; outline-offset: 1px; }
@@ -205,6 +222,16 @@
   </div>
   <div class="mutebar" id="muteBar" title="Mute or unmute each person's mic in OBS (pick their mics in Talk time)"></div>
   <div class="msg" id="muteMsg" style="margin:-4px 0 10px"></div>
+
+  <!-- ================= LAYOUTS ================= -->
+  <section data-fold="layouts">
+    <h2><span class="ttl">Layouts</span> <small id="layState"></small></h2>
+    <div class="grid g4" id="layBtns"></div>
+    <div class="laysug" id="laySug"></div>
+    <label class="check"><input type="checkbox" id="layMod"> Seat 1 is the moderator (smaller, in the moderator layouts)</label>
+    <div class="msg" id="layMsg"></div>
+    <p class="hint">Click a layout to put that scene on air (in Studio Mode it goes to Preview first). <b>★</b> = the layout that fits who's in the seats right now (names in the Control Panel). Needs OBS connected (Clips &amp; replays section). The layout scenes come from <b>Build my scenes</b>.</p>
+  </section>
 
   <!-- ================= RUNDOWN ================= -->
   <section data-fold="rundown">
@@ -745,7 +772,7 @@
     $("recToggle").textContent = rec.active ? "Stop recording" : "Start recording";
     $("markBtn").disabled = !ok;
   }
-  obs.onStatus = (state, text) => { paintObs(state, text); if (state === "error") note("obsMsg", text, true); };
+  obs.onStatus = (state, text) => { paintObs(state, text); if (state === "error") note("obsMsg", text, true); if (state === "ready") loadScenes(); else if (state === "off" || state === "error") paintLayouts(); };
   obs.onEvent = (type, d) => {
     if (type === "ReplayBufferStateChanged") { rb.active = !!d.outputActive; paintObs(); }
     else if (type === "RecordStateChanged") { rec.active = !!d.outputActive; paintObs(); }
@@ -754,6 +781,10 @@
     else if (type === "InputMuteStateChanged") muteChanged(d.inputName, !!d.inputMuted);
     else if (type === "ReplayBufferSaved" && d.savedReplayPath) addClip(d.savedReplayPath);
     else if (type === "MediaInputPlaybackEnded" && d.inputName === S.obs.source) endReplay();
+    else if (type === "CurrentProgramSceneChanged") { LAY.live = d.sceneName || ""; paintLayouts(); }
+    else if (type === "CurrentPreviewSceneChanged") { LAY.preview = d.sceneName || ""; paintLayouts(); }
+    else if (type === "StudioModeStateChanged") { LAY.studio = !!d.studioModeEnabled; paintLayouts(); }
+    else if (type === "SceneListChanged") loadScenes();
     else if (type === "ExitStarted") obs.close();
   };
   /** Connect with the address and password typed in. */
@@ -781,6 +812,92 @@
     $("eScene").innerHTML = `<option value="">Don't switch</option>` + names.map((n) => `<option ${n === keep ? "selected" : ""}>${esc(n)}</option>`).join("");
     if (!obs.ready && !names.length) $("eScene").innerHTML += `<option disabled>(connect to OBS to list scenes)</option>`;
   }
+
+  /* ---------- layouts: switch between the layout scenes, and suggest the one that fits ---------- */
+  // the same layouts as the setup script (awym-obs-setup.lua): seat boxes {x, y, w} on 1920×1080; seat 1 = moderator in "+ M"
+  const LAYOUTS = [
+    { scene: "Show: 1 Person", tag: "1", n: 1, seats: [[650, 190, 620]] },
+    { scene: "Show: 2 People", tag: "2", n: 2, seats: [[370, 210, 520], [1030, 210, 520]] },
+    { scene: "Show: 3 People", tag: "3", n: 3, seats: [[220, 230, 440], [740, 230, 440], [1260, 230, 440]] },
+    { scene: "Show: 4 People", tag: "4", n: 4, seats: [[70, 245, 400], [530, 245, 400], [990, 245, 400], [1450, 245, 400]] },
+    { scene: "Show: 2 + Moderator", tag: "2 + M", n: 3, mod: true, seats: [[810, 330, 300], [170, 200, 500], [1250, 200, 500]] },
+    { scene: "Show: 3 + Moderator", tag: "3 + M", n: 4, mod: true, seats: [[60, 390, 280], [420, 250, 440], [910, 250, 440], [1400, 250, 440]] },
+    { scene: "Show: 4 + Moderator", tag: "4 + M", n: 5, mod: true, seats: [[50, 400, 260], [350, 265, 360], [740, 265, 360], [1130, 265, 360], [1520, 265, 360]] },
+    { scene: "Show: 5 + Moderator", tag: "5 + M", n: 6, mod: true, seats: [[60, 397, 260], [580, 190, 300], [930, 190, 300], [1280, 190, 300], [755, 540, 300], [1105, 540, 300]] },
+  ];
+  S.lay = Object.assign({ mod: null }, S.lay || {});           // mod: null = work it out from seat 1's role
+  const LAY = { scenes: [], live: "", preview: "", studio: false };
+  const slots = () => { try { return JSON.parse(localStorage.getItem("awym-control-v1") || "{}").slots || {}; } catch (e) { return {}; } };
+  const isMod = () => S.lay.mod != null ? S.lay.mod : /moderat/i.test(((slots()[1] || {}).role) || "");
+  /** Who's in the seats (Control Panel names), and the layout that fits. */
+  function suggestLayout() {
+    const sl = slots(), filled = [1, 2, 3, 4, 5, 6].filter((n) => ((sl[n] || {}).name || "").trim());
+    const count = filled.length, last = filled.length ? Math.max(...filled) : 0;
+    const gaps = [];
+    for (let n = 1; n < last; n++) if (!filled.includes(n)) gaps.push(n);
+    const mod = isMod() && filled.includes(1);
+    let pick = null;
+    if (count) {
+      if (mod && count >= 3) pick = LAYOUTS.find((l) => l.mod && l.n === Math.min(count, 6));
+      if (!pick && count <= 4) pick = LAYOUTS.find((l) => !l.mod && l.n === count);
+      if (!pick) pick = LAYOUTS.find((l) => l.mod && l.n === Math.min(count, 6));   // 5 or 6 people: the big moderator layouts
+    }
+    return { pick, count, gaps, last, mod };
+  }
+  function laySvg(L) {
+    return `<svg viewBox="0 0 1920 1080" aria-hidden="true"><rect width="1920" height="1080" rx="60"/>` +
+      L.seats.map(([x, y, w], i) => `<circle class="${L.mod && i === 0 ? "m" : ""}" cx="${x + w / 2}" cy="${y + w / 2}" r="${w * 0.44}" style="stroke-width:${Math.max(28, w * 0.09)}"/>`).join("") + `</svg>`;
+  }
+  function paintLayouts() {
+    const have = (sc) => LAY.scenes.includes(sc);
+    const sug = suggestLayout();
+    const list = [{ scene: "Main Show", tag: "Main Show", main: true }].concat(LAYOUTS);
+    $("layBtns").innerHTML = list.map((L) => {
+      const cls = ["lay", LAY.live === L.scene ? "live" : "", LAY.studio && LAY.preview === L.scene && LAY.live !== L.scene ? "prev" : "", sug.pick && sug.pick.scene === L.scene ? "sug" : ""].join(" ");
+      const off = !obs.ready || (LAY.scenes.length && !have(L.scene));
+      const title = !obs.ready ? "Connect to OBS first (Clips & replays section)" : !have(L.scene) ? `There's no "${L.scene}" scene in OBS: click Build my scenes in the setup script` : (LAY.live === L.scene ? "On air now" : (LAY.studio ? "Put it in Preview" : "Put it on air"));
+      const pic = L.main ? `<svg viewBox="0 0 1920 1080" aria-hidden="true"><rect width="1920" height="1080" rx="60"/><text x="960" y="640" text-anchor="middle" font-size="300" fill="currentColor" opacity=".8">★</text></svg>` : laySvg(L);
+      return `<button class="${cls.trim()}" data-scene="${esc(L.scene)}" ${off ? "disabled" : ""} title="${esc(title)}">${pic}<span class="tag">${esc(L.tag)}</span></button>`;
+    }).join("");
+    $("layState").textContent = !obs.ready ? "not connected to OBS" : LAY.live ? "on air: " + LAY.live + (LAY.studio ? " · Studio Mode" : "") : "";
+    $("layMod").checked = isMod();
+    // the suggestion line
+    let txt = "";
+    if (!sug.count) txt = "No names in the Control Panel's People slots yet, so no suggestion.";
+    else {
+      const who = sug.mod ? `moderator + ${sug.count - 1}` : `${sug.count} ${sug.count === 1 ? "person" : "people"}`;
+      txt = `<b>${who}</b> in the seats` + (sug.pick ? ` → <b>${esc(sug.pick.tag)}</b>` : "") + ".";
+      if (sug.gaps.length) txt += ` Seat ${sug.gaps.join(", ")} ${sug.gaps.length > 1 ? "are" : "is"} empty but seat ${sug.last} isn't: the layouts use seats 1, 2, 3… in order, so move them up in the Control Panel.`;
+      if (sug.pick && !sug.mod && sug.count > 4) txt += " (Seat 1 is drawn smaller in this one.)";
+    }
+    const canGo = sug.pick && obs.ready && have(sug.pick.scene) && LAY.live !== sug.pick.scene;
+    $("laySug").innerHTML = `<span>${txt}</span>` + (canGo ? `<button class="primary" data-scene="${esc(sug.pick.scene)}">Switch to ★</button>` : "");
+  }
+  async function loadScenes() {
+    if (!obs.ready) { LAY.scenes = []; paintLayouts(); return; }
+    try {
+      const r = await obs.req("GetSceneList");
+      LAY.scenes = (r.scenes || []).map((x) => x.sceneName);
+      LAY.live = r.currentProgramSceneName || "";
+      LAY.preview = r.currentPreviewSceneName || "";
+      try { LAY.studio = !!(await obs.req("GetStudioModeEnabled")).studioModeEnabled; } catch (e) { LAY.studio = false; }
+    } catch (e) {}
+    paintLayouts();
+  }
+  async function goLayout(scene) {
+    if (!obs.ready) return;
+    try {
+      if (LAY.studio) {
+        if (LAY.preview === scene && LAY.live !== scene) { await obs.req("TriggerStudioModeTransition"); note("layMsg", `${scene}: on air.`); }
+        else { await obs.req("SetCurrentPreviewScene", { sceneName: scene }); note("layMsg", `${scene} is in Preview. Click it again (or Transition in OBS) to put it on air.`); }
+      } else { await obs.req("SetCurrentProgramScene", { sceneName: scene }); note("layMsg", ""); }
+    } catch (e) { note("layMsg", "Couldn't switch: " + e.message, true); }
+  }
+  $("layBtns").onclick = $("laySug").onclick = (e) => { const b = e.target.closest("button[data-scene]"); if (b && !b.disabled) goLayout(b.dataset.scene); };
+  $("layMod").onchange = () => { S.lay.mod = $("layMod").checked; save(); paintLayouts(); };
+  addEventListener("storage", (e) => { if (e.key === "awym-control-v1") paintLayouts(); });   // names changed in the Control Panel
+  AWYM.listen((m) => { if (m.to === "lower" && (m.cmd === "update" || m.cmd === "clear")) setTimeout(paintLayouts, 50); });
+  paintLayouts();
 
   /* replay buffer + clips */
   $("rbToggle").onclick = () => obs.req(rb.active ? "StopReplayBuffer" : "StartReplayBuffer")
