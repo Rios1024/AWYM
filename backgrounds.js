@@ -998,14 +998,25 @@
         for (let i = 0; i < 70; i++) { const x = rnd() * W, y = rnd() * H, r = lerp(80, 300, rnd()); const g = c.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, rgba(chalk, .045)); g.addColorStop(1, rgba(chalk, 0)); c.fillStyle = g; c.fillRect(x - r, y - r, r * 2, r * 2); }
         // half court in chalk (moved down a little so the show title doesn't cover the hoop)
         c.translate(0, 60);
-        c.strokeStyle = rgba(chalk, .55); c.lineWidth = 5; c.lineCap = "round";
-        const L = (pts) => { c.beginPath(); pts.forEach(([x, y], i) => { const jx = x + (rnd() - .5) * 3, jy = y + (rnd() - .5) * 3; i ? c.lineTo(jx, jy) : c.moveTo(jx, jy); }); c.stroke(); };
-        L([[260, 1020], [260, 120], [1660, 120], [1660, 1020]]);        // sidelines + baseline
-        L([[760, 120], [760, 520], [1160, 520], [1160, 120]]);          // the paint
-        c.beginPath(); c.arc(960, 520, 200, 0, Math.PI); c.stroke();     // free-throw circle
-        c.beginPath(); c.moveTo(380, 120); c.lineTo(380, 300); c.arc(960, 210, 600, Math.PI - .16, .16, true); c.lineTo(1540, 120); c.stroke();   // three-point line
-        c.beginPath(); c.arc(960, 175, 22, 0, TAU); c.stroke(); L([[900, 150], [1020, 150]]);   // hoop + backboard
-        c.beginPath(); c.arc(960, 980, 200, Math.PI, TAU); c.stroke();    // half-court circle
+        // smooth geometry: straight lines, true arcs centred on the hoop, corners that meet exactly
+        const HX = 960, HY = 175;                                        // the hoop
+        const R3 = 560, CX3 = 540;                                       // three-point arc radius; corner lines at HX ± CX3
+        const A3 = Math.acos(CX3 / R3), Y3 = HY + R3 * Math.sin(A3);     // where the corner lines meet the arc
+        const court = () => {
+          c.beginPath(); c.moveTo(260, 1020); c.lineTo(260, 120); c.lineTo(1660, 120); c.lineTo(1660, 1020);   // sidelines + baseline
+          c.moveTo(760, 120); c.lineTo(760, 520); c.lineTo(1160, 520); c.lineTo(1160, 120);                   // the paint
+          c.moveTo(960 + 160, 520); c.arc(960, 520, 160, 0, Math.PI);                                         // free-throw circle (outside half)
+          c.moveTo(HX - CX3, 120); c.lineTo(HX - CX3, Y3); c.arc(HX, HY, R3, Math.PI - A3, A3, true); c.lineTo(HX + CX3, 120);   // three-point line
+          c.moveTo(HX + 70, HY); c.arc(HX, HY, 70, 0, Math.PI);                                               // restricted area
+          c.moveTo(900, 150); c.lineTo(1020, 150);                                                            // backboard
+          c.moveTo(HX + 22, HY); c.arc(HX, HY, 22, 0, TAU);                                                   // hoop
+          c.moveTo(960 + 200, 1020); c.arc(960, 1020, 200, 0, Math.PI, true);                                 // half-court circle
+          c.stroke();
+          c.save(); c.setLineDash([18, 16]); c.beginPath(); c.arc(960, 520, 160, Math.PI, TAU); c.stroke(); c.restore();   // free-throw circle (inside half, dashed)
+        };
+        c.lineCap = "round"; c.lineJoin = "round";
+        c.strokeStyle = rgba(chalk, .12); c.lineWidth = 11; court();     // soft chalk dust round the lines
+        c.strokeStyle = rgba(chalk, .55); c.lineWidth = 5; court();
       });
       // plays: players (x/o) and moves: [kind, points]  kind: cut | pass | dribble | screen
       const PLAYS = [
