@@ -54,6 +54,11 @@ WHAT "BUILD MY SCENES" MAKES
     in a frame's group) is centred on its frame again, in every scene.
     To frame your face differently inside the circle, use the camera's
     Crop/Pad filter or Edit Transform → Crop afterwards.
+    "Reset layout positions" puts every seat's camera, avatar, frame and
+    effects back where the layout has them, in Main Show and every Show: …
+    scene (for scenes where things ended up off screen, or after moving
+    things by hand). It goes by the scene's name and the groups' names
+    (Seat 2 (3+M), Moderator…), so it leaves your other scenes alone.
     Same camera in every scene: it's one source, shown in each.
   An existing Main Show is never rebuilt (only missing overlays are
     added). For the grouped version, rename it (e.g. "Main Show old") and
