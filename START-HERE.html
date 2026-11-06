@@ -184,7 +184,7 @@
         <div class="addr" style="margin-top:6px"><div class="line"><input readonly id="luaPath" aria-label="Script location"><button class="copy" id="luaCopy">Copy</button></div>
         <div class="note">Paste this into the file picker's name box to jump straight to it.</div></div></li>
       <li>On the right, pick the <b>Main Show layout</b> (1–4 people, or 2–5 + a moderator) and what to include.</li>
-      <li>Click <b>Build my scenes</b>. You'll see "Done!" and the new scenes appear in your Scenes list: Main Show, plus a <b>Show: …</b> scene for every layout (switch between them during the show), the stream screens and <b>Show Overlays</b> (the graphics, shown inside every show scene).</li>
+      <li>Click <b>Build my scenes</b>. You'll see "Done!" and the new scenes appear in your Scenes list: Main Show, plus a <b>Show: …</b> scene for every layout (switch between them during the show), the <b>Intro</b> (your show intro: it plays when you switch to it, then goes to Main Show), the stream screens and <b>Show Overlays</b> (the graphics, shown inside every show scene).</li>
       <li>Each person is a color-coded group, <b>Seat 1</b>, <b>Seat 2</b>… (<b>Moderator</b> in the moderator layouts): their camera, avatar, frame and frame effects. Double-click <b>Camera 1</b> (inside Seat 1) and pick your camera; same for the others. Each camera is centred on its frame; if one ever looks off, click <b>Line up cameras with their frames</b> in the script window. If a whole seat is out of place (or off screen) in a layout scene, click <b>Reset layout positions</b>.</li>
       <li>Still in the Scripts window, copy the five dock addresses it shows and add them as in <b>step 2</b>. (OBS doesn't let scripts add docks.)</li>
       <li>Close the Scripts window, but <b>leave the script in the list</b>: it also provides the AWYM hotkeys (step 10).</li>
@@ -807,6 +807,7 @@
     row($("rows-docks"), { title: "Content Panel", kind: "Dock", value: url("content-panel.html"), notes: "Dock name: <b>Content Panel</b>. Type text (bold, lists, emojis, photos) and show it on screen, or import a whole show script from Google Docs / Word (template in <b>templates/</b>)." });
     if ($("rows-guests")) { $("rows-guests").innerHTML = ""; row($("rows-guests"), { title: "Guests (optional dock)", kind: "Dock", value: url("guests.html"), notes: "Dock name: <b>Guests</b>. Only needed if you want <b>Send names to the Control Panel</b>; the links work from your normal browser too." }); }
     row($("rows-docks"), { title: "Show Runner", kind: "Dock", value: url("show-runner.html"), notes: "Dock name: <b>Show Runner</b>. Rundown, debate scoreboard, hot-take receipts, sound board, faces, frame effects, talk time (speaking light), mute, clips &amp; replays, and Backup." });
+    row($("rows-docks"), { title: "Intro Editor (optional dock)", kind: "Dock", value: url("intro-editor.html"), notes: "Dock name: <b>Intro Editor</b>. The show intro's words, VS stamp, name plates, fonts, colors and motion, with a live preview and <b>Play in OBS</b>." });
     row($("rows-bg"), { title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
     renderClock();
     row($("rows-stats"), { title: "Stats overlay", kind: "Browser source", value: url("stats-card.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
@@ -821,6 +822,9 @@
         w: 1920, h: 1080, ticks: ["Untick Local file"].concat(extra[k] ? ["Refresh browser when scene becomes active"] : []),
         notes: extra[k] ? `Counts down ${extra[k].minutes} minutes each time you switch to it. Change the number at the end of the address, or use the Screen Maker.` : "" });
     });
+    row($("rows-screens"), { title: "Show intro", kind: "Browser source", value: url("intro.html", { scene: "Intro", next: "Main Show" }),
+      w: 1920, h: 1080, ticks: ["Untick Local file", "Control audio via OBS", "Refresh browser when scene becomes active", "Page permissions: Advanced access to OBS"],
+      notes: "Put it in a scene called <b>Intro</b>. It plays each time you switch to that scene, then switches to <b>Main Show</b> (change the names at the end of the address if yours differ). Change everything in the <b>Intro Editor</b> dock." });
     row($("rows-screens"), { title: "Custom message screen", kind: "Browser source", value: url("screen.html", { type: "custom", title: "Your Message Here", message: "Type anything you like" }),
       w: 1920, h: 1080, ticks: ["Untick Local file"], notes: "Make your own words in the <a href='screen-maker.html' target='_blank'>Screen Maker</a>, or change them live from the Control Panel." });
     renderPeople();

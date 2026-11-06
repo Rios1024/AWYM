@@ -14,7 +14,7 @@ ARGUE WITH YO MOMMA! — OBS OVERLAY KIT
 
 WHAT "BUILD MY SCENES" MAKES
 ----------------------------
-  Scenes (in this order): Starting Soon · Main Show · Show: 1 Person ·
+  Scenes (in this order): Starting Soon · Intro · Main Show · Show: 1 Person ·
   Show: 2 People · Show: 3 People · Show: 4 People · Show: 2 + Moderator ·
   Show: 3 + Moderator · Show: 4 + Moderator · Show: 5 + Moderator ·
   Be Right Back · Technical Difficulties · Halftime · Thanks for Watching ·
@@ -80,6 +80,11 @@ What's in this folder
                       Offline, or your own custom message
   screen-maker.html   Set up those screens with your own words and copy the OBS address
   screens.js          Default wording for the screens (no need to touch)
+  intro.html          Full-screen show intro: corners slam together, VS, the argument,
+                      the title, name plates; then it switches to Main Show
+  intro-editor.html   Dock: change the intro's words, stamps, names, fonts, colors and
+                      motion with a live preview, and play it in OBS
+  intro.js / intro.css  The intro's animation and look (no need to touch)
   shot-clock.html     Segment timer styled like an arena shot clock (buzzer included)
   lower-third.html    Name / role / handle / jersey-number graphic
   frame.html          Themed ring + name plate for circle-cutout cameras
@@ -244,6 +249,40 @@ STREAM SCREENS (starting soon, be right back, and more)
     ?type=brb  &title=…  &message=…  &lines=A|B|C  &minutes=5  &at=19:30
     &countlabel=…  &done=…  &socials=A|B  &next=…  &scene=…  &bg=0
     &showname=0  &icon=play|cup|tv|hourglass|next|heart|moon|megaphone|none
+
+
+SHOW INTRO (plays at the start of the show)
+-------------------------------------------
+  "Build my scenes" makes an Intro scene for you (after Starting Soon). Switch
+  to it and the intro plays: the two corners slam together, a VS stamp, a
+  quick argument in speech bubbles, then the show title lands with confetti,
+  the tagline, the episode badge and up to four name plates, and it wipes to
+  black and switches to Main Show by itself.
+
+  To change it, add intro-editor.html as a dock (Docks → Custom Browser
+  Docks…, dock name "Intro Editor"; the address is in START-HERE and in the
+  Scripts window). It has a live preview and sliders for:
+    Words       top line, big line, tagline, episode label, the two bubbles
+    Name plates four corners, each with name, role, handle and jersey number
+                (built like the lower thirds; blank name = no plate)
+    Stamp       up to 4 words or pictures (VS, ROUND 1, a logo…) in a row
+    Fonts       the theme's fonts by default, or any Google Font
+    Timing      speed, hold on the title, letter stagger
+    Motion      bounce, impact shake, letter entrance (Drop, Slam, Spin, Rise)
+    Color       pick the corner hues, or use the theme (primary vs secondary)
+    Effects     title size, confetti, sound bars, film grain, bubbles, the
+                black wipe, loop, sound effects
+  Every change goes straight to the Intro source, and "Play in OBS" plays it
+  there. Opened in a normal web browser, the editor can't reach OBS: use Copy
+  settings there and Paste settings in the dock.
+
+  Adding it by hand: Browser source, intro.html?scene=Intro&next=Main%20Show,
+  1920 x 1080, in a scene called "Intro". Untick Local file, tick Control
+  audio via OBS (sound effects) and Refresh browser when scene becomes
+  active, and set Page permissions to "Advanced access to OBS" (that's what
+  lets it switch to Main Show; it only switches while Intro is on air).
+    &scene=…  the intro's own scene   &next=…  the scene to go to afterwards
+    &autoplay=0  wait for "Play in OBS"   &bg=0  transparent until the corners arrive
 
 
 SHOW PACKS (for your other shows)

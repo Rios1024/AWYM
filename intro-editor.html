@@ -1,0 +1,592 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Intro Editor</title>
+<!--
+  INTRO EDITOR: add it as a dock in OBS (Docks → Custom Browser Docks…).
+  Change the show intro's words, stamps, name plates, fonts, colors, speed and
+  effects with a live preview. Every change goes straight to the Intro source
+  (intro.html) in OBS; "Play in OBS" plays it there. Settings are saved for you.
+
+  Opened in a normal web browser instead, it works the same but OBS keeps its
+  own copy of the settings: use "Copy settings" here and "Paste settings" in
+  the dock to move them across.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      control dock (also works as a tool page in a normal browser).
+  Uses:      theme.css, intro.css, shared.js, presets.js (font lists), lib/anime.umd.min.js, intro.js.
+  Settings:  AWYM_INTRO.save() → localStorage "awym-intro-v1"; every change is also sent as
+             {to:"intro", cmd:"update", data} (debounced). Answers the source's {from:"intro", cmd:"hello"}
+             with the current settings. "Play in OBS" sends {to:"intro", cmd:"play"}.
+  Status:    pings {to:"intro", cmd:"ping"} every 4 s; the light is green while the source answers.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="intro.css">
+<style>
+  /* Intro Editor styles: the kit's neutral editor colors (--ui-*) so it stays readable whatever the theme. */
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; --ok: #3DDC84; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.4; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+    padding: 10px 14px; background: var(--ui-panel); border-bottom: 1px solid var(--ui-line); }
+  header h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 20px; color: var(--primary); line-height: 1.1; }
+  header h1 small { display: block; font-family: system-ui, sans-serif; font-size: 12px; color: var(--ui-dim); letter-spacing: .3px; margin-top: 2px; }
+  header .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ui-dim); white-space: nowrap; }
+  .conn i { width: 10px; height: 10px; border-radius: 50%; background: #6b6378; flex: none; }
+  .conn.on i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--ui-line); background: var(--ui-bg); font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--ui-dim); }
+  .btn.go { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .btn.alt { background: var(--accent); color: var(--dark); border-color: transparent; }
+  .btn svg { width: 15px; height: 15px; fill: currentColor; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; padding: 14px; max-width: 1500px; margin: 0 auto; align-items: start; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); padding: 10px; } }
+  .col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .preview { position: sticky; top: 66px; }
+  @media (max-width: 860px) { .preview { position: static; } }
+
+  .frame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; border: 1px solid var(--ui-line); background: #000; }
+  .frame:fullscreen { border: 0; border-radius: 0; }
+  .transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .scrub { flex: 1 1 160px; min-width: 0; accent-color: var(--primary); }
+  .time { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--ui-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .looks { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .looks .lbl, .sub { font-size: 12px; font-weight: 800; letter-spacing: 1.2px; text-transform: uppercase; color: var(--ui-dim); }
+  .chipbtn { border: 1px solid var(--ui-line); background: var(--ui-panel); border-radius: 999px; padding: 5px 11px; font-weight: 600; font-size: 13px; cursor: pointer; }
+  .chipbtn:hover { border-color: var(--primary); }
+  .hint { margin: 0; font-size: 13px; color: var(--ui-dim); }
+  .hint b { color: var(--ui-text); }
+  .warn { border: 1px solid var(--accent); border-radius: 10px; padding: 10px 12px; font-size: 13px; }
+  .warn[hidden] { display: none; }
+
+  .card { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 12px; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card h2 { margin: 0; font-family: var(--font-heading); font-weight: 400; font-size: 17px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ui-dim); }
+  .ctl { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 10px; }
+  .ctl label { font-weight: 600; font-size: 14px; }
+  .ctl output { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--ui-dim); font-variant-numeric: tabular-nums; }
+  .ctl > input[type=range], .ctl > input[type=text], .ctl > select, .ctl > .note { grid-column: 1 / -1; }
+  input[type=text], select, textarea { width: 100%; min-width: 0; min-height: 34px; border-radius: 7px; border: 1px solid var(--ui-line); background: var(--ui-bg); padding: 5px 9px; }
+  input[type=text]:focus, select:focus, textarea:focus { border-color: var(--primary); outline: none; }
+  input[type=range] { width: 100%; accent-color: var(--primary); }
+  input[type=range].hue { accent-color: var(--ui-text); }
+  input:disabled { opacity: .4; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
+  .toggle input { appearance: none; -webkit-appearance: none; width: 38px; height: 22px; border-radius: 999px; background: var(--ui-line); position: relative; cursor: pointer; flex: none; }
+  .toggle input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--ui-text); transition: transform .15s; }
+  .toggle input:checked { background: var(--primary); }
+  .toggle input:checked::after { transform: translateX(16px); background: var(--dark); }
+  .note { margin: 0; font-size: 12px; color: var(--ui-dim); }
+  .note:empty { display: none; }
+
+  .stamp-list { display: flex; flex-direction: column; gap: 6px; }
+  .stamp-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+  .stamp-num { font-family: ui-monospace, Menlo, monospace; font-size: 12px; color: var(--ui-dim); }
+  .stamp-file { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 34px; padding: 0 6px 0 3px; border: 1px solid var(--ui-line); border-radius: 7px; background: var(--ui-bg); }
+  .stamp-file img { width: 40px; height: 26px; object-fit: contain; flex: none; }
+  .stamp-file span { font-size: 12px; color: var(--ui-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .ibtn { width: 32px; height: 32px; border-radius: 7px; border: 1px solid var(--ui-line); background: var(--ui-bg); cursor: pointer; font-weight: 800; padding: 0; }
+  .ibtn:hover { border-color: var(--ui-dim); }
+  .ibtn:disabled { opacity: .35; cursor: default; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .smallbtn { min-height: 30px; padding: 3px 10px; border-radius: 7px; border: 1px solid var(--ui-line); background: var(--ui-bg); font-weight: 600; font-size: 13px; cursor: pointer; }
+  .smallbtn:hover { border-color: var(--ui-dim); }
+  .smallbtn.add { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .smallbtn:disabled { opacity: .4; cursor: default; }
+  .addr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .addr input { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+  textarea { min-height: 90px; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; resize: vertical; }
+  .ticks { margin: 0; padding-left: 18px; font-size: 13px; color: var(--ui-dim); }
+  .ticks b { color: var(--ui-text); }
+  .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--ui-dim); }
+  .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 700; cursor: pointer; font-size: 12px; }
+  .toast { color: var(--ok); font-weight: 600; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Intro Editor<small>The show intro: words, stamps, names, fonts, colors and motion</small></h1>
+  <div class="tools">
+    <span class="conn" id="conn" title="Green when the Intro source in OBS is answering"><i></i><span id="connText">Intro source: not found</span></span>
+    <button class="btn go" type="button" id="playObs"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>Play in OBS</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="col preview">
+    <div class="frame" id="frame"><div id="stage"></div></div>
+    <div class="transport">
+      <button class="btn go" type="button" id="playBtn" aria-label="Play preview"><svg viewBox="0 0 16 16" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg><span id="playLbl">Play</span></button>
+      <button class="btn" type="button" id="replayBtn" aria-label="Replay preview from the start" title="Replay (R)"><svg viewBox="0 0 16 16"><path d="M8 2.5a5.5 5.5 0 1 1-5.3 7h1.6A4 4 0 1 0 8 4v2L4.5 3.25 8 .5z"/></svg></button>
+      <input class="scrub" type="range" id="scrub" min="0" max="1000" step="1" value="0" aria-label="Scrub the preview">
+      <span class="time" id="time">0:00.0 / 0:00.0</span>
+      <button class="btn" type="button" id="fsBtn" aria-label="Full-screen preview" title="Full screen (F)"><svg viewBox="0 0 16 16"><path d="M2 2h4.5v1.5h-3v3H2zm7.5 0H14v4.5h-1.5v-3h-3zM2 9.5h1.5v3h3V14H2zm10.5 0H14V14H9.5v-1.5h3z"/></svg></button>
+    </div>
+    <div class="looks" role="group" aria-label="Looks">
+      <span class="lbl">Looks</span>
+      <button class="chipbtn" type="button" data-preset="theme">Show Theme</button>
+      <button class="chipbtn" type="button" data-preset="kitchen">Kitchen Table</button>
+      <button class="chipbtn" type="button" data-preset="latenight">Late Night</button>
+      <button class="chipbtn" type="button" data-preset="courtroom">Courtroom</button>
+      <button class="chipbtn" type="button" data-preset="chaos">Full Chaos</button>
+    </div>
+    <p class="warn" id="browserNote" hidden>You're editing in a web browser, and OBS keeps its own copy of the settings. To change the intro OBS plays, add this page as a dock (address in <b>In OBS</b> below), or click <b>Copy settings</b> here and <b>Paste settings</b> in the dock.</p>
+    <p class="hint">Motion and timing changes replay the preview; words and colors update in place. Everything you change goes straight to the Intro source in OBS. Keys: <b>Space</b> play/pause, <b>R</b> replay, <b>F</b> full screen.</p>
+  </div>
+
+  <div class="col" id="rack"></div>
+</div>
+
+<script src="shared.js"></script>
+<script src="presets.js"></script>
+<script src="lib/anime.umd.min.js"></script>
+<script src="intro.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const mk = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+  const I = window.AWYM_INTRO;
+  const clone = (v) => JSON.parse(JSON.stringify(v));
+  AWYM.dock("intro");
+
+  /* ---------- settings ---------- */
+  let st = I.load();
+  let saveNote = null, sendT = null;
+  /** Save, and send the new settings to the Intro source (both debounced a little). */
+  function commit() {
+    clearTimeout(sendT);
+    sendT = setTimeout(() => {
+      const ok = I.save(st);
+      if (saveNote) saveNote.textContent = ok ? "Saved. OBS gets every change." : "Too big to save (uploaded pictures). OBS still gets this version while it's open.";
+      AWYM.send({ to: "intro", cmd: "update", data: st });
+    }, 250);
+  }
+
+  /* ---------- fonts ---------- */
+  const LISTS = window.AWYM_FONT_LISTS || {
+    display: ["Bungee", "Anton", "Bangers", "Bowlby One", "Luckiest Guy", "Titan One", "Shrikhand", "Righteous"],
+    heading: ["Anton", "Bebas Neue", "Oswald", "Barlow Condensed", "Archivo Black"],
+    body: ["Barlow Condensed", "Barlow", "Inter", "DM Sans", "Montserrat", "Poppins"]
+  };
+  const firstFamily = (v, d) => { const m = String(v || "").match(/["']([^"']+)["']/) || String(v || "").match(/^\s*([^,]+)/); return m ? m[1].trim() : d; };
+  const themeFont = (role) => firstFamily(getComputedStyle(document.documentElement).getPropertyValue("--font-" + role), "");
+  const FONT_ROLE = { fontDisplay: "display", fontHeavy: "heading", fontBody: "body", fontLabel: "heading" };
+
+  /* ---------- the control list ---------- */
+  const R = (id, label, min, max, step, act, fmt, extra) => Object.assign({ id, type: "range", label, min, max, step, act, fmt }, extra || {});
+  const px = (v) => v + " px", pct = (v) => v + "%", deg = (v) => v + "°", n = (v) => String(v);
+  const plate = (k, where) => [
+    { type: "sub", label: where },
+    { id: k + "Name", type: "text", label: "Name", aria: where + " name" },
+    { id: k + "Role", type: "text", label: "Role", aria: where + " role" },
+    { id: k + "Handle", type: "text", label: "Handle (optional)", aria: where + " handle" },
+    { id: k + "Num", type: "text", label: "Number (optional)", aria: where + " number", max: 2 }
+  ];
+  const SCHEMA = [
+    { group: "Words", items: [
+      { id: "episode", type: "text", label: "Episode label" },
+      { id: "line1", type: "text", label: "Top line" },
+      { id: "line2", type: "text", label: "Big line" },
+      { id: "tagline", type: "text", label: "Tagline" },
+      { id: "leftQuote", type: "text", label: "Left speech bubble" },
+      { id: "rightQuote", type: "text", label: "Right speech bubble" }
+    ] },
+    { group: "Name plates", items: [
+      { id: "plates", type: "toggle", label: "Show name plates", act: "replay" },
+      { id: "plateTheme", type: "toggle", label: "Use show theme colors (like the lower thirds)", act: "look" },
+      { type: "note", text: "They pop in after the title lands. Leave a name blank to hide that plate." }
+    ].concat(plate("tl", "Top left"), plate("tr", "Top right"), plate("ll", "Bottom left"), plate("lr", "Bottom right")) },
+    { group: "Center stamp", items: [
+      { type: "stamps" },
+      R("centerSize", "Stamp size", 120, 440, 5, "replay", px)
+    ] },
+    { group: "Fonts", items: [
+      { id: "fontDisplay", type: "font", label: "Display (big title, stamps)" },
+      { id: "fontHeavy", type: "font", label: "Heading (names, top line)" },
+      { id: "fontBody", type: "font", label: "Body (bubbles, tagline, roles)" },
+      { id: "fontLabel", type: "font", label: "Episode badge" }
+    ] },
+    { group: "Timing", items: [
+      R("speed", "Speed", .5, 2, .05, "replay", (v) => v.toFixed(2) + "×"),
+      R("hold", "Hold on title", .5, 6, .1, "replay", (v) => v.toFixed(1) + " s"),
+      R("stagger", "Letter stagger", 20, 200, 5, "replay", (v) => v + " ms")
+    ] },
+    { group: "Motion", items: [
+      R("energy", "Bounce", 0, 100, 1, "replay", pct),
+      R("shake", "Impact shake", 0, 60, 1, "replay", px),
+      { id: "letterStyle", type: "select", label: "Letter entrance", options: [["Drop", "Drop"], ["Slam", "Slam"], ["Spin", "Spin"], ["Rise", "Rise"]], act: "replay" }
+    ] },
+    { group: "Color", items: [
+      { id: "cornerColors", type: "select", label: "Corner colors", options: [["pick", "Pick the hues below"], ["theme", "Show theme (primary vs secondary)"]], act: "look" },
+      R("hueA", "Left corner hue", 0, 360, 1, "look", deg, { hue: true }),
+      R("hueB", "Right corner hue", 0, 360, 1, "look", deg, { hue: true }),
+      R("sat", "Saturation", 20, 100, 1, "look", pct),
+      R("depth", "Depth", 0, 100, 1, "look", pct)
+    ] },
+    { group: "Effects", items: [
+      R("titleSize", "Title size", 140, 320, 5, "still", px),
+      R("particles", "Confetti", 0, 200, 5, "replay", n),
+      R("bars", "Sound bars", 0, 48, 1, "still", n),
+      R("grain", "Film grain", 0, 40, 1, "look", pct),
+      { id: "bubbles", type: "toggle", label: "Speech bubbles", act: "replay" },
+      { id: "outro", type: "toggle", label: "End on black wipe", act: "replay" },
+      { id: "loop", type: "toggle", label: "Loop", act: "none" },
+      { id: "sound", type: "toggle", label: "Sound effects (tick “Control audio via OBS” on the source)", act: "none" }
+    ] },
+    { group: "In OBS", items: [
+      { id: "autoNext", type: "toggle", label: "When it ends, switch to the next scene", act: "none" },
+      { type: "obs" }
+    ] }
+  ];
+  const PRESETS = {
+    theme:     { cornerColors: "theme", plateTheme: true, sat: 86, depth: 52, speed: 1, energy: 60, shake: 22, letterStyle: "Drop", stagger: 70, particles: 80, grain: 12 },
+    kitchen:   { cornerColors: "pick", hueA: 218, hueB: 8, sat: 82, depth: 50, speed: 1, energy: 60, shake: 22, letterStyle: "Drop", stagger: 70, particles: 80, grain: 12 },
+    latenight: { cornerColors: "pick", hueA: 265, hueB: 176, sat: 68, depth: 80, speed: .85, energy: 30, shake: 10, letterStyle: "Rise", stagger: 90, particles: 40, grain: 22 },
+    courtroom: { cornerColors: "pick", hueA: 224, hueB: 40, sat: 58, depth: 64, speed: .9, energy: 15, shake: 16, letterStyle: "Slam", stagger: 85, particles: 30, grain: 16 },
+    chaos:     { cornerColors: "pick", hueA: 300, hueB: 52, sat: 100, depth: 28, speed: 1.25, energy: 100, shake: 55, letterStyle: "Spin", stagger: 40, particles: 200, grain: 8 }
+  };
+
+  /* ---------- build the rack ---------- */
+  const SUGGEST = ["VS", "ROUND 1", "FIGHT!", "OBJECTION!", "SAYS WHO?"];
+  const stampUI = {};
+  const rack = $("rack"), ctl = {};
+  let textT = null;
+  SCHEMA.forEach((g) => {
+    const sec = mk("section", "card"), h = mk("h2"); h.textContent = g.group; sec.appendChild(h);
+    g.items.forEach((it) => {
+      if (it.type === "stamps") return buildStamps(sec);
+      if (it.type === "obs") return buildObs(sec);
+      if (it.type === "sub") { const s = mk("div", "sub"); s.textContent = it.label; sec.appendChild(s); return; }
+      if (it.type === "note") { const p = mk("p", "note"); p.textContent = it.text; sec.appendChild(p); return; }
+      const cid = "c-" + it.id;
+      if (it.type === "toggle") {
+        const wrap = mk("label", "toggle"); wrap.setAttribute("for", cid);
+        const sp = mk("span"); sp.textContent = it.label;
+        const input = mk("input"); input.type = "checkbox"; input.id = cid;
+        wrap.appendChild(sp); wrap.appendChild(input); sec.appendChild(wrap);
+        ctl[it.id] = { it, input };
+        input.addEventListener("change", () => { st[it.id] = input.checked; changed(it.act); if (it.id === "sound" && input.checked) player.ensureAudio(); });
+        return;
+      }
+      const wrap = mk("div", "ctl");
+      const lb = mk("label"); lb.setAttribute("for", cid); lb.textContent = it.label; wrap.appendChild(lb);
+      let input, out = null, custom = null, note = null;
+      if (it.type === "range") {
+        out = mk("output"); out.setAttribute("for", cid); wrap.appendChild(out);
+        input = mk("input"); input.type = "range"; input.min = it.min; input.max = it.max; input.step = it.step;
+        if (it.hue) input.className = "hue";
+        input.addEventListener("input", () => { st[it.id] = parseFloat(input.value); out.textContent = it.fmt(st[it.id]); if (it.act === "look") changed("look"); });
+        input.addEventListener("change", () => { if (it.act !== "look") changed(it.act); });
+      } else if (it.type === "select" || it.type === "font") {
+        input = mk("select");
+        if (it.type === "select") it.options.forEach(([v, t]) => { const o = mk("option"); o.value = v; o.textContent = t; input.appendChild(o); });
+        else fillFonts(input, it.id);
+        input.addEventListener("change", () => {
+          if (it.type === "font" && input.value === "__custom") { custom.hidden = false; custom.focus(); return; }
+          if (custom) custom.hidden = true;
+          st[it.id] = input.value; changed(it.type === "font" ? "font" : it.act);
+        });
+      } else {
+        input = mk("input"); input.type = "text"; input.maxLength = it.max || 80; input.autocomplete = "off"; input.spellcheck = false;
+        if (it.aria) input.setAttribute("aria-label", it.aria);
+        input.addEventListener("input", () => { st[it.id] = input.value; clearTimeout(textT); textT = setTimeout(() => changed("still"), 220); });
+      }
+      input.id = cid; wrap.appendChild(input);
+      if (it.type === "font") {
+        custom = mk("input"); custom.type = "text"; custom.id = cid + "-custom"; custom.hidden = true; custom.maxLength = 40;
+        custom.placeholder = "Font name as listed on Google Fonts"; custom.autocomplete = "off"; custom.spellcheck = false;
+        custom.setAttribute("aria-label", it.label + ", Google Fonts name");
+        note = mk("p", "note"); note.setAttribute("aria-live", "polite");
+        const commitFont = () => {
+          const v = custom.value.trim().replace(/\s+/g, " ");
+          if (!v) return;
+          if (!/^[A-Za-z0-9 ]{2,40}$/.test(v)) { note.textContent = "Use the family name exactly as Google Fonts lists it, like Poppins or Dela Gothic One."; return; }
+          st[it.id] = v; changed("font");
+        };
+        custom.addEventListener("change", commitFont);
+        custom.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); commitFont(); } });
+        wrap.appendChild(custom); wrap.appendChild(note);
+      }
+      sec.appendChild(wrap);
+      ctl[it.id] = { it, input, out, custom, note };
+    });
+    rack.appendChild(sec);
+  });
+  const foot = mk("div", "foot");
+  saveNote = mk("span"); saveNote.textContent = "Saved. OBS gets every change."; foot.appendChild(saveNote);
+  const resetBtn = mk("button", "linkbtn"); resetBtn.type = "button"; resetBtn.textContent = "Reset everything"; foot.appendChild(resetBtn);
+  rack.appendChild(foot);
+
+  /** Font choices for one job: the theme's font first, the kit's list, then "Other Google Font…". */
+  function fillFonts(sel, id) {
+    const role = FONT_ROLE[id], tf = themeFont(role);
+    sel.textContent = "";
+    const add = (v, t) => { const o = mk("option"); o.value = v; o.textContent = t; sel.appendChild(o); };
+    add("", "Show theme" + (tf ? " (" + tf + ")" : ""));
+    (LISTS[role] || []).forEach((f) => add(f, f));
+    add("__custom", "Other Google Font…");
+  }
+
+  /** Make every control show the current settings. */
+  function syncControls() {
+    Object.entries(ctl).forEach(([id, c]) => {
+      const it = c.it;
+      if (it.type === "toggle") c.input.checked = !!st[id];
+      else if (it.type === "font") {
+        const known = st[id] === "" || [...c.input.options].some((o) => o.value === st[id]);
+        c.input.value = known ? st[id] : "__custom";
+        c.custom.hidden = known; c.custom.value = known ? "" : st[id];
+      } else c.input.value = st[id];
+      if (it.type === "range") c.out.textContent = it.fmt(st[id]);
+    });
+    const themed = st.cornerColors === "theme";
+    ["hueA", "hueB"].forEach((k) => { if (ctl[k]) ctl[k].input.disabled = themed; });
+    renderStampList();
+  }
+
+  /* ---------- center stamps ---------- */
+  function buildStamps(sec) {
+    const p = mk("p", "note"); p.textContent = "Slams in one after another before the speech bubbles. Up to 4: words or pictures (a logo, a face).";
+    const list = mk("div", "stamp-list");
+    const actions = mk("div", "row");
+    const addW = mk("button", "smallbtn add"); addW.type = "button"; addW.textContent = "+ Word";
+    const addI = mk("button", "smallbtn add"); addI.type = "button"; addI.textContent = "+ Picture";
+    const file = mk("input"); file.type = "file"; file.accept = "image/*"; file.hidden = true; file.id = "c-stamp-file";
+    actions.append(addW, addI, file);
+    const sugg = mk("div", "row");
+    SUGGEST.forEach((w) => {
+      const b = mk("button", "smallbtn"); b.type = "button"; b.textContent = w;
+      b.addEventListener("click", () => { if (st.stamps.length < 4) { st.stamps.push({ type: "word", text: w }); stampsChanged(true); } });
+      sugg.appendChild(b);
+    });
+    const note = mk("p", "note"); note.setAttribute("aria-live", "polite");
+    sec.append(p, list, actions, sugg, note);
+    Object.assign(stampUI, { list, addW, addI, sugg, note });
+    addW.addEventListener("click", () => {
+      if (st.stamps.length >= 4) return;
+      st.stamps.push({ type: "word", text: "NEW WORD" }); stampsChanged(false);
+      const inputs = list.querySelectorAll("input"); if (inputs.length) { inputs[inputs.length - 1].focus(); inputs[inputs.length - 1].select(); }
+    });
+    addI.addEventListener("click", () => file.click());
+    file.addEventListener("change", () => {
+      const f = file.files && file.files[0]; file.value = "";
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { note.textContent = "That file isn’t a picture. Try a PNG, JPG, WebP or SVG."; return; }
+      note.textContent = "Adding " + f.name + "…";
+      const r = new FileReader();
+      r.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const m = 1000, sc = Math.min(1, m / Math.max(img.naturalWidth || m, img.naturalHeight || m));
+          const c = document.createElement("canvas");
+          c.width = Math.max(1, Math.round((img.naturalWidth || m) * sc)); c.height = Math.max(1, Math.round((img.naturalHeight || m) * sc));
+          let url;
+          try {
+            c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+            url = c.toDataURL("image/webp", .9);
+            if (url.indexOf("data:image/webp") !== 0) url = c.toDataURL("image/png");
+          } catch (e) { url = r.result; }
+          if (st.stamps.length < 4) st.stamps.push({ type: "image", src: url, name: f.name.slice(0, 40) });
+          note.textContent = ""; stampsChanged(true);
+        };
+        img.onerror = () => { note.textContent = "Couldn’t read that picture. Try saving it as a PNG."; };
+        img.src = r.result;
+      };
+      r.readAsDataURL(f);
+    });
+  }
+  function stampsChanged(replay) { renderStampList(); changed(replay ? "replay" : "still"); }
+  function renderStampList() {
+    const list = stampUI.list; if (!list) return;
+    list.textContent = "";
+    st.stamps.forEach((s, i) => {
+      const row = mk("div", "stamp-row");
+      const num = mk("span", "stamp-num"); num.textContent = i + 1; row.appendChild(num);
+      if (s.type === "word") {
+        const inp = mk("input"); inp.type = "text"; inp.id = "c-stamp-" + i; inp.maxLength = 24; inp.value = s.text;
+        inp.autocomplete = "off"; inp.spellcheck = false; inp.setAttribute("aria-label", "Stamp " + (i + 1) + " word");
+        inp.addEventListener("input", () => { s.text = inp.value; clearTimeout(textT); textT = setTimeout(() => changed("still"), 220); });
+        row.appendChild(inp);
+      } else {
+        const fb = mk("div", "stamp-file"), th = mk("img"), nm = mk("span");
+        th.src = s.src; th.alt = ""; nm.textContent = s.name || "Picture";
+        fb.append(th, nm); row.appendChild(fb);
+      }
+      const up = mk("button", "ibtn"); up.type = "button"; up.textContent = "↑"; up.disabled = i === 0;
+      up.setAttribute("aria-label", "Move stamp " + (i + 1) + " earlier");
+      up.addEventListener("click", () => { const t = st.stamps[i - 1]; st.stamps[i - 1] = st.stamps[i]; st.stamps[i] = t; stampsChanged(true); });
+      const rm = mk("button", "ibtn"); rm.type = "button"; rm.textContent = "×";
+      rm.setAttribute("aria-label", "Remove stamp " + (i + 1));
+      rm.addEventListener("click", () => { st.stamps.splice(i, 1); stampsChanged(true); });
+      row.append(up, rm);
+      list.appendChild(row);
+    });
+    if (!st.stamps.length) { const e = mk("p", "note"); e.textContent = "No stamp. The bubbles start the argument on their own."; list.appendChild(e); }
+    const full = st.stamps.length >= 4;
+    stampUI.addW.disabled = stampUI.addI.disabled = full;
+    stampUI.sugg.querySelectorAll("button").forEach((b) => b.disabled = full);
+  }
+
+  /* ---------- the "In OBS" card ---------- */
+  function buildObs(sec) {
+    const sourceUrl = new URL("intro.html?scene=Intro&next=Main%20Show", location.href).href;
+    const dockUrl = new URL("intro-editor.html", location.href).href.split("?")[0];
+    const field = (label, value) => {
+      const box = mk("div", "ctl"); const lb = mk("label"); lb.textContent = label; box.appendChild(lb);
+      const row = mk("div", "addr"); row.style.gridColumn = "1 / -1";
+      const inp = mk("input"); inp.type = "text"; inp.readOnly = true; inp.value = value; inp.setAttribute("aria-label", label);
+      inp.addEventListener("focus", () => inp.select());
+      const b = mk("button", "smallbtn"); b.type = "button"; b.textContent = "Copy";
+      b.addEventListener("click", () => copyText(value, b));
+      row.append(inp, b); box.appendChild(row); return box;
+    };
+    const p = mk("p", "note");
+    p.textContent = "“Build my scenes” in the setup script makes an Intro scene with this source for you (after Starting Soon). Adding it by hand? Browser source, 1920 × 1080, and in its Properties:";
+    const ticks = mk("ul", "ticks");
+    ticks.innerHTML = "<li>Untick <b>Local file</b></li><li>Tick <b>Control audio via OBS</b> (for the sound effects)</li>" +
+      "<li>Tick <b>Refresh browser when scene becomes active</b> (plays it each time)</li><li><b>Page permissions</b>: Advanced access to OBS (for the scene switch)</li>";
+    const p2 = mk("p", "note");
+    p2.textContent = "The address ends with the intro's own scene and the one to switch to. Change “Main%20Show” if your show scene has another name (%20 = space).";
+    const io = mk("div", "row");
+    const copyB = mk("button", "smallbtn"); copyB.type = "button"; copyB.textContent = "Copy settings";
+    const pasteB = mk("button", "smallbtn"); pasteB.type = "button"; pasteB.textContent = "Paste settings";
+    io.append(copyB, pasteB);
+    const pasteBox = mk("div"); pasteBox.hidden = true; pasteBox.style.display = "grid"; pasteBox.style.gap = "6px";
+    const ta = mk("textarea"); ta.id = "c-paste"; ta.setAttribute("aria-label", "Paste intro settings here"); ta.placeholder = "Paste the copied settings here";
+    const useB = mk("button", "smallbtn add"); useB.type = "button"; useB.textContent = "Use these settings";
+    const pnote = mk("p", "note"); pnote.setAttribute("aria-live", "polite");
+    pasteBox.append(ta, useB, pnote);
+    const ionote = mk("p", "note");
+    ionote.textContent = "Moves your intro between this dock, a web browser and the Claude intro page (its Copy settings button).";
+    sec.append(field("Intro source address", sourceUrl), p, ticks, p2, field("This editor as a dock", dockUrl), io, ionote, pasteBox);
+    copyB.addEventListener("click", () => copyText(JSON.stringify(st), copyB));
+    pasteB.addEventListener("click", () => { pasteBox.hidden = !pasteBox.hidden; pasteBox.style.display = pasteBox.hidden ? "none" : "grid"; if (!pasteBox.hidden) ta.focus(); });
+    pasteBox.style.display = "none";
+    useB.addEventListener("click", () => {
+      let obj = null;
+      try { obj = JSON.parse(ta.value); } catch (e) { pnote.textContent = "That isn’t a settings copy. Click Copy settings on the other page and paste again."; return; }
+      st = I.clean(obj); syncControls(); changed("replay");
+      pnote.textContent = "Done: the intro is using the pasted settings."; ta.value = "";
+    });
+  }
+  function copyText(text, btn) {
+    const done = () => { const t = btn.textContent; btn.textContent = "Copied"; setTimeout(() => btn.textContent = t, 1400); };
+    const fallback = () => {
+      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) {} ta.remove();
+    };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  }
+
+  /* ---------- preview ---------- */
+  const frame = $("frame"), stageEl = $("stage");
+  const player = I.mount(stageEl);
+  function fitStage() {
+    const w = frame.clientWidth, h = frame.clientHeight; if (!w || !h) return;
+    const s = Math.min(w / 1920, h / 1080);
+    stageEl.style.transform = `translate(${(w - 1920 * s) / 2}px, ${(h - 1080 * s) / 2}px) scale(${s})`;
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitStage).observe(frame);
+  addEventListener("resize", fitStage);
+  document.addEventListener("fullscreenchange", fitStage);
+  fitStage();
+
+  /** A setting changed: "look" = colors only, "still" = rebuild on the title frame, "replay" = rebuild and play. */
+  function changed(act) {
+    if (act === "look") { player.look(st); ["hueA", "hueB"].forEach((k) => { if (ctl[k]) ctl[k].input.disabled = st.cornerColors === "theme"; }); }
+    else if (act === "font") {
+      const fontsIn = player.set(st);
+      fontsIn.then((oks) => Object.keys(FONT_ROLE).forEach((k, i) => {
+        const c = ctl[k]; if (!c) return;
+        c.note.textContent = oks && oks[i] === false ? "Couldn’t find “" + st[k] + "” on Google Fonts. Check the spelling and capitals." : "";
+      }));
+    }
+    else if (act === "replay") player.set(st, { replay: true });
+    else if (act === "still") player.set(st);
+    commit();
+  }
+
+  const playBtn = $("playBtn"), playLbl = $("playLbl"), playIcon = $("playIcon"), scrub = $("scrub"), timeEl = $("time");
+  let scrubbing = false;
+  const fmt = (ms) => { const s = Math.max(0, ms) / 1000; return Math.floor(s / 60) + ":" + (s % 60).toFixed(1).padStart(4, "0"); };
+  function paint() {
+    const s = player.state();
+    if (!scrubbing) scrub.value = s.duration ? Math.round(s.time / s.duration * 1000) : 0;
+    timeEl.textContent = fmt(s.time) + " / " + fmt(s.duration);
+    playLbl.textContent = s.playing ? "Pause" : "Play";
+    playBtn.setAttribute("aria-label", s.playing ? "Pause preview" : "Play preview");
+    playIcon.innerHTML = s.playing ? '<path d="M4 2.5h3v11H4zm5 0h3v11H9z"/>' : '<path d="M4 2.5v11l9-5.5z"/>';
+  }
+  player.on("update", paint).on("built", paint);
+  player.on("complete", () => { if (st.loop) setTimeout(() => { if (!player.state().playing) player.play(true); }, 500); });
+  playBtn.addEventListener("click", () => player.state().playing ? player.pause() : player.play(false));
+  $("replayBtn").addEventListener("click", () => player.play(true));
+  scrub.addEventListener("pointerdown", () => { scrubbing = true; player.scrubbing(true); player.pause(); });
+  scrub.addEventListener("input", () => { scrubbing = true; player.scrubbing(true); if (player.state().playing) player.pause(); player.seek(scrub.value / 1000 * player.state().duration); });
+  const endScrub = () => { scrubbing = false; player.scrubbing(false); };
+  scrub.addEventListener("change", endScrub); scrub.addEventListener("pointerup", endScrub);
+  function fullscreen() {
+    try {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else if (frame.requestFullscreen) { const p = frame.requestFullscreen(); if (p && p.catch) p.catch(() => {}); }
+    } catch (e) {}
+  }
+  $("fsBtn").addEventListener("click", fullscreen);
+  document.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (t && t.matches && t.matches("input[type=text], select, textarea, button")) return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.code === "Space") { e.preventDefault(); player.state().playing ? player.pause() : player.play(false); }
+    else if (e.key === "r" || e.key === "R") player.play(true);
+    else if (e.key === "f" || e.key === "F") fullscreen();
+  });
+
+  document.querySelectorAll("[data-preset]").forEach((b) => b.addEventListener("click", () => {
+    Object.assign(st, PRESETS[b.dataset.preset]); syncControls(); changed("replay");
+  }));
+  resetBtn.addEventListener("click", () => { st = clone(I.DEFAULTS); syncControls(); changed("replay"); });
+
+  /* ---------- talking to the Intro source in OBS ---------- */
+  let lastSeen = 0;
+  const conn = $("conn"), connText = $("connText");
+  function paintConn() {
+    const on = Date.now() - lastSeen < 6000;
+    conn.classList.toggle("on", on);
+    connText.textContent = on ? "Intro source: connected" : "Intro source: not found";
+    conn.title = on ? "The Intro source in OBS is answering" : "No Intro source answering. Is OBS open with the Intro scene built? In a web browser this stays grey.";
+  }
+  AWYM.listen((m) => {
+    if (m.from !== "intro") return;
+    lastSeen = Date.now(); paintConn();
+    if (m.cmd === "hello") AWYM.send({ to: "intro", cmd: "update", data: st });   // a source that just loaded gets the latest settings
+  });
+  setInterval(() => { AWYM.send({ to: "intro", cmd: "ping" }); setTimeout(paintConn, 800); }, 4000);
+  AWYM.send({ to: "intro", cmd: "ping" });
+  $("playObs").addEventListener("click", () => {
+    AWYM.send({ to: "intro", cmd: "update", data: st });
+    setTimeout(() => AWYM.send({ to: "intro", cmd: "play" }), 120);
+  });
+  if (!window.obsstudio) $("browserNote").hidden = false;
+
+  /* ---------- start ---------- */
+  syncControls();
+  player.set(st);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!player.state().playing) player.set(st); });
+  const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (!reduced) setTimeout(() => player.play(true), 700);
+})();
+</script>
+</body>
+</html>

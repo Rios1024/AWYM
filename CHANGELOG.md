@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.3 (2026-11-06)
+
+- Show intro (`intro.html`): the two corners slam together, a VS stamp, a quick argument in speech bubbles, then the show title lands letter by letter with confetti, sound bars, the tagline, the episode badge and name plates in all four corners, and it wipes to black. It follows theme.css (fonts, dark/light, gold), and its sound effects are made in code.
+- Intro Editor dock (`intro-editor.html`): live preview with sliders for speed, hold, letter stagger, bounce, shake, corner colors (or the theme's), depth, title size, confetti, sound bars and film grain; letter entrances (Drop, Slam, Spin, Rise); up to four center stamps, words or pictures; any Google Font per job. Changes go straight to OBS; Play in OBS; Copy / Paste settings.
+- The setup script adds an **Intro** scene after Starting Soon. It plays each time you switch to it, then switches to Main Show (only while Intro is on air; the source gets "Advanced access to OBS"). START-HERE and the script panel show the Intro Editor dock address.
+
 ## 1.2.2 (2026-11-05)
 
 - Fixed: in some layout scenes, cameras, frames and effects could be built off screen (OBS moves a group to fit its layers as they're added). Each seat's layers are now placed relative to where their group ends up, and a new "Reset layout positions" button puts existing scenes right.

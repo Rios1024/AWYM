@@ -8,7 +8,8 @@
     3. Click "Build my scenes".
   It creates the scenes and every overlay (with the right addresses, sizes and
   positions): Main Show in the layout you pick, a "Show: …" scene for every
-  layout (1–4 people, 2–5 + moderator), the stream screens, and Show Overlays.
+  layout (1–4 people, 2–5 + moderator), the Intro (plays the show intro, then
+  switches to Main Show), the stream screens, and Show Overlays.
   Each person's camera, avatar, frame and frame effects are a colored group
   ("Seat 1"…). Scenes that already exist are left alone, so it's safe to click
   again.
@@ -29,7 +30,7 @@ obs = obslua
 
 --- Options chosen in the script panel (filled in by script_update).
 local cfg = { people = 2, layout = "2", layouts = true, cameras = true, frames = true, screens = true, halftime = true,
-              clock = true, stats = true, content = true, runner = true, update = true, status = "",
+              clock = true, stats = true, content = true, runner = true, update = true, intro = true, status = "",
               guest_room = "", guest_pass = "", guest_seats = "" }
 
 --- The kit's hotkey actions: { id, name in OBS Settings → Hotkeys, suggested key }.
@@ -186,7 +187,9 @@ local function log(msg) obs.script_log(obs.LOG_INFO, msg) end
 -- @param address  file:/// address (Local file is turned off so the docks can reach it)
 -- @param w, h     the page's design size in pixels
 -- @param opts     { audio = true } routes sound through OBS; { restart = true } reloads the
---                 page whenever its scene becomes active (restarts countdowns)
+--                 page whenever its scene becomes active (restarts countdowns);
+--                 { control = 4 } sets Page permissions (4 = "Advanced access to OBS",
+--                 which lets the page switch scenes)
 -- @return obs_source_t or nil
 local function browser(name, address, w, h, opts)
   opts = opts or {}
@@ -214,6 +217,7 @@ local function browser(name, address, w, h, opts)
   obs.obs_data_set_int(s, "height", h)
   if opts.audio then obs.obs_data_set_bool(s, "reroute_audio", true) end
   if opts.restart then obs.obs_data_set_bool(s, "restart_when_active", true) end
+  if opts.control then obs.obs_data_set_int(s, "webpage_control_level", opts.control) end
   local src = obs.obs_source_create("browser_source", name, s, nil)
   obs.obs_data_release(s)
   return src
@@ -904,6 +908,18 @@ local function build()
     screen_scene("Starting Soon", "Starting Soon Screen", { { "type", "starting" }, { "minutes", "5" } }, true)
   end
 
+  -- the show intro (intro.html): plays every time its scene goes live, then switches to Main Show
+  -- (it only switches when "Intro" is the scene on air, which needs "Advanced access to OBS")
+  if cfg.intro then
+    local sc = new_scene("Intro")
+    if sc == nil then skipped[#skipped + 1] = "Intro"
+    else
+      full(sc, "Show Intro", url("intro.html", { { "scene", "Intro" }, { "next", "Main Show" } }), { restart = true, audio = true, control = 4 })
+      made[#made + 1] = "Intro"
+      obs.obs_scene_release(sc)
+    end
+  end
+
   local keep = {}                                    -- new scenes, released at the end
   local main = new_scene("Main Show")
   if main == nil then
@@ -1092,7 +1108,8 @@ Choose your options below, then click <b>Build my scenes</b>.</p>
 <p>Scenes that already exist are left alone, so it's safe to click again.
 If Main Show already exists, ticking "Add missing overlays" puts in just the new ones.
 Afterwards, add the five docks by hand (addresses below):
-<b>Docks → Custom Browser Docks…</b>, one row each, then Apply.</p>
+<b>Docks → Custom Browser Docks…</b>, one row each, then Apply. The Intro Editor dock is optional:
+it changes the show intro's words, names, fonts and colors.</p>
 <p><b>Hotkeys:</b> keep this script loaded. It adds "AWYM: …" actions to <b>Settings → Hotkeys</b>
 (next segment, clear screen, shot clock, scores, sounds, names, clips) for your keyboard or stream deck.</p>
 <p><b>Scenes:</b> Main Show uses the layout you pick; "Also make a scene for every layout" adds
@@ -1151,6 +1168,7 @@ function script_properties()
   obs.obs_properties_add_text(p, "guest_seats", "Remote guests: seats 1–6, e.g. 2,3", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_bool(p, "prekeys", "Hotkeys: fill in the suggested keys (Ctrl+Alt+Shift+…) the first time")
   obs.obs_properties_add_bool(p, "screens", "Add the stream screen scenes (Starting Soon, Be Right Back, …)")
+  obs.obs_properties_add_bool(p, "intro", "Add the Intro scene (plays the show intro, then switches to Main Show)")
   obs.obs_properties_add_bool(p, "halftime", "Include a Halftime scene")
   obs.obs_properties_add_button(p, "build", "Build my scenes", on_build)
   obs.obs_properties_add_button(p, "lineup", "Line up cameras with their frames", on_line_up)
@@ -1162,6 +1180,7 @@ function script_properties()
   obs.obs_properties_add_text(p, "dock_content", "Content Panel dock URL (copy)", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_runner", "Show Runner dock URL (copy)", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_guests", "Remote guests page / optional dock (copy)", obs.OBS_TEXT_DEFAULT)
+  obs.obs_properties_add_text(p, "dock_intro", "Intro Editor / optional dock (copy)", obs.OBS_TEXT_DEFAULT)
   return p
 end
 
@@ -1180,6 +1199,7 @@ function script_defaults(settings)
   obs.obs_data_set_default_bool(settings, "update", true)
   obs.obs_data_set_default_bool(settings, "prekeys", true)
   obs.obs_data_set_default_bool(settings, "screens", true)
+  obs.obs_data_set_default_bool(settings, "intro", true)
   obs.obs_data_set_default_bool(settings, "halftime", true)
 end
 
@@ -1199,6 +1219,7 @@ function script_update(settings)
   cfg.guest_pass = obs.obs_data_get_string(settings, "guest_pass")
   cfg.guest_seats = obs.obs_data_get_string(settings, "guest_seats")
   cfg.screens = obs.obs_data_get_bool(settings, "screens")
+  cfg.intro = obs.obs_data_get_bool(settings, "intro")
   cfg.halftime = obs.obs_data_get_bool(settings, "halftime")
   -- always show the current addresses for the docks (they follow the folder)
   obs.obs_data_set_string(settings, "dock_control", url("control-panel.html"))
@@ -1207,6 +1228,7 @@ function script_update(settings)
   obs.obs_data_set_string(settings, "dock_content", url("content-panel.html"))
   obs.obs_data_set_string(settings, "dock_runner", url("show-runner.html"))
   obs.obs_data_set_string(settings, "dock_guests", url("guests.html"))
+  obs.obs_data_set_string(settings, "dock_intro", url("intro-editor.html"))
 end
 
 ---------------------------------------------------------------- hotkeys
