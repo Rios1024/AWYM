@@ -1,0 +1,132 @@
+/* ==========================================================================
+   intro.css: how the show intro looks (used by intro.html and intro-editor.html)
+   --------------------------------------------------------------------------
+   You don't need to edit this file. Words, timing, colors, fonts, stamps and
+   name plates are all set in the Intro Editor (intro-editor.html). Fonts and
+   colors follow theme.css unless you pick others there.
+
+   Everything lives inside one 1920 × 1080 element with class "awi" (AWYM
+   Intro), so these rules can't clash with the page around it. intro.js
+   fills it and sets these variables on it:
+     --hA / --hB      hue of the left / right corner
+     --sA / --sB      their saturation (both = --sat unless "Show theme" colors)
+     --lp             panel lightness (from the Depth slider)
+     --grain          film grain opacity, 0–0.4
+     --sf-display, --sf-heading, --sf-body, --sf-label   fonts (blank = theme)
+   ========================================================================== */
+
+.awi {
+  --hA: 218; --hB: 8; --sat: 82%; --sA: var(--sat); --sB: var(--sat); --lp: 39%; --grain: .12;
+  --ink: var(--dark, #120A1F); --cream: var(--light, #FFF4E0); --gold: var(--clock-digit, #FFB23E);
+  --sf-display: var(--font-display, "Bungee", Impact, sans-serif);
+  --sf-heading: var(--font-heading, "Anton", Impact, sans-serif);
+  --sf-body: var(--font-body, "Barlow Condensed", "Arial Narrow", Arial, sans-serif);
+  --sf-label: var(--sf-heading);
+  position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; overflow: hidden;
+  background: var(--ink); color: var(--cream); font-family: var(--sf-body);
+}
+.awi.nobg { background: transparent; }
+.awi.cleared { visibility: hidden; }
+.awi * { box-sizing: border-box; }
+.awi .shaker { position: absolute; inset: 0; }
+
+/* the two corners: diagonal panels that slam together */
+.awi .panel { position: absolute; top: -40px; bottom: -40px; width: 2220px; transform: translateX(-2300px); }
+.awi .panel.l { left: -300px; clip-path: polygon(0 0, 1375px 0, 1145px 100%, 0 100%);
+  background: radial-gradient(1200px 1000px at 560px 420px, hsl(var(--hA) var(--sA) calc(var(--lp) + 14%)), hsl(var(--hA) var(--sA) var(--lp)) 55%, hsl(var(--hA) var(--sA) calc(var(--lp) - 17%)) 100%); }
+.awi .panel.r { left: 0; transform: translateX(2300px); clip-path: polygon(1075px 0, 2220px 0, 2220px 100%, 845px 100%);
+  background: radial-gradient(1200px 1000px at 1620px 640px, hsl(var(--hB) var(--sB) calc(var(--lp) + 14%)), hsl(var(--hB) var(--sB) var(--lp)) 55%, hsl(var(--hB) var(--sB) calc(var(--lp) - 17%)) 100%); }
+.awi .panel::after { content: ""; position: absolute; inset: 0;
+  background: radial-gradient(circle, rgba(255,243,220,.16) 2.2px, transparent 2.8px) 0 0 / 24px 24px; }
+.awi .panel.l::after { -webkit-mask-image: linear-gradient(105deg, transparent 35%, #000 62%); mask-image: linear-gradient(105deg, transparent 35%, #000 62%); }
+.awi .panel.r::after { -webkit-mask-image: linear-gradient(285deg, transparent 35%, #000 62%); mask-image: linear-gradient(285deg, transparent 35%, #000 62%); }
+.awi .seam { position: absolute; top: -40px; bottom: -40px; left: 0; width: 1920px; background: var(--cream);
+  clip-path: polygon(1064px 0, 1086px 0, 856px 100%, 834px 100%); opacity: 0; }
+
+/* episode badge, top centre */
+.awi .chip-row { position: absolute; top: 78px; left: 0; right: 0; display: flex; justify-content: center; }
+.awi .chip { font: 400 30px/1 var(--sf-label); letter-spacing: .3em; padding: 14px 18px 14px 28px; border: 4px solid var(--cream);
+  border-radius: 999px; background: rgba(19,13,21,.38); opacity: 0; white-space: nowrap; }
+
+/* center stamps (VS, ROUND 1, a logo…) and their shock rings */
+.awi .vs-wrap, .awi .stamps { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.awi .stamp { position: absolute; opacity: 0; }
+.awi .stamp.word { font-family: var(--sf-display); font-size: 300px; line-height: 1.05; letter-spacing: -.02em; white-space: nowrap; padding: 0 .12em;
+  color: var(--cream); -webkit-text-stroke: .04em var(--ink); paint-order: stroke fill; text-shadow: .047em .047em 0 var(--ink); }
+.awi .stamp.img img { display: block; width: auto; max-width: 1500px; object-fit: contain; filter: drop-shadow(12px 12px 0 var(--ink)); }
+.awi .ring { position: absolute; width: 440px; height: 440px; border-radius: 50%; border: 10px solid var(--cream); opacity: 0; }
+
+/* the argument: two speech bubbles */
+.awi .bubble { position: absolute; max-width: 660px; padding: 30px 44px 34px; background: var(--cream); color: var(--ink);
+  border: 7px solid var(--ink); border-radius: 48px; font: italic 800 58px/1.1 var(--sf-body); box-shadow: 12px 12px 0 var(--ink); opacity: 0; }
+.awi .bubble::after { content: ""; position: absolute; width: 58px; height: 58px; background: var(--cream); border: 7px solid var(--ink); transform: rotate(45deg); }
+.awi .bubble.l { left: 150px; top: 280px; transform-origin: 80% 110%; }
+.awi .bubble.l::after { right: 90px; bottom: -36px; border-top: 0; border-left: 0; }
+.awi .bubble.r { right: 150px; top: 650px; transform-origin: 20% -10%; }
+.awi .bubble.r::after { left: 90px; top: -36px; border-bottom: 0; border-right: 0; }
+
+/* the title: small top line, the big line, the tagline strip */
+.awi .title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding-bottom: 50px; pointer-events: none; }
+.awi .line1 { display: flex; font: 78px/1 var(--sf-heading); letter-spacing: .28em; padding-left: .28em; white-space: nowrap; }
+.awi .line1 .ch { display: inline-block; opacity: 0; text-shadow: 5px 5px 0 var(--ink); }
+.awi .line1 .sp { display: inline-block; width: .25em; }
+.awi .line2 { display: flex; gap: .24em; font-family: var(--sf-display); font-size: 250px; line-height: 1.1; white-space: nowrap; padding: 0 .12em;
+  color: var(--cream); -webkit-text-stroke: .045em var(--ink); paint-order: stroke fill; }
+.awi .line2 .word { display: flex; }
+.awi .line2 .ch { display: inline-block; opacity: 0; text-shadow: .035em .035em 0 var(--ink), .075em .075em 0 hsl(var(--hB) var(--sB) 60%); }
+.awi .tag-tilt { transform: rotate(-2deg); margin-top: 8px; }
+.awi .tag-band { display: flex; gap: .28em; background: var(--ink); padding: 14px 36px 18px; transform-origin: 0 50%;
+  font: italic 700 46px/1.1 var(--sf-body); white-space: nowrap; transform: scaleX(0); }
+.awi .tag-band .w { display: inline-block; opacity: 0; }
+
+/* sound bars, bottom centre (they narrow to fit between the bottom name plates) */
+.awi .bars-row { position: absolute; left: 0; right: 0; bottom: 66px; height: 120px; display: flex; justify-content: center; pointer-events: none; }
+.awi .bars { display: flex; align-items: flex-end; gap: 10px; height: 120px; opacity: 0; }
+.awi .bar { width: 14px; height: 120px; border-radius: 7px; background: var(--cream); box-shadow: 4px 4px 0 var(--ink); transform-origin: 50% 100%; transform: scaleY(.2); }
+.awi .bar:nth-child(5n+3) { background: var(--gold); }
+
+/* confetti */
+.awi .burst { position: absolute; left: 960px; top: 520px; width: 0; height: 0; }
+.awi .p { position: absolute; left: -10px; top: -10px; width: 20px; height: 20px; opacity: 0; }
+.awi .p.c { border-radius: 50%; }
+.awi .p.s { width: 12px; height: 30px; left: -6px; top: -15px; border-radius: 3px; }
+.awi .p.k0 { background: var(--cream); } .awi .p.k1 { background: hsl(var(--hA) var(--sA) 72%); }
+.awi .p.k2 { background: hsl(var(--hB) var(--sB) 68%); } .awi .p.k3 { background: var(--gold); }
+
+/* name plates in the four corners (same build as lower-third.html) */
+.awi .plate { position: absolute; bottom: 92px; display: flex; align-items: stretch;
+  --pl-primary: hsl(var(--hA) var(--sA) 58%); --pl-secondary: hsl(var(--hA) calc(var(--sA) * .55) 14%); --pl-accent: hsl(var(--hA) var(--sA) 78%); }
+.awi .plate.r { --pl-primary: hsl(var(--hB) var(--sB) 58%); --pl-secondary: hsl(var(--hB) calc(var(--sB) * .55) 14%); --pl-accent: hsl(var(--hB) var(--sB) 78%); }
+.awi.theme-plates .plate { --pl-primary: var(--primary, #F26B1D); --pl-secondary: var(--secondary, #2A1747); --pl-accent: var(--accent, #FF3D7F); }
+.awi .plate.top { top: 72px; bottom: auto; }
+.awi .plate.l { left: 96px; }
+.awi .plate.r { right: 96px; flex-direction: row-reverse; }
+.awi .pnum { position: relative; z-index: 2; width: 128px; height: 128px; flex: none; display: flex; align-items: center; justify-content: center;
+  background: var(--pl-primary); color: var(--ink); font: 92px/1 var(--sf-heading); border-radius: 16px 0 0 16px; box-shadow: inset 0 -7px 0 rgba(0,0,0,.18); transform: scale(0); }
+.awi .plate.r .pnum { border-radius: 0 16px 16px 0; }
+.awi .pnum svg { width: 88px; height: 88px; }
+.awi .pnum .ball { fill: var(--ink); } .awi .pnum .bseam { fill: none; stroke: var(--pl-primary); stroke-width: 5; }
+.awi .pmask { overflow: hidden; border-radius: 0 16px 16px 0; display: flex; }
+.awi .plate.r .pmask { border-radius: 16px 0 0 16px; }
+.awi .ppanel { position: relative; overflow: hidden; min-width: 400px; background: var(--pl-secondary); color: var(--cream); padding: 12px 40px 18px 26px;
+  display: flex; flex-direction: column; justify-content: center; transform: translateX(-101%); }
+.awi .plate.r .ppanel { align-items: flex-end; padding: 12px 26px 18px 40px; transform: translateX(101%); }
+.awi .ppanel::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 7px; background: var(--pl-primary); }
+.awi .ppanel::after { content: ""; position: absolute; right: -60px; top: 50%; width: 170px; height: 170px; margin-top: -85px; border: 4px solid var(--cream); border-radius: 50%; opacity: .07; }
+.awi .plate.r .ppanel::after { right: auto; left: -60px; }
+.awi .pname { font: 56px/1.04 var(--sf-heading); text-transform: uppercase; letter-spacing: 1px; white-space: nowrap; opacity: 0; }
+.awi .pmeta { display: flex; align-items: center; gap: 14px; margin-top: 3px; white-space: nowrap; opacity: 0; }
+.awi .prole { font: 700 27px/1.15 var(--sf-body); color: var(--pl-accent); text-transform: uppercase; letter-spacing: 2px; }
+.awi .phandle { font: 600 24px/1.25 var(--sf-body); border: 2px solid var(--cream); border-radius: 999px; padding: 0 12px 1px; opacity: .9; }
+.awi .prole:empty, .awi .phandle:empty { display: none; }
+
+/* finishing layers */
+.awi .flash { position: absolute; inset: 0; background: var(--cream); opacity: 0; pointer-events: none; }
+.awi .iris-wrap { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.awi .iris { flex: none; width: 2400px; height: 2400px; border-radius: 50%; background: var(--ink); transform: scale(0); }
+.awi .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.42)); pointer-events: none; }
+.awi .grain { position: absolute; inset: -20%; pointer-events: none; opacity: var(--grain); mix-blend-mode: overlay; background-size: 220px 220px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .6 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  animation: awi-grain .6s steps(1) infinite; }
+@keyframes awi-grain { 0% { transform: translate(0,0); } 20% { transform: translate(-3%,2%); } 40% { transform: translate(2%,-3%); } 60% { transform: translate(-2%,-1%); } 80% { transform: translate(3%,3%); } }
+@media (prefers-reduced-motion: reduce) { .awi .grain { animation: none; } }

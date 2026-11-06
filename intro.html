@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Show Intro</title>
+<!--
+  SHOW INTRO: OBS browser source
+  Source size: 1920 x 1080 (same as your canvas). It's full screen, so it can be
+  the only source in its scene ("Intro", made by the setup script).
+
+  What it does: the two corners slam together, a VS stamp (or your own words
+  or logo), a quick argument in speech bubbles, then the show title lands with
+  confetti, the tagline, the episode badge and up to four name plates, and it
+  wipes to black. Every word, color, font, speed and effect is set in the
+  Intro Editor (intro-editor.html, add it as a dock), which updates this
+  source live and has a "Play in OBS" button.
+
+  Plays: every time its scene goes live (tick "Refresh browser when scene
+  becomes active"), when "Play in OBS" is pressed in the Intro Editor, or when
+  it's sent {to:"intro", cmd:"play"}.
+
+  URL settings (all optional; the setup script fills them in):
+    ?scene=Intro        the name of the scene this source is in
+    &next=Main%20Show   when the intro ends, switch to this scene (only if the
+                        "scene" scene is the one on air, and "Then switch to the
+                        next scene" is on in the editor). Needs the source's
+                        Page permissions set to "Advanced access to OBS".
+    &autoplay=0         don't play on load; wait for "Play in OBS"
+    &bg=0               transparent until the corners slide in
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080.
+  Uses:      theme.css, intro.css, shared.js, lib/anime.umd.min.js (anime.js v4), intro.js
+             (the stage and its timeline; settings in localStorage "awym-intro-v1").
+  Messages:  listens to:"intro"  play | stop | hide | update {data: settings} | ping
+             sends   from:"intro" {cmd:"hello"} on load · {cmd:"here", playing, duration}
+                                  (answer to ping) · {cmd:"state", playing} · {cmd:"done"}
+             Clear (🚨) hides it until it plays again.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="theme.css">
+<link rel="stylesheet" href="intro.css">
+<style>
+  /* The page is transparent; the 1920×1080 stage (.awi, see intro.css) is scaled to the source size. */
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+
+<script src="shared.js"></script>
+<script src="lib/anime.umd.min.js"></script>
+<script src="intro.js"></script>
+<script>
+(function () {
+  const stage = document.getElementById("stage");
+  /** Scale the 1920×1080 design to the OBS source size, centred. */
+  function fit() {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = `translate(${(innerWidth - 1920 * s) / 2}px, ${(innerHeight - 1080 * s) / 2}px) scale(${s})`;
+  }
+  addEventListener("resize", fit); fit();
+
+  const I = window.AWYM_INTRO;
+  const player = I.mount(stage);
+  if (AWYM.param("bg") === "0") stage.classList.add("nobg");
+
+  let settings = I.load();
+  let pending = null;                         // settings that arrived mid-intro, used when it ends
+  const say = (msg) => AWYM.send(Object.assign({ from: "intro" }, msg));
+
+  /** Switch OBS to the next scene, but only if this intro's own scene is the one on air. */
+  function goNext() {
+    const next = AWYM.param("next"), mine = AWYM.param("scene");
+    const o = window.obsstudio;
+    if (!settings.autoNext || !next || !o || typeof o.setCurrentScene !== "function") return;
+    const go = () => { try { o.setCurrentScene(next); } catch (e) {} };
+    if (mine && typeof o.getCurrentScene === "function") {
+      try { o.getCurrentScene((sc) => { if (sc && sc.name === mine) go(); }); } catch (e) {}
+    } else if (!mine) go();
+  }
+
+  player.on("complete", () => {
+    say({ cmd: "state", playing: false });
+    say({ cmd: "done" });
+    if (pending) { settings = pending; pending = null; player.set(settings, { at: player.state().duration }); }
+    if (settings.loop) setTimeout(() => { if (!player.state().playing) play(); }, 500);
+    else setTimeout(goNext, 250);
+  });
+
+  function play() { player.play(true); say({ cmd: "state", playing: true }); }
+
+  AWYM.listen((m) => {
+    if (m.to !== "intro") return;
+    if (m.cmd === "play") play();
+    else if (m.cmd === "stop") { player.pause(); player.seek(player.state().duration); say({ cmd: "state", playing: false }); }
+    else if (m.cmd === "hide") player.hide(true);
+    else if (m.cmd === "ping") say({ cmd: "here", playing: player.state().playing, duration: Math.round(player.state().duration) });
+    else if (m.cmd === "update" && m.data) {
+      const next = I.clean(m.data);
+      if (JSON.stringify(next) === JSON.stringify(settings)) return;
+      if (player.state().playing) { pending = next; return; }      // don't restart an intro that's on air
+      const t = player.state().time;
+      settings = next;
+      player.set(settings, { at: t });
+    }
+  });
+  AWYM.onClear(() => player.hide(true));
+
+  // OBS: play again whenever this source goes live (covers sources without "Refresh when active")
+  addEventListener("obsSourceActiveChanged", (e) => { if (e.detail && e.detail.active && !player.state().playing) play(); });
+
+  // start on the first frame (corners off screen), then play once the fonts are in (or after 1.5 s)
+  const fontsIn = player.set(settings, { at: 0 });
+  const ready = Promise.race([Promise.all([fontsIn, document.fonts ? document.fonts.ready : null]), new Promise((r) => setTimeout(r, 1500))]);
+  ready.then(() => { if (AWYM.param("autoplay") !== "0") play(); });
+  say({ cmd: "hello" });
+})();
+</script>
+</body>
+</html>

@@ -10,8 +10,8 @@ It's all plain HTML, CSS and JavaScript (OBS browser sources and custom browser 
 
 1. **Download** this repository (green **Code** button → **Download ZIP**) and unzip it somewhere permanent, e.g. `Documents`.
 2. **Open `START-HERE.html`** in your browser. It walks you through every step and gives you the exact addresses for your folder, ready to copy.
-3. In OBS: **Tools → Scripts → +** → pick `awym-obs-setup.lua` → **Build my scenes**. You get Starting Soon, Main Show, a scene for every layout (1–4 people, 2–5 + moderator), Be Right Back, Technical Difficulties, Halftime and Thanks for Watching, with every overlay in place. Each person's camera, avatar, frame and frame effects are grouped as **Seat N** and color-coded in the Sources list.
-4. Add the docks (**Docks → Custom Browser Docks…**): Control Panel, Stats Desk, Theme Panel, Content Panel and Show Runner. START-HERE has the addresses.
+3. In OBS: **Tools → Scripts → +** → pick `awym-obs-setup.lua` → **Build my scenes**. You get Starting Soon, Main Show, a scene for every layout (1–4 people, 2–5 + moderator), Be Right Back, Technical Difficulties, Halftime and Thanks for Watching, plus an **Intro** scene that plays the show intro and then switches to Main Show, with every overlay in place. Each person's camera, avatar, frame and frame effects are grouped as **Seat N** and color-coded in the Sources list.
+4. Add the docks (**Docks → Custom Browser Docks…**): Control Panel, Stats Desk, Theme Panel, Content Panel and Show Runner (plus the optional Intro Editor). START-HERE has the addresses.
 
 Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. An internet connection is only needed for web fonts, live NBA stats and remote guests.
 
@@ -20,6 +20,7 @@ Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. 
 | | |
 |---|---|
 | **Scenes and screens** | Starting Soon / Be Right Back / Halftime / Thanks for Watching screens with countdowns; 40+ animated backgrounds (court, arena, Tin Foil conspiracy board, vaporwave… and light ones: daylight court, studio white, sports page, clear sky…). |
+| **Show intro** | The corners slam together, VS (or your own words or logo), a quick argument in speech bubbles, then the show title, tagline, episode badge and four name plates land; it wipes to black and switches to Main Show. Every word, color, font and speed is set in the Intro Editor dock, with a live preview. |
 | **Layouts** | Ready-made scenes for 1, 2, 3 or 4 people and 2–5 people + a moderator (the moderator a bit smaller), with color-coded groups per seat. |
 | **People** | Camera frames (circle, rounded, hexagon) with name plates and a "has the floor" spotlight; lower thirds; remote guests through [VDO.Ninja](https://vdo.ninja/), with badge pictures and saved guests. |
 | **Shot clock** | Arena-style segment timer with buzzer and a Tin Foil alert. |
@@ -55,6 +56,7 @@ The Elgato profiles follow the Stream Deck app's V3 profile format but haven't b
 | `START-HERE.html` | The setup guide (open this first) |
 | `awym-obs-setup.lua` | OBS script: builds the scenes, adds the hotkeys, keeps frame effects lined up |
 | `*.html` | Overlays (browser sources) and docks; each file's header comment explains it |
+| `intro.html`, `intro-editor.html` | The show intro (browser source) and its editor dock; `intro.js` / `intro.css` hold its animation and look |
 | `shared.js` | Shared helpers and the message protocol every page uses (documented at the top) |
 | `README.txt` | The full manual |
 | `stream-controller/` | VSD M18 and Elgato Stream Deck layouts |
