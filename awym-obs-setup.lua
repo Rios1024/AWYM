@@ -116,6 +116,7 @@ local COLORS = {
   graphics = "rgba(90,120,255,25%)", tools = "rgba(160,160,170,25%)", overlays = "rgba(90,120,255,25%)",
 }
 local OVERLAYS = "Show Overlays"     -- a scene with the graphics and tools, shown inside every show scene
+local fix_seat_group                 -- (defined further down)
 
 ---------------------------------------------------------------- addresses
 --- The overlay folder (where this script lives), with forward slashes and a trailing "/".
@@ -526,6 +527,41 @@ local function ring_center(fr)
   return p.x + lx * math.cos(r) - ly * math.sin(r), p.y + lx * math.sin(r) + ly * math.cos(r), 600 * k
 end
 
+--- Where each layer of a seat goes, on the canvas: { cx, cy, w, h } (centres; everything shares
+-- the ring's centre). seat = { x, y, w } in 1920×1080 design px; f = canvas scale.
+local function seat_targets(seat, f)
+  local x, y, w = seat[1], seat[2], seat[3]
+  local h = w * 660 / 600
+  local rx, ry = x + w / 2, y + w / 2
+  local ch = w * 0.93
+  return {
+    camera = { rx * f, ry * f, ch * 16 / 9 * f, ch * f },
+    guest  = { rx * f, ry * f, ch * f, ch * f },
+    avatar = { rx * f, (ry + w * 30 / 600) * f, w * f, h * f },
+    frame  = { rx * f, (ry + w * 30 / 600) * f, w * f, h * f },
+    fx     = { rx * f, (ry + w * 50 / 600) * f, w * FX_GROW * f, h * FX_GROW * f },
+  }
+end
+
+--- Put an item that's inside a group at a spot given in canvas coordinates: works out the
+-- group-local position from the group's own position, scale and rotation (OBS stores the
+-- children of a group relative to the group). t = { cx, cy, w, h }.
+local function put_in_group(g, item, t)
+  local gp, gs = obs.vec2(), obs.vec2()
+  obs.obs_sceneitem_get_pos(g, gp)
+  if obs.obs_sceneitem_get_scale ~= nil then obs.obs_sceneitem_get_scale(g, gs) else gs.x, gs.y = 1, 1 end
+  if gs.x == 0 then gs.x = 1 end
+  if gs.y == 0 then gs.y = 1 end
+  local r = -math.rad(obs.obs_sceneitem_get_rot(g))
+  local dx, dy = t[1] - gp.x, t[2] - gp.y
+  local lx, ly = (dx * math.cos(r) - dy * math.sin(r)) / gs.x, (dx * math.sin(r) + dy * math.cos(r)) / gs.y
+  obs.obs_sceneitem_set_alignment(item, 0)
+  obs.obs_sceneitem_set_bounds_type(item, obs.OBS_BOUNDS_SCALE_INNER)
+  obs.obs_sceneitem_set_bounds_alignment(item, 0)
+  local b = obs.vec2(); b.x = t[3] / math.abs(gs.x); b.y = t[4] / math.abs(gs.y); obs.obs_sceneitem_set_bounds(item, b)
+  local v = obs.vec2(); v.x = lx; v.y = ly; obs.obs_sceneitem_set_pos(item, v)
+end
+
 --- Which seat a scene item is a camera frame or an effects layer for, from its
 -- Browser source address (frame.html?id=2 / frame-fx.html?id=2), whatever the
 -- source is called. Cached by source name; the cache is emptied every few seconds.
@@ -678,6 +714,73 @@ local function frame_source(n)
   return browser("Frame " .. n, url("frame.html", { { "id", tostring(n) } }), 600, 660)
 end
 
+--- The kind of layer a seat-group child is: "camera", "guest", "avatar", "frame", "fx" or nil.
+local function seat_layer_kind(item)
+  local k = frame_kind(item)
+  if k == "frame" then return "frame" elseif k == "fx" then return "fx" elseif k == "avatar" then return "avatar" end
+  local src = obs.obs_sceneitem_get_source(item)
+  if src == nil then return nil end
+  local name = obs.obs_source_get_name(src) or ""
+  if name:find("^Guest Seat %d") or name:find("^" .. OLD_PREFIX .. "Guest Seat %d") then return "guest" end
+  if name:find("^Camera %d") or CAPTURE[obs.obs_source_get_unversioned_id(src)] then return "camera" end
+  return nil
+end
+
+--- Put every layer of a seat group where the layout says (see seat_targets).
+-- @return how many layers were placed
+fix_seat_group = function(g, seat, f)
+  local t = seat_targets(seat, f)
+  local gs = obs.obs_sceneitem_group_get_scene(g)
+  if gs == nil then return 0 end
+  local items = obs.obs_scene_enum_items(gs)
+  if items == nil then return 0 end
+  local n = 0
+  for _, it in ipairs(items) do
+    local kind = seat_layer_kind(it)
+    if kind ~= nil then put_in_group(g, it, t[kind]); n = n + 1 end
+  end
+  obs.sceneitem_list_release(items)
+  return n
+end
+
+--- "Reset layout positions": in Main Show and every "Show: …" scene, put each seat group's camera,
+-- avatar, frame and effects back where the layout has them (the layout comes from the scene's
+-- name; Main Show uses the "Main Show layout" setting). Groups are found by their names
+-- ("Seat 2 (3+M)", "Moderator", …). Anything moved by hand in those groups is put back.
+-- @return layers placed, scenes touched
+local function reset_layouts()
+  local W, H = canvas()
+  local f = math.min(W / 1920, H / 1080)
+  local n, touched = 0, 0
+  local scenes = obs.obs_frontend_get_scenes()
+  if scenes == nil then return 0, 0 end
+  for _, s in ipairs(scenes) do
+    local name = obs.obs_source_get_name(s) or ""
+    local L = nil
+    if name == "Main Show" then L = layout_by_key(cfg.layout)
+    else for _, x in ipairs(LAYOUTS) do if name == "Show: " .. x.name then L = x end end end
+    local sc = L and obs.obs_scene_from_source(s) or nil
+    if sc ~= nil then
+      local items = obs.obs_scene_enum_items(sc)
+      local did = false
+      for _, it in ipairs(items or {}) do
+        if obs.obs_sceneitem_is_group(it) then
+          local gname = obs.obs_source_get_name(obs.obs_sceneitem_get_source(it)) or ""
+          local seat = tonumber(gname:match("^Seat (%d+)")) or (gname:find("^Moderator") and 1) or nil
+          if seat ~= nil and L.seats[seat] ~= nil then
+            local k = fix_seat_group(it, L.seats[seat], f)
+            if k > 0 then n = n + k; did = true end
+          end
+        end
+      end
+      if items ~= nil then obs.sceneitem_list_release(items) end
+      if did then touched = touched + 1 end
+    end
+  end
+  obs.source_list_release(scenes)
+  return n, touched
+end
+
 ---------------------------------------------------------------- the build
 --- Build everything: Starting Soon, Main Show, a scene for every layout (1–4 people,
 -- 2–5 + moderator), Be Right Back, Technical Difficulties, Halftime, Thanks for Watching,
@@ -773,7 +876,11 @@ local function build()
         items[#items + 1] = addc(sc, fx_source(i), rx, ry + w * 50 / 600, w * FX_GROW, h * FX_GROW)
       end
       local label = (L.mod and i == 1) and "Moderator" or ("Seat " .. i)
-      make_group(sc, label .. suffix, items, COLORS.seat[i])
+      local g = make_group(sc, label .. suffix, items, COLORS.seat[i])
+      -- OBS keeps a group's children relative to the group, and it moves the group to fit them as
+      -- they're added, which can leave some layers off where they belong: set each one's spot again,
+      -- worked out from where the group ended up
+      if g ~= nil then fix_seat_group(g, seat, f) end
     end
     local names = {}
     for i = 1, #L.seats do
@@ -996,6 +1103,17 @@ end
 
 --- "Build my scenes" button: run build() safely and show the result in the panel.
 -- @return true so OBS redraws the panel (to show the new status text)
+local function on_reset_layouts(props, prop)
+  local ok, n, sc = pcall(reset_layouts)
+  cfg.status = ok and (n > 0 and ("Put " .. n .. " layers back in place in " .. sc .. " scene" .. (sc == 1 and "" or "s") .. ".")
+    or "No seat groups found (Main Show and the Show: … scenes, groups called Seat 1, Seat 2… or Moderator).")
+    or ("Something went wrong: " .. tostring(n))
+  log(cfg.status)
+  local st = obs.obs_properties_get(props, "status")
+  if st ~= nil then obs.obs_property_set_description(st, cfg.status) end
+  return true
+end
+
 local function on_line_up(props, prop)
   local ok, n = pcall(line_up_cameras)
   cfg.status = ok and (n > 0 and ("Lined up " .. n .. " camera" .. (n == 1 and "" or "s") .. " with their frames (centred on the ring).")
@@ -1036,6 +1154,7 @@ function script_properties()
   obs.obs_properties_add_bool(p, "halftime", "Include a Halftime scene")
   obs.obs_properties_add_button(p, "build", "Build my scenes", on_build)
   obs.obs_properties_add_button(p, "lineup", "Line up cameras with their frames", on_line_up)
+  obs.obs_properties_add_button(p, "relayout", "Reset layout positions (Main Show and the Show: … scenes)", on_reset_layouts)
   obs.obs_properties_add_text(p, "status", cfg.status ~= "" and cfg.status or "Ready.", obs.OBS_TEXT_INFO or obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_control", "Control Panel dock URL (copy)", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_stats", "Stats Desk dock URL (copy)", obs.OBS_TEXT_DEFAULT)

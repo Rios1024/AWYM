@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2 (2026-11-05)
+
+- Fixed: in some layout scenes, cameras, frames and effects could be built off screen (OBS moves a group to fit its layers as they're added). Each seat's layers are now placed relative to where their group ends up, and a new "Reset layout positions" button puts existing scenes right.
+
 ## 1.2.1 (2026-11-05)
 
 - Chalk Talk background: the court lines are redrawn smoothly (the three-point corners meet the arc cleanly; dashed top half on the free-throw circle, restricted area added).
