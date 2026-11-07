@@ -264,7 +264,8 @@ SHOW INTRO (plays at the start of the show)
   Scripts window). It has a live preview and sliders for:
     Words       top line, big line, tagline, episode label, the two bubbles
     Name plates four corners, each with name, role, handle and jersey number
-                (built like the lower thirds; blank name = no plate)
+                (built like the lower thirds; blank name = no plate). The
+                Guests page's "Send names" fills these from seats 1–4.
     Stamp       up to 4 words or pictures (VS, ROUND 1, a logo…) in a row
     Fonts       the theme's fonts by default, or any Google Font
     Timing      speed, hold on the title, letter stagger
@@ -748,6 +749,11 @@ SHOW PACKS (for your other shows)
      see-through background are kept whole; photos are cropped to the
      middle. "Send names and badges to the Control Panel" puts them on
      screen (the Control Panel's slot shows the badge, with Remove).
+     "Also put seats 1–4 on the show intro's name plates" (ticked by
+     default): the same click puts seat 1 top-left, 2 top-right, 3
+     bottom-left and 4 bottom-right on the intro (an empty seat = no
+     plate). The Intro Editor shows them too; handles and numbers there are
+     left as they are.
      Saved guests: "Save as guest" keeps a person (name, role, badge) for
      future shows; next time pick them from a seat's "Load a saved guest"
      list, or "Seat…" in Saved guests. They're kept with the page's other

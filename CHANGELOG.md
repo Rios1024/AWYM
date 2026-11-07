@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.4 (2026-11-06)
+
+- Guests page: "Send names and badges" also puts seats 1–4 on the show intro's name plates (top-left, top-right, bottom-left, bottom-right; an empty seat = no plate). There's a checkbox to turn it off; the Intro Editor shows the new names too.
+
 ## 1.2.3 (2026-11-06)
 
 - Show intro (`intro.html`): the two corners slam together, a VS stamp, a quick argument in speech bubbles, then the show title lands letter by letter with confetti, sound bars, the tagline, the episode badge and name plates in all four corners, and it wipes to black. It follows theme.css (fonts, dark/light, gold), and its sound effects are made in code.

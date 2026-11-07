@@ -27,7 +27,9 @@
                director      https://vdo.ninja/?director=R[&password=P]
              The setup script (awym-obs-setup.lua) builds the same OBS addresses from the
              room name, password and seat list, so keep the two in step.
-  Sends:     to:"control" person {id, data:{name, role, badge}, nonce} → Control Panel fills that
+  Sends:     to:"intro" names {plates:{tl, tr, ll, lr: {name, role}}} (seats 1–4, when "Also put seats
+             1–4 on the show intro's name plates" is ticked) → Intro source and Intro Editor.
+             to:"control" person {id, data:{name, role, badge}, nonce} → Control Panel fills that
              People slot (answers from:"control" {ack}). badge = a small image (data: URL, about
              200 × 200) shown in the camera frame's name plate (right of the name) and the
              lower third's number box; "" = no picture.
@@ -120,6 +122,7 @@
       <button class="primary" id="sendNames">Send names and badges to the Control Panel</button>
       <span class="note" style="margin:0">Works when this page is open as a dock in OBS. Otherwise, type the names in the Control Panel's People section.</span>
     </div>
+    <label class="check"><input type="checkbox" id="introNames"> Also put seats 1–4 on the show intro's name plates (1 top-left, 2 top-right, 3 bottom-left, 4 bottom-right; an empty seat = no plate)</label>
     <div class="msg" id="namesMsg"></div>
   </div>
 
@@ -257,14 +260,39 @@
       AWYM.send({ to: "control", cmd: "person", id: String(n), data: { name: s.name.trim(), role: s.role.trim(), badge: s.badge || "" }, nonce: nonces[n] });
     });
     if (!sent.length) { msg("Type at least one name first.", true); return; }
+    let toIntro = false;
+    if (S.introNames) { sendIntroNames(); toIntro = true; }
     const onAck = (m) => { if (m.from === "control" && Object.values(nonces).includes(m.ack)) acks.add(m.ack); };
     AWYM.listen(onAck);
     setTimeout(() => {
-      if (acks.size) msg(`Sent ${acks.size} name${acks.size > 1 ? "s" : ""} (and badges) to the Control Panel (People ${sent.join(", ")}).`);
-      else msg("The Control Panel didn't answer. Open this page as a dock in OBS (Docks → Custom Browser Docks…), or type the names into the Control Panel.", true);
+      const intro = toIntro ? (introHeard ? " Also on the intro's name plates." : " The intro's name plates are updated too (they'll show next time it plays).") : "";
+      if (acks.size) msg(`Sent ${acks.size} name${acks.size > 1 ? "s" : ""} (and badges) to the Control Panel (People ${sent.join(", ")}).` + intro);
+      else msg("The Control Panel didn't answer. Open this page as a dock in OBS (Docks → Custom Browser Docks…), or type the names into the Control Panel." + intro, true);
     }, 900);
   };
   function msg(t, err) { $("namesMsg").textContent = t; $("namesMsg").className = "msg" + (err ? " err" : ""); }
+
+  /* ---------- the show intro's name plates ---------- */
+  const INTRO_KEY = "awym-intro-v1", CORNERS = ["tl", "tr", "ll", "lr"];
+  let introHeard = false;
+  AWYM.listen((m) => { if (m.from === "intro" && m.cmd === "names-ok") introHeard = true; });
+  /** Seats 1–4 → the intro's four name plates (empty seat = no plate). Sent to the Intro source and
+      the Intro Editor, and written into the intro's saved settings in case neither is open. */
+  function sendIntroNames() {
+    const plates = {};
+    CORNERS.forEach((k, i) => { const s = S.seats[i + 1] || {}; const on = s.who !== "empty" && (s.name || "").trim();
+      plates[k] = { name: on ? s.name.trim() : "", role: on ? (s.role || "").trim() : "" }; });
+    introHeard = false;
+    AWYM.send({ to: "intro", cmd: "names", plates });
+    try {
+      const st = JSON.parse(localStorage.getItem(INTRO_KEY) || "{}") || {};
+      CORNERS.forEach((k) => { st[k + "Name"] = plates[k].name; st[k + "Role"] = plates[k].role; });
+      localStorage.setItem(INTRO_KEY, JSON.stringify(st));
+    } catch (e) {}
+  }
+  if (S.introNames === undefined) S.introNames = true;
+  $("introNames").checked = S.introNames;
+  $("introNames").onchange = () => { S.introNames = $("introNames").checked; save(); };
 
   /* ---------- badge pictures ---------- */
   /** Shrink a picture to a small square for the badge: a logo with see-through parts is kept whole
