@@ -567,6 +567,11 @@
     connText.textContent = on ? "Intro source: connected" : "Intro source: not found";
     conn.title = on ? "The Intro source in OBS is answering" : "No Intro source answering. Is OBS open with the Intro scene built? In a web browser this stays grey.";
   }
+  // the Guests page's "Send names": put them on the name plates here too, so the editor shows them
+  AWYM.listen((m) => {
+    if (m.to !== "intro" || m.cmd !== "names" || !m.plates) return;
+    st = I.applyNames(st, m.plates); syncControls(); player.set(st); commit();
+  });
   AWYM.listen((m) => {
     if (m.from !== "intro") return;
     lastSeen = Date.now(); paintConn();

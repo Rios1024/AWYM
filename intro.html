@@ -33,6 +33,7 @@
   Uses:      theme.css, intro.css, shared.js, lib/anime.umd.min.js (anime.js v4), intro.js
              (the stage and its timeline; settings in localStorage "awym-intro-v1").
   Messages:  listens to:"intro"  play | stop | hide | update {data: settings} | ping
+                                 names {plates: {tl, tr, ll, lr: {name, role}}}  (from the Guests page)
              sends   from:"intro" {cmd:"hello"} on load · {cmd:"here", playing, duration}
                                   (answer to ping) · {cmd:"state", playing} · {cmd:"done"}
              Clear (🚨) hides it until it plays again.
@@ -97,8 +98,10 @@
     else if (m.cmd === "stop") { player.pause(); player.seek(player.state().duration); say({ cmd: "state", playing: false }); }
     else if (m.cmd === "hide") player.hide(true);
     else if (m.cmd === "ping") say({ cmd: "here", playing: player.state().playing, duration: Math.round(player.state().duration) });
-    else if (m.cmd === "update" && m.data) {
-      const next = I.clean(m.data);
+    else if ((m.cmd === "update" && m.data) || (m.cmd === "names" && m.plates)) {
+      // "names": the Guests page's people on the name plates (also works with the Intro Editor closed)
+      const next = m.cmd === "names" ? I.applyNames(settings, m.plates) : I.clean(m.data);
+      if (m.cmd === "names") { I.save(next); say({ cmd: "names-ok" }); }
       if (JSON.stringify(next) === JSON.stringify(settings)) return;
       if (player.state().playing) { pending = next; return; }      // don't restart an intro that's on air
       const t = player.state().time;

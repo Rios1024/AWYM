@@ -14,6 +14,8 @@
  *   AWYM_INTRO.save(st)        save them (returns false if storage is full)
  *   AWYM_INTRO.clean(obj)      keep only known settings of the right type
  *   AWYM_INTRO.loadFont(name)  load a Google Font; resolves true / false (not found)
+ *   AWYM_INTRO.applyNames(st, plates)  the name plates' names and roles from the Guests page:
+ *                              plates = { tl, tr, ll, lr: {name, role} } (blank name = no plate)
  *   AWYM_INTRO.mount(el)       turn a 1920 × 1080 element into the intro; returns
  *                              { set(st, {replay}), play(fromStart), pause(), seek(ms),
  *                                seekHold(), hide(on), state(), scrubbing(on),
@@ -495,5 +497,16 @@
     return api;
   }
 
-  window.AWYM_INTRO = { KEY, DEFAULTS, clean, load, save, loadFont, mount, hexHS };
+  /** Put people's names on the four name plates: plates = { tl, tr, ll, lr: {name, role} } (a blank
+      name = no plate). Other plate fields (handle, number) are left as they are. Returns new settings. */
+  function applyNames(st, plates) {
+    const next = clone(st || DEFAULTS);
+    if (plates && typeof plates === "object") ["tl", "tr", "ll", "lr"].forEach((k) => {
+      const p = plates[k]; if (!p || typeof p !== "object") return;
+      if (typeof p.name === "string") next[k + "Name"] = p.name;
+      if (typeof p.role === "string") next[k + "Role"] = p.role;
+    });
+    return clean(next);
+  }
+  window.AWYM_INTRO = { KEY, DEFAULTS, clean, load, save, loadFont, mount, hexHS, applyNames };
 })();
