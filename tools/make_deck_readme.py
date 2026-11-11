@@ -38,7 +38,7 @@ m = L["m18"]
 t.append("""
 VSD M18 (VSD Craft)
 -------------------
-  VSD-M18/AWYM-Show.SDProfile         the one file: all 73 keys on 7 pages
+  VSD-M18/AWYM-Show.SDProfile         the one file: all 74 keys on 7 pages
   Import: in VSD Craft, the import button next to the scene list → pick the
   file. A scene called AWYM Show appears.
   The 3 plain buttons under the screen keys: ◀ page · Clear screen · page ▶.
@@ -50,7 +50,7 @@ t.append("""
 ELGATO STREAM DECK (Stream Deck app 6.0 or newer; made for 7.3+)
 -------------------------------------------------------------
   Double-click the file for your model (or in the Stream Deck app: profile
-  list → Import). A profile called "AWYM Show" appears with all 73 actions.
+  list → Import). A profile called "AWYM Show" appears with all 74 actions.
   ◀ / ▶ page keys sit in the bottom corners (the Neo uses its touch points
   instead). If a profile won't import on your app version, set keys by hand:
   drag System → Hotkey onto a key, press the keys, Set from File → the

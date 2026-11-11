@@ -83,7 +83,7 @@ window.AWYM_DECK_LAYOUTS = {
      "hide-text",
      "clock-toggle",
      "clock-reset",
-     null,
+     "clock-ot",
      "snd-tinfoil",
      "clock-foil",
      "save-clip",
@@ -173,7 +173,7 @@ window.AWYM_DECK_LAYOUTS = {
      "clock-buzz",
      "clock-hide",
      "clock-foil",
-     "unmute-all",
+     "clock-ot",
      "mute-1",
      "mute-2",
      "mute-3",
@@ -222,7 +222,7 @@ window.AWYM_DECK_LAYOUTS = {
     ]
    },
    {
-    "name": "Frame FX · Clips & graphics",
+    "name": "Frame FX · Clips & graphics · Mute",
     "keys": [
      "fx-fire",
      "fx-ice",
@@ -236,7 +236,7 @@ window.AWYM_DECK_LAYOUTS = {
      "hide-stats",
      "@prev",
      "hide-text",
-     null,
+     "unmute-all",
      null,
      "@next"
     ]
@@ -301,6 +301,7 @@ window.AWYM_DECK_LAYOUTS = {
      "clock-buzz",
      "clock-hide",
      "clock-foil",
+     "clock-ot",
      "score-a",
      "score-b",
      "score-show",
@@ -315,14 +316,13 @@ window.AWYM_DECK_LAYOUTS = {
      "fx-zap",
      "fx-smoke",
      "fx-sparks",
-     "fx-shake",
      "mute-1",
      "mute-2",
      "mute-3",
      "mute-4",
      "unmute-all",
+     "fx-shake",
      "fx-stop",
-     null,
      "@next"
     ]
    },
@@ -435,7 +435,7 @@ window.AWYM_DECK_LAYOUTS = {
     "keys": [
      "clock-hide",
      "clock-foil",
-     null,
+     "clock-ot",
      "@prev",
      null,
      "@next"
@@ -650,16 +650,16 @@ window.AWYM_DECK_LAYOUTS = {
     ]
    },
    {
-    "name": "Shot clock · Sound board",
+    "name": "Shot clock · Mute",
     "keys": [
      "clock-toggle",
      "clock-reset",
      "clock-buzz",
      "clock-hide",
      "clock-foil",
-     "snd-airhorn",
-     "snd-buzzer",
-     "snd-ding"
+     "clock-ot",
+     "unmute-all",
+     null
     ]
    },
    {
@@ -669,36 +669,49 @@ window.AWYM_DECK_LAYOUTS = {
      "score-b",
      "score-show",
      "winner",
-     "snd-wrong",
-     "snd-rimshot",
-     "snd-drumroll",
-     "snd-ooh"
+     "snd-airhorn",
+     "snd-buzzer",
+     "snd-ding",
+     "snd-wrong"
     ]
    },
    {
     "name": "Sound board",
     "keys": [
+     "snd-rimshot",
+     "snd-drumroll",
+     "snd-ooh",
      "snd-applause",
      "snd-chaching",
      "snd-sadtrombone",
      "snd-scratch",
-     "snd-swoosh",
-     "snd-whistle",
-     "snd-gong",
-     "snd-boing"
+     "snd-swoosh"
     ]
    },
    {
-    "name": "Sound board · Names · Mute",
+    "name": "Sound board · Verdicts",
     "keys": [
+     "snd-whistle",
+     "snd-gong",
+     "snd-boing",
      "snd-micdrop",
      "snd-tinfoil",
+     "fx-trash",
+     "fx-facts",
+     "fx-cooking"
+    ]
+   },
+   {
+    "name": "Names · Faces",
+    "keys": [
      "lt-1",
      "lt-2",
      "lt-3",
      "lt-4",
      "lt-hide",
-     "unmute-all"
+     "face-1",
+     "face-2",
+     "face-3"
     ]
    },
    {
@@ -717,50 +730,37 @@ window.AWYM_DECK_LAYOUTS = {
    {
     "name": "Verdicts",
     "keys": [
-     "fx-trash",
-     "fx-facts",
-     "fx-cooking",
      "fx-cap",
      "fx-bricked",
      "fx-airball",
      "fx-technical",
-     "fx-posterized"
-    ]
-   },
-   {
-    "name": "Verdicts · Clips & graphics",
-    "keys": [
+     "fx-posterized",
      "fx-onfire",
      "fx-clown",
-     "save-clip",
-     "replay",
-     "hide-stats",
-     "hide-text",
-     null,
      null
     ]
    },
    {
-    "name": "Faces",
+    "name": "Clips & graphics · Faces",
     "keys": [
-     "face-1",
-     "face-2",
-     "face-3",
+     "save-clip",
+     "replay",
+     "hide-stats",
+     "hide-text",
      "face-4",
      "face-5",
      "face-6",
-     "face-7",
-     "face-8"
+     "face-7"
     ]
    },
    {
     "name": "Faces",
     "keys": [
+     "face-8",
      "face-9",
      "face-10",
      "avatar-toggle",
      "face-next",
-     null,
      null,
      null,
      null
@@ -796,7 +796,7 @@ window.AWYM_DECK_LAYOUTS = {
      "clock-hide",
      "@prev",
      "clock-foil",
-     null,
+     "clock-ot",
      "@next"
     ]
    },

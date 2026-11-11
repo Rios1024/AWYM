@@ -13,6 +13,8 @@
     &autostart=1      start counting as soon as the source loads
     &sound=0          turn the buzzer off
     &ticks=0          turn off the ticking in the last 5 seconds
+    &otcolor=FF1FB4   overtime colour (hex, no #); default electric purple
+    &ot=90            seconds each overtime adds (default 60)
 
   Keyboard (OBS: right-click the source → Interact):
     Space = start/pause   R = reset   ← / → = minus/plus 5 seconds
@@ -21,18 +23,21 @@
                  T, then 1 3 0, then Enter  →  1:30
                  (Backspace fixes a digit, Esc cancels)
     S = sound on/off      F = Tin Foil alert on/off    H = hide/show the clock
+    O = overtime: add a minute, start the clock, overtime colours (press again for 2OT…)
     Click = start/pause   Double-click = reset
 
   ── For developers ─────────────────────────────────────────────
   Type:      OBS browser source (overlay), designed at 640 × 320 and scaled to fit.
   Uses:      theme.css (colors/fonts), shared.js (messages, sounds, live theme).
   Messages:  listens  to:"clock"  start | pause | toggle | reset | set | add | label | sound | buzz | foil |
+                               ot {seconds} (overtime; ot {on:false} ends the look) |
                                visible {on} (on missing = flip; hidden keeps counting)
              sends    from:"clock" state every 300 ms (see shared.js for fields)
   Layout:    .housing > .topbar (hat icon, label, status pill) · .digits (SVG seven-segment
              digits built in code) · .progress bar.
   States (classes on <body>): running · warn (last 10 s, or 3 s for clocks ≤ 10 s) ·
              expired (buzzer moment) · entering (typing a custom time) · foil (Tin Foil alert) ·
+             ot (overtime colours) · otpop (the moment overtime starts) ·
              offscreen (hidden with the Control Panel's Hide button; remembered after a reload)
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -156,6 +161,31 @@
     40%, 60% { transform: translateX(7px); }
   }
   @keyframes flash { 50% { opacity: .15; } }
+
+  /* ---------- Overtime: hot colour on the frame and digits ---------- */
+  :root { --ot: #a238ff; --ot-hi: #e6ccff; }
+  .otbanner { position: absolute; inset: 54px 0 7px; z-index: 3; display: flex; align-items: center; justify-content: center;
+    pointer-events: none; opacity: 0; font-family: var(--font-display); font-size: 92px; letter-spacing: 6px; color: #fff;
+    text-transform: uppercase; text-shadow: 0 0 18px var(--ot), 0 0 40px var(--ot), 0 4px 0 rgba(0,0,0,.45);
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--ot) 70%, transparent) 25%, color-mix(in srgb, var(--ot) 70%, transparent) 75%, transparent); }
+  .otpop .otbanner { animation: otBanner 1.5s cubic-bezier(.2,.9,.3,1) both; }
+  @keyframes otBanner { 0% { opacity: 0; transform: translateX(-60%) skewX(-18deg); } 18% { opacity: 1; transform: translateX(0) skewX(-8deg); }
+    72% { opacity: 1; transform: translateX(0) skewX(-8deg) scale(1.04); } 100% { opacity: 0; transform: translateX(55%) skewX(-18deg); } }
+  .ot .housing { border-color: var(--ot); animation: otGlow 1.6s ease-in-out infinite;
+    box-shadow: inset 0 0 0 3px var(--ot-hi), 0 10px 0 -2px color-mix(in srgb, var(--ot) 55%, #000), 0 0 28px var(--ot); }
+  .otpop .housing { animation: otPop .55s cubic-bezier(.2,1.6,.4,1), otGlow 1.6s ease-in-out .55s infinite; }
+  @keyframes otGlow { 50% { box-shadow: inset 0 0 0 3px var(--ot-hi), 0 10px 0 -2px color-mix(in srgb, var(--ot) 55%, #000), 0 0 52px var(--ot), 0 0 90px color-mix(in srgb, var(--ot) 45%, transparent); } }
+  @keyframes otPop { 0% { transform: scale(1); } 35% { transform: scale(1.07); } 100% { transform: scale(1); } }
+  .ot .topbar { background: linear-gradient(90deg, color-mix(in srgb, var(--ot) 75%, #000), var(--ot), color-mix(in srgb, var(--ot) 75%, #000));
+    background-size: 200% 100%; animation: foilSheen 2.4s linear infinite; border-bottom-color: var(--ot-hi); }
+  .ot .label { color: #fff; text-shadow: 0 2px 0 rgba(0,0,0,.35); }
+  .ot .status { background: #fff !important; color: var(--ot); }
+  .ot .seg, .ot.warn .seg { fill: var(--ot); }
+  .ot .seg.lit { fill: color-mix(in srgb, var(--ot) 82%, #fff); }
+  .ot .lit, .ot.warn .lit { filter: drop-shadow(0 0 calc(8px * var(--glow-k, 1)) var(--ot)) drop-shadow(0 0 calc(18px * var(--glow-k, 1)) var(--ot)); }
+  .ot.warn.running .digits { animation: pulse .5s steps(2, jump-none) infinite; }
+  .ot .progress > i, .ot.warn .progress > i { background: linear-gradient(90deg, var(--ot), var(--ot-hi), var(--ot)); }
+  .ot.expired .housing { animation: shake .5s cubic-bezier(.36,.07,.19,.97) 2; }
 </style>
 </head>
 <body>
@@ -175,6 +205,7 @@
       </div>
       <div class="digits"><svg id="svg" viewBox="-6 -4 506 196" aria-label="time"></svg></div>
       <div class="progress"><i id="bar"></i></div>
+      <div class="otbanner" id="otbanner">Overtime</div>
     </div>
   </div>
 
@@ -295,7 +326,7 @@
     document.body.classList.toggle("running", running);
     document.body.classList.toggle("expired", expired);
     bar.style.width = (100 * ms / (total * 1000)) + "%";
-    statusEl.textContent = expired ? "Time!" : running ? "Live" : (ms === total * 1000 ? "Ready" : "Paused");
+    statusEl.textContent = expired ? "Time!" : running ? (ot ? otName() : "Live") : (ms === total * 1000 && !ot ? "Ready" : "Paused");
     statusEl.classList.toggle("paused", !running && !expired);
   }
 
@@ -311,9 +342,39 @@
     broadcast();
   }
 
+  /* Overtime: each press adds a minute (or ?ot= seconds), starts the clock and switches to the OT colours.
+     Reset (or setting a new time) ends overtime and goes back to the regular time. */
+  let ot = 0, regularTotal = null;
+  const OT_SECS = Math.max(1, Number(AWYM.param("ot", "60")) || 60);
+  const otColor = AWYM.param("otcolor", "");
+  if (/^[0-9a-f]{6}$/i.test(otColor)) document.documentElement.style.setProperty("--ot", "#" + otColor);
+  const otName = () => (ot > 1 ? ot : "") + "OT";
+  function overtime(seconds) {
+    const add = Math.max(1, Math.round(seconds || OT_SECS)) * 1000;
+    if (regularTotal === null) regularTotal = total;
+    ot++;
+    if (expired || remaining <= 0) remaining = 0;
+    if (running) remaining = Math.max(0, deadline - performance.now());
+    remaining = Math.min(remaining + add, (99 * 60 + 59) * 1000);
+    total = Math.ceil(remaining / 1000);            // full bar again for the new period
+    expired = false; lastTickSecond = null;
+    running = true; deadline = performance.now() + remaining;
+    document.body.classList.add("ot");
+    document.body.classList.remove("otpop"); void document.body.offsetWidth; document.body.classList.add("otpop");
+    clearTimeout(overtime.t); overtime.t = setTimeout(() => document.body.classList.remove("otpop"), 1600);
+    document.getElementById("otbanner").textContent = ot > 1 ? ot + "× Overtime" : "Overtime";
+    if (soundOn) AWYM.overtime();
+    render(); broadcast();
+  }
+  /** Drop the overtime look (and go back to the regular time length on the next reset). */
+  function endOvertime() {
+    ot = 0; document.body.classList.remove("ot", "otpop");
+    if (regularTotal !== null) { total = regularTotal; regularTotal = null; if (remaining > total * 1000) remaining = total * 1000; }
+  }
+
   /** Tell the Control Panel the clock's current state. */
   function broadcast() {
-    AWYM.send({ from: "clock", remaining, total, running, expired, label: labelEl.textContent, sound: soundOn, foil, hidden: offscreen });
+    AWYM.send({ from: "clock", remaining, total, running, expired, label: labelEl.textContent, sound: soundOn, foil, ot, hidden: offscreen });
   }
 
   /* ---- timer controls (also driven by Control Panel messages and the keyboard) ---- */
@@ -330,11 +391,13 @@
   }
   function toggle() { running ? pause() : start(); }
   function reset() {
+    endOvertime();
     running = false; expired = false; remaining = total * 1000; lastTickSecond = null;
     render(); broadcast();
   }
   /** Set a new total time (1 s – 99:59), reset, and optionally start. */
   function setTime(seconds, autostart) {
+    endOvertime();
     total = Math.max(1, Math.min(Math.round(seconds), 99 * 60 + 59));
     reset();
     if (autostart) start();
@@ -390,6 +453,7 @@
     else if (m.cmd === "sound") { soundOn = !!m.on; broadcast(); }
     else if (m.cmd === "buzz") AWYM.buzzer();
     else if (m.cmd === "foil") setFoil(m.on === undefined ? !foil : !!m.on);
+    else if (m.cmd === "ot") { if (m.on === false) { endOvertime(); render(); broadcast(); } else overtime(m.seconds); }
     else if (m.cmd === "visible") setOffscreen(m.on === undefined ? !offscreen : !m.on);
   });
 
@@ -434,6 +498,7 @@
     else if (e.key === "s" || e.key === "S") { soundOn = !soundOn; broadcast(); }
     else if (e.key === "f" || e.key === "F") setFoil(!foil);
     else if (e.key === "h" || e.key === "H") setOffscreen(!offscreen);
+    else if (e.key === "o" || e.key === "O") overtime();
     else if (PRESETS[e.key]) setTime(PRESETS[e.key]);
   });
 

@@ -104,3 +104,4 @@ Faces (seat 1)
   71-face-10.png            Seat 1 face: Smug           Ctrl + Alt + Shift + F22
   72-avatar-toggle.png      Seat 1: face / live camera  Ctrl + Alt + Shift + D
   73-face-next.png          Seat 1: next face           Ctrl + Alt + Shift + J
+  74-clock-ot.png           Shot clock overtime +1:00   Ctrl + Alt + Shift + Page Down

@@ -80,7 +80,8 @@ local HOTKEYS = {
   { "face-8", "Seat 1 face 8 (Starstruck)", "F20" },
   { "face-9", "Seat 1 face 9 (Facepalm)", "F21" },
   { "face-10", "Seat 1 face 10 (Smug)", "F22" },
-  { "avatar-toggle", "Seat 1: face / live camera", "D" }, { "face-next", "Seat 1: next face", "J" }
+  { "avatar-toggle", "Seat 1: face / live camera", "D" }, { "face-next", "Seat 1: next face", "J" },
+  { "clock-ot", "Shot clock overtime +1:00", "PAGEDOWN" }
 }
 local hotkey_ids = {}     -- action id → OBS hotkey id
 local presses = 0

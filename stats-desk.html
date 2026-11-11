@@ -42,7 +42,7 @@
     ],
     athlete:    (id) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}`,
     athleteStats: (id) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/stats`,
-    gamelog:    (id) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/gamelog`
+    gamelog:    (id, season) => `https://site.web.api.espn.com/apis/common/v3/sports/basketball/nba/athletes/${id}/gamelog` + (season ? `?season=${season}` : "")
   };
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -116,6 +116,9 @@
   .presult .n { font-weight: 700; font-size: 16px; }
   .presult .n small { display: block; font-weight: 500; font-size: 13px; opacity: .7; }
   .presult button { padding: 5px 10px; font-size: 13px; }
+  .plast { grid-template-columns: auto 1fr; align-items: center; }
+  .pslot.empty .row2 { display: none; }
+  .plast .mini { margin: 0; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -179,6 +182,9 @@
         <button data-act="hist">History</button>
         <button data-act="log">Last 5</button>
       </div>
+      <div class="row2 plast" style="margin-top:6px"><label class="mini">Last</label><select class="plogn" title="How many of the most recent games (in the season picked above)">
+        <option value="3">3 games</option><option value="5" selected>5 games</option><option value="7">7 games</option><option value="10">10 games</option><option value="15">15 games</option><option value="20">20 games</option></select></div>
+      <div class="row2" style="margin-top:6px"><select class="pgame" title="One game from the season picked above"><option value="">Pick a game…</option></select><button data-act="game">Game</button></div>
     </div>
     <div class="pslot" id="slotB">
       <div class="phead"><span class="ptag b">B</span><span class="pnm">Optional: second player to compare</span></div>
@@ -188,6 +194,9 @@
         <button data-act="hist">History</button>
         <button data-act="log">Last 5</button>
       </div>
+      <div class="row2 plast" style="margin-top:6px"><label class="mini">Last</label><select class="plogn" title="How many of the most recent games (in the season picked above)">
+        <option value="3">3 games</option><option value="5" selected>5 games</option><option value="7">7 games</option><option value="10">10 games</option><option value="15">15 games</option><option value="20">20 games</option></select></div>
+      <div class="row2" style="margin-top:6px"><select class="pgame" title="One game from the season picked above"><option value="">Pick a game…</option></select><button data-act="game">Game</button></div>
     </div>
     <label for="histMode">History shows</label>
     <select id="histMode"><option value="last">Last 10 seasons</option><option value="first">First 10 seasons</option><option value="best">Best 10 seasons (by points)</option><option value="all">Every season (up to 15)</option></select>

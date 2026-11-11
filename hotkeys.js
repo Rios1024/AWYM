@@ -82,7 +82,9 @@
     // seat 1's faces instead of the live camera (avatars/avatars.js); F13–F22 are for stream decks
     ...((window.AWYM_AVATARS || {})["1"] || { faces: [] }).faces.slice(0, 10).map((f, i) => ({ id: "face-" + (i + 1), face: i + 1, name: "Seat 1 face: " + f.name, group: "face", icon: "🙂", img: "avatars/" + f.file, label: f.name, key: "F" + (13 + i), route: "direct" })),
     { id: "avatar-toggle", name: "Seat 1: face / live camera", group: "face", icon: "🎭", label: "Face on/off", key: "D", route: "direct" },
-    { id: "face-next", name: "Seat 1: next face", group: "face", icon: "⏭️", label: "Next face", key: "J", route: "direct" }
+    { id: "face-next", name: "Seat 1: next face", group: "face", icon: "⏭️", label: "Next face", key: "J", route: "direct" },
+    // added in 1.2.5 (kept last so the earlier key pictures keep their numbers)
+    { id: "clock-ot", name: "Shot clock overtime +1:00", group: "clock", icon: "⏰", label: "Overtime", key: "PAGEDOWN", route: "direct" }
   ];
   /* Group names and the color each group's keys use (a theme color variable, or a fixed color). */
   window.AWYM_HOTKEY_GROUPS = {
@@ -92,6 +94,6 @@
     graphics: { name: "Graphics", color: "--light" }, fx: { name: "Frame effects", color: "#FF6A2B" }, mute: { name: "Mute", color: "#E5484D" }, face: { name: "Faces (seat 1)", color: "#8E7CFF" }
   };
   /** "Ctrl + Alt + Shift + N" for a suggested key. */
-  const CHAR = { SPACE: "Space", BRACKETLEFT: "[", BRACKETRIGHT: "]", SEMICOLON: ";", APOSTROPHE: "'", BACKSLASH: "\\", COMMA: ",", PERIOD: ".", SLASH: "/", MINUS: "-", EQUAL: "=", QUOTELEFT: "`", INSERT: "Insert", HOME: "Home", END: "End", PAGEUP: "Page Up" };
+  const CHAR = { SPACE: "Space", BRACKETLEFT: "[", BRACKETRIGHT: "]", SEMICOLON: ";", APOSTROPHE: "'", BACKSLASH: "\\", COMMA: ",", PERIOD: ".", SLASH: "/", MINUS: "-", EQUAL: "=", QUOTELEFT: "`", INSERT: "Insert", HOME: "Home", END: "End", PAGEUP: "Page Up", PAGEDOWN: "Page Down" };
   window.AWYM_HOTKEY_TEXT = (k) => "Ctrl + Alt + Shift + " + (CHAR[k] || k);
 })();
