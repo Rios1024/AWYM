@@ -32,7 +32,7 @@ Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. 
 | **Faces** | Swap a live camera for a set of prebuilt faces (cartoon you, reactions…), switched from the dock, hotkeys or a stream deck's Faces page; the face bobs along while you talk. |
 | **Content Panel** | Rich on-screen text with photos and emojis, or **import a whole show script** from Google Docs / Word ([template](templates/)). |
 | **Theme** | Colors, fonts and glow change live on every overlay; 80 color presets including all 30 NBA teams. |
-| **Hotkeys** | 73 OBS hotkeys (Ctrl + Alt + Shift + …) with key pictures for stream controllers. |
+| **Hotkeys** | 74 OBS hotkeys (Ctrl + Alt + Shift + …) with key pictures for stream controllers. |
 
 <p>
   <img src="docs/images/speaking-light.png" alt="Speaking light: the frame of the person talking glows" width="49%">
@@ -41,7 +41,7 @@ Requirements: **OBS Studio 28 or newer** (30+ recommended) on Windows or macOS. 
 
 ## Stream controllers
 
-Ready-made layouts in [`stream-controller/`](stream-controller/), all 73 actions with their pictures:
+Ready-made layouts in [`stream-controller/`](stream-controller/), all 74 actions with their pictures:
 
 - **VSD M18** (VSD Craft): `VSD-M18/AWYM-Show.SDProfile`, one file with everything on 7 pages.
 - **Elgato Stream Deck** 15-key (MK.2 / original), XL, Mini, Neo and +: `Elgato-Stream-Deck/*.streamDeckProfile`.

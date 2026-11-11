@@ -61,6 +61,7 @@
       else if (id === "clock-buzz") send({ to: "clock", cmd: "buzz" });
       else if (id === "clock-foil") send({ to: "clock", cmd: "foil" });            // toggles
       else if (id === "clock-hide") send({ to: "clock", cmd: "visible" });         // toggles
+      else if (id === "clock-ot") send({ to: "clock", cmd: "ot", seconds: 60 });   // each press = next overtime
       else if (/^lt-[1-4]$/.test(id)) send({ to: "lower", id: id.slice(3), cmd: "toggle" });
       else if (id === "lt-hide") send({ to: "lower", id: "*", cmd: "hide" });
       else if (id === "hide-stats") send({ to: "stats", cmd: "hide" });

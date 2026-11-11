@@ -3,10 +3,11 @@
  * =====================================================================
  * Search for NBA players (or paste an espn.com player link), load them into
  * slot A or B, and send cards to the stats overlay: season or career
- * averages, season-by-season history, last 5 games, and A-vs-B comparison.
+ * averages, season-by-season history, the last N games (3–20, with an average row),
+ * one game's full stat line, and A-vs-B comparison.
  *
  * Loaded by: stats-desk.html, after its main script (it needs both of these):
- *   window.AWYM_STATS_API   ESPN addresses: search[], athlete(id), athleteStats(id), gamelog(id)
+ *   window.AWYM_STATS_API   ESPN addresses: search[], athlete(id), athleteStats(id), gamelog(id, season)
  *   window.AWYM_DESK        helpers from the desk: getJSON, esc, colorCache, hex, customTitle,
  *                           show(card, kind, key, btn), isShowing(key), hideCard()
  * Data: ESPN's public (unofficial, no-key) athlete feed. ESPN can change it.
@@ -14,7 +15,8 @@
  * Card objects sent to stats-card.html (type → fields):
  *   averages  name, jersey, team{abbr,color}, sub, big[[label,value]×3], small[[label,value]…], foot
  *   history   name, jersey, team, sub, cols[], rows[{season, team, vals{}}], career, best (row index), foot
- *   gamelog   name, jersey, team, sub, cols[], rows[{date, opp, result, vals{}}], foot
+ *   gamelog   name, jersey, team, sub, cols[], rows[{date, opp, result, vals{}}], avg{label, vals}, foot
+ *   (one game) is an "averages" card: big PTS/REB/AST, small MIN/FG/3PT/FT/STL/BLK/TO/PF
  *   h2h       away/home {abbr,color}, awaySub, homeSub, rows[{label, away, home, awayVal, homeVal, lowerBetter}]
  */
 (function () {
@@ -164,6 +166,7 @@
       }
       slots[slot] = cache[pick.id];
       paintSlot(slot);
+      fillGames(slot);
     } catch (e) {
       el.querySelector(".pnm").textContent = pick.name;
       msg(e.message, true);
@@ -188,7 +191,11 @@
   }
   ["A", "B"].forEach((slot) => {
     paintSlot(slot);
-    $("slot" + slot).querySelectorAll("button[data-act]").forEach((b) => b.onclick = () => act(slot, b.dataset.act, b));
+    const el = $("slot" + slot);
+    el.querySelectorAll("button[data-act]").forEach((b) => b.onclick = () => act(slot, b.dataset.act, b));
+    const logBtn = el.querySelector('button[data-act="log"]');
+    el.querySelector(".plogn").onchange = (e) => { logBtn.textContent = "Last " + e.target.value; };
+    el.querySelector(".pseason").addEventListener("change", () => fillGames(slot));
   });
 
   /** The stat row picked in a slot's dropdown → {row, label, teamAbbr, career?, current?}. */
@@ -243,39 +250,125 @@
     };
   }
 
-  /** Build a "gamelog" card with the player's five most recent games (fetched fresh). */
-  async function gamelogCard(slot) {
-    const p = slots[slot];
-    const json = await D.getJSON(API.gamelog(p.id));
+  /* ---------- game logs ---------- */
+  const logCache = {};   // "id|season" → { at, rows } (rows newest first)
+  /**
+   * A player's games in one season (regular season and playoffs), newest first, each
+   * {id, t, date, opp, result, vals, playoff}. Cached for 2 minutes (the current season changes).
+   * @param {string} id      ESPN athlete id
+   * @param {number} [year]  season, named by the year it ends (2026 = 2025-26); blank = ESPN's current
+   */
+  async function seasonGames(id, year) {
+    const ck = id + "|" + (year || "");
+    const c = logCache[ck];
+    if (c && Date.now() - c.at < 120000) return c.rows;
+    const json = await D.getJSON(API.gamelog(id, year));
     const labels = (json.labels || json.names || []).map(key);
     const evMeta = json.events || {};
     const list = [];
     (json.seasonTypes || []).forEach((stype) => {
+      const playoff = /post|playoff/i.test(String(stype.displayName || stype.name || ""));
       (stype.categories || []).forEach((cat) => {
-        (cat.events || []).forEach((e) => { if (e && e.eventId && e.stats) list.push(e); });
+        (cat.events || []).forEach((e) => { if (e && e.eventId && e.stats) list.push({ e, playoff }); });
       });
     });
-    if (!labels.length || !list.length) throw new Error("ESPN has no recent games for this player yet.");
-    const rows = list.map((e) => {
+    const seen = new Set();
+    const rows = list.map(({ e, playoff }) => {
       const m = evMeta[e.eventId] || {};
       const vals = {}; labels.forEach((l, i) => { if (e.stats[i] != null) vals[l] = e.stats[i]; });
       const d = new Date(m.gameDate || 0);
       const opp = m.opponent || {};
       return {
-        t: d.getTime() || 0,
+        id: String(e.eventId), t: d.getTime() || 0, playoff,
         date: isNaN(d) || !m.gameDate ? "" : d.toLocaleDateString([], { month: "short", day: "numeric" }),
+        year: isNaN(d) || !m.gameDate ? "" : d.getFullYear(),
         opp: `${m.atVs || "vs"} ${opp.abbreviation || opp.displayName || ""}`.trim(),
         result: [m.gameResult, m.score].filter(Boolean).join(" "),
         vals
       };
-    });
-    const seen = new Set();
-    const recent = rows.sort((a, b) => b.t - a.t).filter((r) => { const k = r.t + r.opp; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 5);
+    }).sort((a, b) => b.t - a.t).filter((r) => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+    logCache[ck] = { at: Date.now(), rows };
+    return rows;
+  }
+  /** The season year the slot's dropdown points at (career → the latest season). */
+  function slotYear(slot) {
+    const p = slots[slot], v = $("slot" + slot).querySelector(".pseason").value;
+    const row = v === "latest" || v === "career" ? p.seasons[p.seasons.length - 1] : p.seasons[Number(v)];
+    return row && row.year ? row.year : currentSeasonYear;
+  }
+  /** Fill the slot's "Pick a game" list for the season picked (newest first). */
+  async function fillGames(slot) {
+    const sel = $("slot" + slot).querySelector(".pgame"), p = slots[slot];
+    if (!p) { sel.innerHTML = `<option value="">Pick a game…</option>`; return; }
+    sel.innerHTML = `<option value="">Loading games…</option>`;
+    try {
+      const year = slotYear(slot), rows = await seasonGames(p.id, year);
+      if (slots[slot] !== p || slotYear(slot) !== year) return;   // changed meanwhile
+      sel.innerHTML = rows.length
+        ? `<option value="">Pick a game (${rows.length} in ${esc(seasonName(year))})…</option>` + rows.map((r) =>
+            `<option value="${esc(r.id)}">${esc(r.date)} · ${esc(r.opp)} · ${esc(r.result)}${r.vals.PTS != null ? " · " + esc(r.vals.PTS) + " pts" : ""}${r.playoff ? " · playoffs" : ""}</option>`).join("")
+        : `<option value="">No games in ${esc(seasonName(year))}</option>`;
+    } catch (e) { sel.innerHTML = `<option value="">Couldn't load the games</option>`; }
+  }
+
+  /** Average of a column over some games: plain numbers → one decimal; "made-att" → per-game "m.m-a.a". */
+  function avgOf(rows, c) {
+    const vs = rows.map((r) => r.vals[c]).filter((v) => v != null && v !== "");
+    if (!vs.length) return null;
+    if (vs.every((v) => /^\d+-\d+$/.test(String(v)))) {
+      const m = vs.reduce((t, v) => t + Number(String(v).split("-")[0]), 0), a = vs.reduce((t, v) => t + Number(String(v).split("-")[1]), 0);
+      return (m / vs.length).toFixed(1) + "-" + (a / vs.length).toFixed(1);
+    }
+    const ns = vs.map(num).filter((n) => isFinite(n));
+    return ns.length ? (ns.reduce((t, n) => t + n, 0) / ns.length).toFixed(1) : null;
+  }
+
+  /** Build a "gamelog" card with the player's last N games (N from the slot's "Last" list) in the
+      season picked; for the latest season it reaches into the season before if there aren't enough yet.
+      An average row goes underneath. */
+  async function gamelogCard(slot) {
+    const p = slots[slot], n = Number($("slot" + slot).querySelector(".plogn").value) || 5;
+    const v = $("slot" + slot).querySelector(".pseason").value, year = slotYear(slot);
+    let rows = await seasonGames(p.id, year);
+    rows = rows.map((r) => Object.assign({ season: year }, r));
+    if (rows.length < n && (v === "latest" || v === "career")) {          // early in a season: add last season's games
+      const prev = await seasonGames(p.id, year - 1).catch(() => []);
+      if (prev.length) rows = rows.concat(prev.map((r) => Object.assign({ season: year - 1 }, r)));
+    }
+    if (!rows.length) throw new Error("ESPN has no games for this player in " + seasonName(year) + ".");
+    const recent = rows.slice(0, n);
+    const cols = ["MIN", "PTS", "REB", "AST", "FG", "3PT"].filter((c) => recent.some((r) => r.vals[c] != null));
+    const avg = { label: `Average (${recent.length})`, vals: {} };
+    cols.forEach((c) => { avg.vals[c] = avgOf(recent, c) ?? "–"; });
+    const isLatest = v === "latest" || v === "career";
+    const seasonTxt = isLatest ? "" : seasonName(year);
     return {
-      type: "gamelog", title: D.customTitle() || "Last " + recent.length + " games",
-      name: p.name, jersey: p.jersey, team: p.team, sub: [p.team.abbr, p.pos].filter(Boolean).join(" · "),
-      cols: ["MIN", "PTS", "REB", "AST", "FG"].filter((c) => recent.some((r) => r.vals[c] != null)), rows: recent,
-      foot: "Most recent games · ESPN"
+      type: "gamelog",
+      title: D.customTitle() || (isLatest ? "Last " + recent.length + " games" : "Last " + recent.length + " games of " + seasonTxt),
+      name: p.name, jersey: isLatest ? p.jersey : "", team: p.team, sub: [p.team.abbr, p.pos].filter(Boolean).join(" · "),
+      cols, rows: recent.map((r) => ({ date: r.date, opp: r.opp + (r.playoff ? " ·P" : ""), result: r.result, vals: r.vals })), avg,
+      foot: (recent.some((r) => r.playoff) ? "P = playoffs · " : "") + (recent.length < n ? `Only ${recent.length} games found · ` : "") +
+        (isLatest && recent.some((r) => r.season === year - 1) ? `Includes ${seasonName(year - 1)} games · ` : "") + "Most recent first · ESPN"
+    };
+  }
+
+  /** Build an "averages"-style card with the player's full line from one game (picked in "Pick a game"). */
+  async function gameCard(slot) {
+    const p = slots[slot], gid = $("slot" + slot).querySelector(".pgame").value;
+    if (!gid) throw new Error("Pick a game from the list first.");
+    const year = slotYear(slot);
+    const r = (await seasonGames(p.id, year)).find((x) => x.id === gid);
+    if (!r) throw new Error("Couldn't find that game. Pick it again.");
+    const v = r.vals;
+    const pctOf = (k) => v[k] != null && v[k] !== "" ? " " + Math.round(num(v[k])) + "%" : "";
+    return {
+      type: "averages",
+      title: D.customTitle() || `${r.date}${r.year ? ", " + r.year : ""} · ${r.opp}`,
+      name: p.name, jersey: p.jersey, team: p.team,
+      sub: [r.result, r.playoff ? "Playoffs" : seasonName(year)].filter(Boolean).join(" · "),
+      big: [["PTS", v.PTS], ["REB", v.REB], ["AST", v.AST]],
+      small: [["MIN", v.MIN], ["FG" + pctOf("FG%"), v.FG], ["3PT" + pctOf("3P%"), v["3PT"]], ["FT" + pctOf("FT%"), v.FT], ["STL", v.STL], ["BLK", v.BLK], ["TO", v.TO], ["PF", v.PF]],
+      foot: "One game · ESPN"
     };
   }
 
@@ -307,16 +400,18 @@
   /**
    * A slot button was pressed: show that card, or hide it if it's already on screen.
    * @param {"A"|"B"} slot
-   * @param {"avg"|"hist"|"log"} what
+   * @param {"avg"|"hist"|"log"|"game"} what
    * @param {HTMLElement} btn  highlighted while its card is showing
    */
   async function act(slot, what, btn) {
     if (!slots[slot]) { msg("Load a player into " + slot + " first.", true); return; }
-    const key = ["p", what, slot, slots[slot].id, $("slot" + slot).querySelector(".pseason").value, what === "hist" ? $("histMode").value : "", D.customTitle()].join("|");
+    const el = $("slot" + slot);
+    const extra = what === "hist" ? $("histMode").value : what === "log" ? el.querySelector(".plogn").value : what === "game" ? el.querySelector(".pgame").value : "";
+    const key = ["p", what, slot, slots[slot].id, el.querySelector(".pseason").value, extra, D.customTitle()].join("|");
     if (D.isShowing(key)) { D.hideCard(); return; }   // pressed again: hide it
     try {
-      msg(what === "log" ? "Loading recent games…" : "");
-      const card = what === "avg" ? averagesCard(slot) : what === "hist" ? historyCard(slot) : await gamelogCard(slot);
+      msg(what === "log" || what === "game" ? "Loading games…" : "");
+      const card = what === "avg" ? averagesCard(slot) : what === "hist" ? historyCard(slot) : what === "game" ? await gameCard(slot) : await gamelogCard(slot);
       D.show(card, "player-" + what, key, btn);
       msg("");
     } catch (e) { msg(e.message, true); }

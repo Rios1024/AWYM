@@ -22,18 +22,18 @@ H = json.loads(subprocess.run(["node", "-e", "global.window={}; require(%s); req
                               capture_output=True, text=True, check=True).stdout)
 BY = {h["id"]: h for h in H}
 FILE = {h["id"]: "%02d-%s.png" % (i + 1, h["id"]) for i, h in enumerate(H)}
-assert len(H) == 73
+assert len(H) == 74
 
 VK = {**{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}, **{"F%d" % n: 111 + n for n in range(1, 25)},
       "BRACKETLEFT": 219, "BRACKETRIGHT": 221, "SEMICOLON": 186, "APOSTROPHE": 222, "BACKSLASH": 220, "COMMA": 188, "PERIOD": 190, "SLASH": 191,
-      "MINUS": 189, "EQUAL": 187, "QUOTELEFT": 192, "INSERT": 45, "HOME": 36, "END": 35, "PAGEUP": 33}
+      "MINUS": 189, "EQUAL": 187, "QUOTELEFT": 192, "INSERT": 45, "HOME": 36, "END": 35, "PAGEUP": 33, "PAGEDOWN": 34}
 QT = {**{c: ord(c) for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"}, **{"F%d" % n: 16777263 + n for n in range(1, 25)},
       "BRACKETLEFT": 91, "BRACKETRIGHT": 93, "SEMICOLON": 59, "APOSTROPHE": 39, "BACKSLASH": 92, "COMMA": 44, "PERIOD": 46, "SLASH": 47,
-      "MINUS": 45, "EQUAL": 61, "QUOTELEFT": 96, "INSERT": 16777222, "HOME": 16777232, "END": 16777233, "PAGEUP": 16777238}   # Qt key = the character
+      "MINUS": 45, "EQUAL": 61, "QUOTELEFT": 96, "INSERT": 16777222, "HOME": 16777232, "END": 16777233, "PAGEUP": 16777238, "PAGEDOWN": 16777239}   # Qt key = the character
 
 SECTIONS = [
     ("Run of show", ["next", "prev", "clear", "mark"]),
-    ("Shot clock", ["clock-toggle", "clock-reset", "clock-buzz", "clock-hide", "clock-foil"]),
+    ("Shot clock", ["clock-toggle", "clock-reset", "clock-buzz", "clock-hide", "clock-foil", "clock-ot"]),
     ("Scoreboard", ["score-a", "score-b", "score-show", "winner"]),
     ("Sound board", [h["id"] for h in H if h["group"] == "sound"]),
     ("Names", ["lt-1", "lt-2", "lt-3", "lt-4", "lt-hide"]),

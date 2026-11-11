@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.5 (2026-11-10)
+
+- Shot clock overtime: an **Overtime +1:00** button on the Control Panel (hotkey Ctrl+Alt+Shift+Page Down, stream-deck key, key O on the clock) adds a minute, starts the clock and turns its frame and numbers electric purple with a glow, an "OVERTIME" banner and a horn. Press again for 2OT, 3OT…; Reset ends it. `&otcolor=` and `&ot=` change the colour and length. 74 hotkeys now.
+- Stats Desk → Player lookup: "Last N games" (3, 5, 7, 10, 15 or 20, in any season, with an average row; reaches into last season early in a new one) and a "Pick a game" list to show one game's full stat line.
+
 ## 1.2.4 (2026-11-06)
 
 - Guests page: "Send names and badges" also puts seats 1–4 on the show intro's name plates (top-left, top-right, bottom-left, bottom-right; an empty seat = no plate). There's a checkbox to turn it off; the Intro Editor shows the new names too.

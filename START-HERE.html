@@ -400,7 +400,7 @@
     <header><div class="num">10</div><h2>Hotkeys and your stream controller<small>Optional: run the show from a keyboard, VSD M18, Stream Deck, Loupedeck, Touch Portal or any macro pad</small></h2><label class="donebox"><input type="checkbox"> Done</label></header>
     <div class="body">
       <ol class="how">
-        <li><b>Keep the setup script loaded</b> (Tools → Scripts: <b>awym-obs-setup.lua</b> stays in the list). It adds 73 actions to <span class="menu">Settings → Hotkeys</span>, all starting with <b>AWYM:</b>, and fills in the keys below the first time (always <b>Ctrl + Alt + Shift</b> plus one key, so they won't clash with anything). Change any of them there if you like. If you built your scenes before hotkeys existed, click <b>Build my scenes</b> once more: it adds the invisible <b>Hotkeys</b> source that carries them out.</li>
+        <li><b>Keep the setup script loaded</b> (Tools → Scripts: <b>awym-obs-setup.lua</b> stays in the list). It adds 74 actions to <span class="menu">Settings → Hotkeys</span>, all starting with <b>AWYM:</b>, and fills in the keys below the first time (always <b>Ctrl + Alt + Shift</b> plus one key, so they won't clash with anything). Change any of them there if you like. If you built your scenes before hotkeys existed, click <b>Build my scenes</b> once more: it adds the invisible <b>Hotkeys</b> source that carries them out.</li>
         <li>So they work while you're clicked into another window: <span class="menu">Settings → Advanced → Hotkeys → Hotkey Focus Behavior → Never disable hotkeys</span>.</li>
         <li>Keep the <b>Show Runner</b> dock open: it does the rundown, scoreboard, sound volume and clip actions. (Sounds still play without it, at 80%.)</li>
         <li><b>Set up your controller:</b> open the one you use below. Each has its own steps (a ready-made file to import where there is one). The others stay folded out of the way.</li>
@@ -413,7 +413,7 @@
         <details class="deck" data-deck="m18">
           <summary>VSD M18 <span class="tag">one file · VSD Craft</span></summary>
           <ol class="how">
-            <li>In <b>VSD Craft</b>, click the import button next to the scene list and pick <b>stream-controller/VSD-M18/AWYM-Show.SDProfile</b>. A scene called <b>AWYM Show</b> appears with all 73 actions on the 7 pages below.</li>
+            <li>In <b>VSD Craft</b>, click the import button next to the scene list and pick <b>stream-controller/VSD-M18/AWYM-Show.SDProfile</b>. A scene called <b>AWYM Show</b> appears with all 74 actions on the 7 pages below.</li>
             <li>The 3 plain buttons under the screen keys are the same on every page: ◀ previous page, 🚨 Clear screen, next page ▶. The bottom row of page 1 mutes each person (seats 1–4) and unmutes everyone.</li>
             <li>That one file has everything. If you imported the older one-page scenes (AWYM Run of Show, Scoreboard, Frame FX, Faces, Sound Board), you can delete them in VSD Craft.</li>
           </ol>
@@ -483,7 +483,7 @@
       </div>
 
       <details class="deck" data-deck="all" style="margin-top:14px">
-        <summary>Every action and its keys <span class="tag">73</span></summary>
+        <summary>Every action and its keys <span class="tag">74</span></summary>
       <div class="hktable" id="hkTable"></div>
       </details>
     </div>
@@ -570,7 +570,7 @@
     const nav = id === "neo" ? "Change pages with the Neo's two touch points under the keys." : "The ◀ / ▶ page keys in the bottom corners flip between the pages.";
     const extra = id === "plus" ? " The dials and touch strip are left free for you (a dial on OBS's Sound Effects volume works well)." : "";
     el.innerHTML = `<ol class="how">
-        <li>Double-click <b>stream-controller/Elgato-Stream-Deck/${fname}</b> (or in the Stream Deck app: the profile list → <b>Import</b>). A profile called <b>AWYM Show</b> appears with all 73 actions on ${l.pages.length} pages: ${nav}${extra}</li>
+        <li>Double-click <b>stream-controller/Elgato-Stream-Deck/${fname}</b> (or in the Stream Deck app: the profile list → <b>Import</b>). A profile called <b>AWYM Show</b> appears with all 74 actions on ${l.pages.length} pages: ${nav}${extra}</li>
         <li>Needs the Stream Deck app 6.0 or newer (made for 7.3+). If it won't import, set the keys up by hand: drag <b>System → Hotkey</b> onto a key, press the action's keys (list below) and set its picture from <b>icons/hotkeys/</b>.</li>
       </ol>` + pagesHTML(l);
   });

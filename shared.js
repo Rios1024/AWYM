@@ -12,7 +12,7 @@
  *   AWYM.send / AWYM.listen      talk to the other pages (docks ⇄ overlays)
  *   AWYM.liveTheme / onTheme /   the live theme set from the Theme Panel dock
  *     setLiveTheme
- *   AWYM.buzzer / tinfoil / tick sound effects made in code (no audio files)
+ *   AWYM.buzzer / tinfoil / overtime / tick sound effects made in code (no audio files)
  *   AWYM.collapsible()           fold/unfold dock sections by clicking their headers
  *   AWYM.cleanHTML()             keep only safe formatting (Content Panel text)
  *   AWYM.sizeImages()            let photos in formatted text know their shape
@@ -34,8 +34,10 @@
  *   to: "clock"       (shot-clock.html)    ← control-panel.html
  *       cmd: start | pause | toggle | reset | buzz
  *            set {seconds, autostart} · add {seconds} · label {label}
- *            sound {on} · foil {on}
- *   from: "clock"     → every 300 ms: {remaining, total, running, expired, label, sound, foil}
+ *            sound {on} · foil {on} · ot {seconds = 60} (overtime: adds time, starts the
+ *            clock, OT colours; each press is the next OT) · ot {on:false} (end overtime look)
+ *   from: "clock"     → every 300 ms: {remaining, total, running, expired, label, sound, foil, ot, hidden}
+ *                        (ot = overtime number, 0 = regular time)
  *
  *   to: "lower"       (lower-third.html)   ← control-panel.html     id: "1"…"4" or "*"
  *       cmd: show | hide | toggle | update | ping   (+ data: {name, role, handle, number})
@@ -337,6 +339,32 @@
       gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
       osc.connect(gain).connect(audioCtx.destination);
       osc.start(now); lfo.start(now); osc.stop(now + dur + 0.05); lfo.stop(now + dur + 0.05);
+    } catch (e) {}
+  };
+
+  /* Overtime horn: two short rising blasts (about 0.9 seconds) */
+  /** Overtime sting for the shot clock: two quick rising horn blasts. @param {number} [volume] */
+  AWYM.overtime = (volume = 0.28) => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = "lowpass"; filter.frequency.value = 3200;
+      filter.connect(audioCtx.destination);
+      [[0, 262, 0.28], [0.34, 392, 0.5]].forEach(([at, f, len]) => {
+        const g = audioCtx.createGain(), t = now + at;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(volume, t + 0.025);
+        g.gain.setValueAtTime(volume, t + len - 0.08);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+        g.connect(filter);
+        [[1, "sawtooth", 0.55], [1.5, "square", 0.2], [0.5, "sawtooth", 0.35]].forEach(([k, type, v]) => {
+          const o = audioCtx.createOscillator(), og = audioCtx.createGain();
+          o.type = type; o.frequency.setValueAtTime(f * k * 0.94, t); o.frequency.exponentialRampToValueAtTime(f * k, t + 0.08);
+          og.gain.value = v; o.connect(og).connect(g); o.start(t); o.stop(t + len + 0.05);
+        });
+      });
     } catch (e) {}
   };
 

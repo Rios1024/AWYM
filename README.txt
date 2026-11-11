@@ -114,7 +114,7 @@ What's in this folder
   lib/                anime.js (animation library, MIT licence) for the effects
   obs-ws.js           Talks to OBS's WebSocket server for clips/replays (no need to touch)
   hotkeys.html        Invisible source that carries out OBS hotkeys (Hotkeys)
-  hotkeys.js          The 73 hotkey actions and their suggested keys
+  hotkeys.js          The 74 hotkey actions and their suggested keys
   hotkey-icons.html   Make stream-deck key pictures in your show colors
   stream-controller/  Ready-made setups: VSD M18 scenes and Elgato Stream Deck
                       profiles (15-key, XL, Mini, Neo, +)
@@ -367,6 +367,15 @@ SHOW PACKS (for your other shows)
   again to go back to normal; the clock keeps running either way.
   (Want different wording? Add &foillabel=Conspiracy%20Corner to the
   shot clock's address.)
+  Overtime +1:00 (the purple button under the clock buttons): adds a
+  minute, starts the clock if it had stopped or run out, and turns the
+  clock's frame and numbers electric purple with a glow, an "OVERTIME" banner
+  and a two-blast horn (if sound is on). Press it again for 2OT, 3OT…
+  (the status pill on the clock says which). Reset, or picking a new
+  time, ends overtime and goes back to the regular time. Hotkey
+  Ctrl + Alt + Shift + Page Down; key O on the clock itself. Another
+  colour: add &otcolor=FF6A00 (hex) to the shot clock's address;
+  another length: &ot=90 (seconds).
   Background title: change the title and tagline on the background, or
   move it (top / center / bottom / hide), live. Leave Title empty to use
   the show name; "Back to default" undoes your changes.
@@ -411,7 +420,15 @@ SHOW PACKS (for your other shows)
     - History: season-by-season table with the career line. "History
       shows" picks last 10, first 10, best 10 (by points) or every season.
       The ★ marks their highest-scoring season.
-    - Last 5: their five most recent games.
+    - Last N: their most recent games, with an average row underneath. Pick
+      how many in the "Last" list (3, 5, 7, 10, 15 or 20); the button shows
+      the number. It uses the season picked above (This season = the latest
+      games; early in a season it reaches back into last season and says
+      so on the card). Playoff games are marked P.
+    - Game: one game's full line (points, rebounds, assists, minutes,
+      shooting with percentages, steals, blocks, turnovers, fouls). Pick
+      the game in "Pick a game" (every game of the season picked above,
+      newest first, with the result and points), then click Game.
     - Compare A vs B: two players side by side, each with its own season,
       e.g. one player's career against another's rookie year.
     All player numbers are regular-season per-game averages.
@@ -683,13 +700,14 @@ SHOW PACKS (for your other shows)
 
 5d) HOTKEYS AND STREAM CONTROLLERS (VSD M18, Stream Deck, Loupedeck, macro pads)
 ---------------------------------------------------------------------------------
-  The setup script (awym-obs-setup.lua) adds 73 actions to OBS → Settings →
+  The setup script (awym-obs-setup.lua) adds 74 actions to OBS → Settings →
   Hotkeys, all named "AWYM: …". KEEP THE SCRIPT LOADED in Tools → Scripts,
   or they disappear. The first time, it fills in a key for each, always
   Ctrl + Alt + Shift plus one key (change them in Settings → Hotkeys):
 
     Run of show    Next segment N · Previous P · Clear screen X
-    Shot clock     Start/pause S · Reset R · Buzzer Z · Tin Foil T · Show/hide K
+    Shot clock     Start/pause S · Reset R · Buzzer Z · Tin Foil T · Show/hide K ·
+                   Overtime +1:00 Page Down
     Scoreboard     Side A +1 Q · Side B +1 W · Show/hide E · Winner Y
     Sound board    Air horn F1 · Buzzer F2 · Correct F3 · Wrong F4 ·
                    Rimshot F5 · Drumroll F6 · Crowd ooh F7 · Applause F8 ·
@@ -721,7 +739,7 @@ SHOW PACKS (for your other shows)
   READY-MADE CONTROLLER SETUPS (stream-controller/; START-HERE step 10 has a
   folded section per model with its layout):
     VSD-M18/              AWYM-Show.SDProfile: one VSD Craft scene for the
-                          VSD M18 with all 73 keys on 7 pages
+                          VSD M18 with all 74 keys on 7 pages
     Elgato-Stream-Deck/   Stream Deck profiles for the 15-key (MK.2 /
                           original), XL, Mini, Neo and + : double-click to
                           import
@@ -783,6 +801,7 @@ SHOW PACKS (for your other shows)
   If a dock's light stays grey, right-click the overlay source → Interact.
     Shot clock: Space start/pause, R reset, ←/→ ±5s, S sound on/off
                 F = Tin Foil alert on/off · H = hide/show the clock
+                O = overtime (+1:00, overtime colours; again = 2OT)
                 Presets: 1–5 = 1 to 5 minutes, 0 = 0:30
                 Custom time: press T (or Enter), type the digits like a
                 microwave (1 3 0 = 1:30, 4 5 = 0:45), then Enter.

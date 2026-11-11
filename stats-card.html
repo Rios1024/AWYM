@@ -19,6 +19,8 @@
              sends    from:"stats" {visible, ticker, type} · {cmd:"hello"} on load
   Cards:     R.<type>(card) turns card data into {cls, title, body, foot}. Types:
              score · player · compare · leaders · box · standings · averages · history · gamelog · h2h
+             (gamelog: optional avg {label, vals} = an average row under the games; a single game
+              is sent as an "averages" card)
   options:   position ("left" | "center" | "right" | "full"), autohide (s), teamColors, clearLT
   Fitting:   fitCard() keeps cards above the lower thirds and ticker (move up → compact →
              shrink), or scales them up for full screen.
@@ -374,7 +376,7 @@
       body: `${playerTop(d)}<table><thead><tr><th>Date</th><th>Opp</th><th>Result</th>${cols.map((c) => `<th>${esc(c)}</th>`).join("")}</tr></thead>
         <tbody>${(d.rows || []).map((r) => `<tr><td class="l dim">${esc(r.date)}</td><td class="l">${esc(r.opp)}</td>
           <td class="${/^W/.test(r.result) ? "w" : /^L/.test(r.result) ? "lo" : ""}">${esc(r.result)}</td>
-          ${cols.map((c) => `<td>${esc(r.vals[c] ?? "–")}</td>`).join("")}</tr>`).join("")}</tbody></table>`,
+          ${cols.map((c) => `<td>${esc(r.vals[c] ?? "–")}</td>`).join("")}</tr>`).join("")}${d.avg ? `<tr class="total"><td class="l" colspan="3">${esc(d.avg.label || "Average")}</td>${cols.map((c) => `<td>${esc(d.avg.vals[c] ?? "–")}</td>`).join("")}</tr>` : ""}</tbody></table>`,
       foot: d.foot || ""
     };
   };

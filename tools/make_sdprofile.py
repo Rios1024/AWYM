@@ -19,9 +19,9 @@ SERIAL = ""   # left blank in shared files (VSD Craft fills in your own device)
 src = open(os.path.join(KIT, "hotkeys.js"), encoding="utf-8").read()
 icons = sorted(f for f in os.listdir(os.path.join(KIT, "icons/hotkeys")) if f.endswith(".png"))
 ICON = {re.sub(r"^\d+-|\.png$", "", f): f for f in icons}
-assert len(ICON) == 73, len(ICON)
+assert len(ICON) == 74, len(ICON)
 KEYS = {"next": "N", "prev": "P", "clear": "X", "clock-toggle": "S", "clock-reset": "R", "clock-buzz": "Z",
-        "clock-foil": "T", "clock-hide": "K", "score-a": "Q", "score-b": "W", "score-show": "E", "winner": "Y",
+        "clock-foil": "T", "clock-hide": "K", "clock-ot": "PAGEDOWN", "score-a": "Q", "score-b": "W", "score-show": "E", "winner": "Y",
         "lt-1": "1", "lt-2": "2", "lt-3": "3", "lt-4": "4", "lt-hide": "5", "save-clip": "C", "replay": "V",
         "mark": "M", "hide-stats": "G", "hide-text": "H",
         "fx-fire": "F", "fx-ice": "I", "fx-zap": "L", "fx-smoke": "O", "fx-sparks": "A", "fx-trash": "COMMA", "fx-facts": "PERIOD", "fx-cooking": "SLASH", "fx-cap": "MINUS", "fx-bricked": "EQUAL",
@@ -40,7 +40,7 @@ for i, k in KEYS.items():
 lua = open(os.path.join(KIT, "awym-obs-setup.lua"), encoding="utf-8").read()
 
 OEM = {"BRACKETLEFT": 219, "BRACKETRIGHT": 221, "SEMICOLON": 186, "APOSTROPHE": 222, "BACKSLASH": 220, "COMMA": 188, "PERIOD": 190, "SLASH": 191,
-       "MINUS": 189, "EQUAL": 187, "QUOTELEFT": 192, "INSERT": 45, "HOME": 36, "END": 35, "PAGEUP": 33}
+       "MINUS": 189, "EQUAL": 187, "QUOTELEFT": 192, "INSERT": 45, "HOME": 36, "END": 35, "PAGEUP": 33, "PAGEDOWN": 34}
 def vk(k):  # Windows virtual-key code (the sample stores N as 78)
     if k in OEM: return OEM[k]
     if re.fullmatch(r"F\d+", k): return 111 + int(k[1:])
@@ -64,7 +64,7 @@ PAGES = [  # (name, 15 keys top row first, left→right)
     ("Sound board", ["snd-" + s for s in SOUNDS[:15]]),
     ("Scoreboard", SCOREBOARD),
     ("Clock & clips", ["lt-hide", "clock-hide", "clock-buzz", "hide-stats", "hide-text",
-                       "clock-toggle", "clock-reset", None, "snd-tinfoil", "clock-foil",
+                       "clock-toggle", "clock-reset", "clock-ot", "snd-tinfoil", "clock-foil",
                        "save-clip", "replay", "mark", None, None]),
     ("Frame FX", FRAME_FX),
     ("Verdicts", VERDICTS),
@@ -141,7 +141,7 @@ def build(top_row, name, fname, seed, PAGES=PAGES, BUTTONS=BUTTONS):
 os.makedirs(OUT, exist_ok=True)
 for f in os.listdir(OUT):
     if f.endswith(".SDProfile"): os.remove(os.path.join(OUT, f))
-# One file holds everything: AWYM Show, all 73 actions on 7 pages (◀ page · Clear · page ▶ on the plain buttons).
+# One file holds everything: AWYM Show, all 74 actions on 7 pages (◀ page · Clear · page ▶ on the plain buttons).
 SCENES = [
     ("AWYM Show", "AWYM-Show.SDProfile", PAGES, BUTTONS),
 ]

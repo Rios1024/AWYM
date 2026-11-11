@@ -16,7 +16,7 @@ layouts here as a guide.
 
 VSD M18 (VSD Craft)
 -------------------
-  VSD-M18/AWYM-Show.SDProfile         the one file: all 73 keys on 7 pages
+  VSD-M18/AWYM-Show.SDProfile         the one file: all 74 keys on 7 pages
   Import: in VSD Craft, the import button next to the scene list → pick the
   file. A scene called AWYM Show appears.
   The 3 plain buttons under the screen keys: ◀ page · Clear screen · page ▶.
@@ -36,7 +36,7 @@ AWYM Show (top row first)
     Correct        Wrong          Buzzer         Crowd ooh      Applause
   Page 4 · Clock & clips
     Hide names     Hide clock     Clock buzzer   Hide stats     Hide text
-    Start/Pause    Reset          (empty)        Tin Foil sound Tin Foil
+    Start/Pause    Reset          Overtime       Tin Foil sound Tin Foil
     Save clip      Replay         Mark           (empty)        (empty)
   Page 5 · Frame FX
     Fire           Ice            Lightning      Smoke          Sparks
@@ -54,7 +54,7 @@ AWYM Show (top row first)
 ELGATO STREAM DECK (Stream Deck app 6.0 or newer; made for 7.3+)
 -------------------------------------------------------------
   Double-click the file for your model (or in the Stream Deck app: profile
-  list → Import). A profile called "AWYM Show" appears with all 73 actions.
+  list → Import). A profile called "AWYM Show" appears with all 74 actions.
   ◀ / ▶ page keys sit in the bottom corners (the Neo uses its touch points
   instead). If a profile won't import on your app version, set keys by hand:
   drag System → Hotkey onto a key, press the keys, Set from File → the
@@ -64,7 +64,7 @@ Stream Deck (15 keys: MK.2, original, Scissor Keys)
   Elgato-Stream-Deck/AWYM-Stream-Deck-15-key.streamDeckProfile  (6 pages)
   Page 1 · Run of show · Shot clock · Mute
     Next           Prev           Clear          Mark           Start/Pause
-    Reset          Clock buzzer   Hide clock     Tin Foil       Unmute all
+    Reset          Clock buzzer   Hide clock     Tin Foil       Overtime
     Mute 1         Mute 2         Mute 3         Mute 4         page ▶
   Page 2 · Scoreboard · Sound board
     Side A         Side B         Scoreboard     Winner         Air horn
@@ -74,10 +74,10 @@ Stream Deck (15 keys: MK.2, original, Scissor Keys)
     Sad trombone   Record scratch Swoosh         Whistle        Gong
     Boing          Mic drop       Tin Foil sound Name 1         Name 2
     ◀ page         Name 3         Name 4         Hide names     page ▶
-  Page 4 · Frame FX · Clips & graphics
+  Page 4 · Frame FX · Clips & graphics · Mute
     Fire           Ice            Lightning      Smoke          Sparks
     Shake          Stop FX        Save clip      Replay         Hide stats
-    ◀ page         Hide text      (empty)        (empty)        page ▶
+    ◀ page         Hide text      Unmute all     (empty)        page ▶
   Page 5 · Verdicts
     Trash take     100% Facts     Cooking        Cap            Bricked
     Air ball       Technical      Posterized     On fire        Clown take
@@ -91,9 +91,9 @@ Stream Deck XL (32 keys)
   Elgato-Stream-Deck/AWYM-Stream-Deck-XL.streamDeckProfile  (3 pages)
   Page 1 · Run of show · Shot clock · Scoreboard · Names · Frame FX · Mute
     Next        Prev        Clear       Mark        Start/Pause Reset       Clock buzze Hide clock
-    Tin Foil    Side A      Side B      Scoreboard  Winner      Name 1      Name 2      Name 3
-    Name 4      Hide names  Fire        Ice         Lightning   Smoke       Sparks      Shake
-    Mute 1      Mute 2      Mute 3      Mute 4      Unmute all  Stop FX     (empty)     page ▶
+    Tin Foil    Overtime    Side A      Side B      Scoreboard  Winner      Name 1      Name 2
+    Name 3      Name 4      Hide names  Fire        Ice         Lightning   Smoke       Sparks
+    Mute 1      Mute 2      Mute 3      Mute 4      Unmute all  Shake       Stop FX     page ▶
   Page 2 · Sound board · Verdicts
     Air horn    Buzzer      Correct     Wrong       Rimshot     Drumroll    Crowd ooh   Applause
     Cha-ching   Sad trombon Record scra Swoosh      Whistle     Gong        Boing       Mic drop
@@ -114,7 +114,7 @@ Stream Deck Mini (6 keys)
     Mark           Start/Pause    Reset
     ◀ page         Clock buzzer   page ▶
   Page 3 · Shot clock
-    Hide clock     Tin Foil       (empty)
+    Hide clock     Tin Foil       Overtime
     ◀ page         (empty)        page ▶
   Page 4 · Scoreboard
     Side A         Side B         Scoreboard
@@ -173,33 +173,33 @@ Stream Deck Neo (8 keys; its touch points change pages)
   Page 1 · Run of show · Mute
     Next           Prev           Clear          Mark
     Mute 1         Mute 2         Mute 3         Mute 4
-  Page 2 · Shot clock · Sound board
+  Page 2 · Shot clock · Mute
     Start/Pause    Reset          Clock buzzer   Hide clock
-    Tin Foil       Air horn       Buzzer         Correct
+    Tin Foil       Overtime       Unmute all     (empty)
   Page 3 · Scoreboard · Sound board
     Side A         Side B         Scoreboard     Winner
-    Wrong          Rimshot        Drumroll       Crowd ooh
+    Air horn       Buzzer         Correct        Wrong
   Page 4 · Sound board
-    Applause       Cha-ching      Sad trombone   Record scratch
-    Swoosh         Whistle        Gong           Boing
-  Page 5 · Sound board · Names · Mute
-    Mic drop       Tin Foil sound Name 1         Name 2
-    Name 3         Name 4         Hide names     Unmute all
-  Page 6 · Frame FX
+    Rimshot        Drumroll       Crowd ooh      Applause
+    Cha-ching      Sad trombone   Record scratch Swoosh
+  Page 5 · Sound board · Verdicts
+    Whistle        Gong           Boing          Mic drop
+    Tin Foil sound Trash take     100% Facts     Cooking
+  Page 6 · Names · Faces
+    Name 1         Name 2         Name 3         Name 4
+    Hide names     Smile          Skeptical      Shocked
+  Page 7 · Frame FX
     Fire           Ice            Lightning      Smoke
     Sparks         Shake          Stop FX        (empty)
-  Page 7 · Verdicts
-    Trash take     100% Facts     Cooking        Cap
-    Bricked        Air ball       Technical      Posterized
-  Page 8 · Verdicts · Clips & graphics
-    On fire        Clown take     Save clip      Replay
-    Hide stats     Hide text      (empty)        (empty)
-  Page 9 · Faces
-    Smile          Skeptical      Shocked        Thinking
-    Happy          Cringe         Unimpressed    Starstruck
+  Page 8 · Verdicts
+    Cap            Bricked        Air ball       Technical
+    Posterized     On fire        Clown take     (empty)
+  Page 9 · Clips & graphics · Faces
+    Save clip      Replay         Hide stats     Hide text
+    Thinking       Happy          Cringe         Unimpressed
   Page 10 · Faces
-    Facepalm       Smug           Face on/off    Next face
-    (empty)        (empty)        (empty)        (empty)
+    Starstruck     Facepalm       Smug           Face on/off
+    Next face      (empty)        (empty)        (empty)
 
 Stream Deck + (8 keys)
   Elgato-Stream-Deck/AWYM-Stream-Deck-Plus.streamDeckProfile  (13 pages)
@@ -208,7 +208,7 @@ Stream Deck + (8 keys)
     Mute 1         Mute 2         Mute 3         page ▶
   Page 2 · Shot clock
     Start/Pause    Reset          Clock buzzer   Hide clock
-    ◀ page         Tin Foil       (empty)        page ▶
+    ◀ page         Tin Foil       Overtime       page ▶
   Page 3 · Scoreboard · Mute
     Side A         Side B         Scoreboard     Winner
     ◀ page         Mute 4         Unmute all     page ▶

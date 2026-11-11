@@ -75,6 +75,11 @@
   .foilbtn { white-space: nowrap; font-size: 14px; padding-left: 4px; padding-right: 4px; background: linear-gradient(110deg, #8f97a4, #eef1f5 35%, #9ea6b2 55%, #f7f9fb 75%, #a7afba); color: #1b1e24; border-color: #c9ced6; text-shadow: 0 1px 0 rgba(255,255,255,.6); }
   .foilbtn:hover { filter: brightness(1.08); background: linear-gradient(110deg, #8f97a4, #eef1f5 35%, #9ea6b2 55%, #f7f9fb 75%, #a7afba); }
   .foilbtn.on { outline: 3px solid #9fe8ff; box-shadow: 0 0 12px #9fe8ff; }
+  .otbtn { width: 100%; margin-top: 6px; font-size: 16px; background: linear-gradient(90deg, #6a14c9, #a238ff, #6a14c9); color: #fff; border-color: transparent; text-shadow: 0 1px 0 rgba(0,0,0,.35); }
+  .otbtn:hover { filter: brightness(1.12); background: linear-gradient(90deg, #6a14c9, #a238ff, #6a14c9); }
+  .otbtn.on { box-shadow: 0 0 14px #a238ff; outline: 2px solid #e6ccff; }
+  .otbtn small { display: inline; opacity: .8; font-size: 11px; margin-left: 6px; }
+  #readout.ot { color: #b866ff; text-shadow: 0 0 10px #a238ff; }
 
   label { display: block; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin: 8px 0 3px; }
   input[type=text] {
@@ -136,6 +141,7 @@
       <button id="buzz" class="accent">Buzzer</button>
       <button id="foil" class="foilbtn" title="Call out a conspiracy-theory take: tin-foil hat + spooky sound on the shot clock. Click again to turn off.">🛸 Tin Foil</button>
     </div>
+    <button id="ot" class="otbtn" title="Overtime: adds a minute, starts the clock and turns the clock's frame and numbers purple. Click again for double overtime. Reset ends overtime.">⏱️ Overtime +1:00</button>
 
     <label>Quick times <span class="keyhint">(same as keys 0–5 on the clock)</span></label>
     <div class="grid g3" id="presets">
@@ -225,6 +231,12 @@
   $("minus").onclick = () => clock("add", { seconds: -5 });
   $("plus").onclick = () => clock("add", { seconds: 5 });
   $("buzz").onclick = () => clock("buzz");
+  $("ot").onclick = () => clock("ot", { seconds: 60 });
+  let otNow = 0;
+  function paintOt() {
+    $("ot").classList.toggle("on", otNow > 0);
+    $("ot").innerHTML = (otNow ? "⏱️ " + (otNow + 1 > 1 ? (otNow + 1) + "OT" : "OT") + " +1:00" : "⏱️ Overtime +1:00") + (otNow ? "<small>now " + (otNow > 1 ? otNow : "") + "OT</small>" : "");
+  }
   let foilOn = false;
   $("foil").onclick = () => clock("foil", { on: !foilOn });
   function paintFoil() { $("foil").classList.toggle("on", foilOn); $("foil").textContent = foilOn ? "🛸 Foil off" : "🛸 Tin Foil"; }
@@ -362,11 +374,13 @@
       clockRunning = m.running;
       $("readout").textContent = fmt(m.remaining);
       $("readout").classList.toggle("warn", m.expired || (m.remaining <= 10000 && m.total > 10));
-      $("clockState").innerHTML = esc(m.label) + "<br>" + (m.expired ? "Time!" : m.running ? "Live" : "Stopped") + (m.hidden ? " · hidden" : "");
+      $("clockState").innerHTML = esc(m.label) + "<br>" + (m.expired ? "Time!" : m.running ? (m.ot ? (m.ot > 1 ? m.ot : "") + "OT · Live" : "Live") : "Stopped") + (m.hidden ? " · hidden" : "");
       $("toggle").textContent = m.running ? "Pause" : "Start";
       if (m.sound !== soundOn) { soundOn = m.sound; paintSound(); }
       if (!!m.hidden !== clockHidden) { clockHidden = !!m.hidden; paintVis(); }
       if (!!m.foil !== foilOn) { foilOn = !!m.foil; paintFoil(); }
+      if ((m.ot || 0) !== otNow) { otNow = m.ot || 0; paintOt(); }
+      $("readout").classList.toggle("ot", otNow > 0);
     } else if (m.from === "frame") {
       lastHeard = Date.now();
       if (m.cmd === "hello") {
