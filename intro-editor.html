@@ -21,6 +21,10 @@
              {to:"intro", cmd:"update", data} (debounced). Answers the source's {from:"intro", cmd:"hello"}
              with the current settings. "Play in OBS" sends {to:"intro", cmd:"play"}.
   Status:    pings {to:"intro", cmd:"ping"} every 4 s; the light is green while the source answers.
+  Pick:      "Pick an intro" chooses Classic (everything below) or one of the HyperFrames intros in
+             intros/ (Tip-Off, Tale of the Tape, Breaking Take). Their words are fields built from each
+             intro's data-composition-variables; saved in localStorage "awym-intro-pick-v1" = {pick, vars}
+             and sent as {to:"intro", cmd:"pick", data}. Preview: intros/<name>.html driven by outros/player.js.
 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -113,6 +117,32 @@
   .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--ui-dim); }
   .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); font-weight: 700; cursor: pointer; font-size: 12px; }
   .toast { color: var(--ok); font-weight: 600; font-size: 13px; }
+
+  /* ---------- Pick an intro + the HyperFrames intros ---------- */
+  .picker { max-width: 1500px; margin: 0 auto; padding: 14px 14px 0; }
+  .picker .card { gap: 8px; }
+  .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+  .pick { text-align: left; border: 2px solid var(--ui-line); background: var(--ui-bg); border-radius: 10px; padding: 9px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+  .pick:hover { border-color: var(--ui-dim); }
+  .pick b { font-size: 15px; }
+  .pick small { color: var(--ui-dim); font-size: 12px; line-height: 1.3; }
+  .pick .len { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--ui-dim); }
+  .pick[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+  .pick[aria-pressed="true"]::before { content: "● IN OBS"; color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .8px; }
+  #hfHost { position: absolute; inset: 0; display: none; }
+  #hfHost iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; }
+  #hfTransport, #hfRack, #hfHint { display: none; }
+  body.hf #hfHost { display: block; }
+  body.hf #stage, body.hf .looks, body.hf #classicTransport, body.hf #classicHint, body.hf #rack { display: none; }
+  body.hf #hfTransport { display: flex; }
+  body.hf #hfRack { display: flex; }
+  body.hf #hfHint { display: block; }
+  .hfields { display: flex; flex-direction: column; gap: 12px; }
+  .hfield { display: flex; flex-direction: column; gap: 4px; }
+  .hfield > span { font-weight: 600; font-size: 14px; }
+  .hfield small { color: var(--ui-dim); font-size: 12px; }
+  .htwo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  .cmd { min-height: 64px; color: var(--ui-dim); }
 </style>
 </head>
 <body>
@@ -124,10 +154,24 @@
   </div>
 </header>
 
+<div class="picker">
+  <section class="card" aria-labelledby="hPickI">
+    <h2 id="hPickI">Pick an intro</h2>
+    <div class="picks" id="picks"></div>
+    <p class="hint">The one marked <b>● IN OBS</b> plays when you switch to the <b>Intro</b> scene. Classic has all the controls below; the others have their own words.</p>
+  </section>
+</div>
+
 <div class="wrap">
   <div class="col preview">
-    <div class="frame" id="frame"><div id="stage"></div></div>
-    <div class="transport">
+    <div class="frame" id="frame"><div id="stage"></div><div id="hfHost"></div></div>
+    <div class="transport" id="hfTransport">
+      <button class="btn go" type="button" id="hfPlay" aria-label="Play preview"><svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg><span id="hfPlayLbl">Play</span></button>
+      <input class="scrub" type="range" id="hfScrub" min="0" max="10" step="0.05" value="0" aria-label="Scrub the preview">
+      <span class="time" id="hfTime">0.0 / 0.0 s</span>
+      <label class="toggle" style="gap:6px">Sound <input type="checkbox" id="hfSound"></label>
+    </div>
+    <div class="transport" id="classicTransport">
       <button class="btn go" type="button" id="playBtn" aria-label="Play preview"><svg viewBox="0 0 16 16" id="playIcon"><path d="M4 2.5v11l9-5.5z"/></svg><span id="playLbl">Play</span></button>
       <button class="btn" type="button" id="replayBtn" aria-label="Replay preview from the start" title="Replay (R)"><svg viewBox="0 0 16 16"><path d="M8 2.5a5.5 5.5 0 1 1-5.3 7h1.6A4 4 0 1 0 8 4v2L4.5 3.25 8 .5z"/></svg></button>
       <input class="scrub" type="range" id="scrub" min="0" max="1000" step="1" value="0" aria-label="Scrub the preview">
@@ -143,10 +187,29 @@
       <button class="chipbtn" type="button" data-preset="chaos">Full Chaos</button>
     </div>
     <p class="warn" id="browserNote" hidden>You're editing in a web browser, and OBS keeps its own copy of the settings. To change the intro OBS plays, add this page as a dock (address in <b>In OBS</b> below), or click <b>Copy settings</b> here and <b>Paste settings</b> in the dock.</p>
-    <p class="hint">Motion and timing changes replay the preview; words and colors update in place. Everything you change goes straight to the Intro source in OBS. Keys: <b>Space</b> play/pause, <b>R</b> replay, <b>F</b> full screen.</p>
+    <p class="hint" id="hfHint">Preview sound is off unless you turn it on (OBS may pick up this dock through Desktop Audio). Every change goes straight to the Intro source in OBS.</p>
+    <p class="hint" id="classicHint">Motion and timing changes replay the preview; words and colors update in place. Everything you change goes straight to the Intro source in OBS. Keys: <b>Space</b> play/pause, <b>R</b> replay, <b>F</b> full screen.</p>
   </div>
 
   <div class="col" id="rack"></div>
+  <div class="col" id="hfRack">
+    <section class="card" aria-labelledby="hWordsI">
+      <h2 id="hWordsI">Words</h2>
+      <div class="hfields" id="hfFields"></div>
+      <div class="row"><button class="smallbtn" type="button" id="hfReset">Reset to the originals</button></div>
+    </section>
+    <section class="card" aria-labelledby="hAfterI">
+      <h2 id="hAfterI">After the intro</h2>
+      <label class="toggle">When it ends, switch to the next scene (Main Show) <input type="checkbox" id="hfNext"></label>
+      <p class="note">Only while the Intro scene is on air (needs "Advanced access to OBS", which the setup script sets).</p>
+    </section>
+    <section class="card" aria-labelledby="hFileI">
+      <h2 id="hFileI">Make a video file</h2>
+      <p class="note">These intros are HyperFrames projects (AWYM-intros-projects.zip or AWYM-more-projects.zip), so they also render to MP4 with these words. Needs Node.js 22+ and FFmpeg. In the intro's folder, run:</p>
+      <textarea class="cmd" id="hfCmd" readonly aria-label="Render command"></textarea>
+      <div class="row"><button class="smallbtn" type="button" id="hfCopy">Copy command</button><span class="toast" id="hfToast"></span></div>
+    </section>
+  </div>
 </div>
 
 <script src="shared.js"></script>
@@ -545,6 +608,7 @@
   }
   $("fsBtn").addEventListener("click", fullscreen);
   document.addEventListener("keydown", (e) => {
+    if (document.body.classList.contains("hf")) return;
     const t = e.target;
     if (t && t.matches && t.matches("input[type=text], select, textarea, button")) return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -590,7 +654,152 @@
   player.set(st);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!player.state().playing) player.set(st); });
   const reduced = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (!reduced) setTimeout(() => player.play(true), 700);
+  if (!reduced) setTimeout(() => { if (!document.body.classList.contains("hf")) player.play(true); }, 700);
+
+  /* ---------- Pick an intro: Classic or a HyperFrames intro ---------- */
+  const PKEY = "awym-intro-pick-v1";
+  const INTROS = [
+    { id: "classic", name: "Classic", len: "8–14", about: "Corners slam together, VS, the argument, name plates" },
+    { id: "tip-off", name: "Tip-Off", len: 9, poster: 7.6, about: "Jump ball into the title slam, episode and tonight's topic" },
+    { id: "tale-of-the-tape", name: "Tale of the Tape", len: 10, poster: 5.6, about: "Fight-night matchup: names, stats, VS lightning" },
+    { id: "breaking-take", name: "Breaking Take", len: 9, poster: 4.8, about: "Sports-news BREAKING parody with a headline and ticker" },
+    { id: "starting-lineup", name: "Starting Lineup", len: 12, poster: 3.6, about: "Spotlights and jerseys for up to four people (fills from the Guests page)" },
+    { id: "draft-night", name: "Draft Night", len: 10, poster: 5.6, about: "“With the 1st pick…”, tonight's topic gets drafted, cap on" },
+    { id: "arcade-mode", name: "Arcade Mode", len: 9, poster: 4.5, about: "Insert coin, pick your players, pixel title, chiptune" },
+    { id: "group-chat", name: "Family Group Chat", len: 10, poster: 5.4, about: "Texts pop in on a phone, then “Momma is typing…”" },
+    { id: "film-room", name: "Film Room", len: 10, poster: 5.2, about: "VHS tape, rewind, telestrator: let's go to the tape" }
+  ];
+  const HFLISTS = { chat: 1 };
+  const FOLDER = { "tip-off": "1-tip-off", "tale-of-the-tape": "2-tale-of-the-tape", "breaking-take": "3-breaking-take",
+    "starting-lineup": "intro-starting-lineup", "draft-night": "intro-draft-night", "arcade-mode": "intro-arcade-mode", "group-chat": "intro-group-chat", "film-room": "intro-film-room" };
+  const HINTS = { statLabels: "Separate with |", leftStats: "Separate with |", rightStats: "Separate with |", ticker: "Separate items with |",
+    chat: "One per line: Name: message (up to 6). “Me:” goes on the right.", p1Name: "Leave a player's name empty to skip them" };
+  const cleanPick = (p) => { p = p && typeof p === "object" ? p : {}; return { pick: INTROS.some((i) => i.id === p.pick) ? p.pick : "classic", vars: p.vars && typeof p.vars === "object" ? p.vars : {} }; };
+  let pk = cleanPick((() => { try { return JSON.parse(localStorage.getItem(PKEY) || "{}"); } catch (e) { return {}; } })());
+  let pkT = 0;
+  function commitPick() {
+    try { localStorage.setItem(PKEY, JSON.stringify(pk)); } catch (e) {}
+    clearTimeout(pkT); pkT = setTimeout(() => AWYM.send({ to: "intro", cmd: "pick", data: pk }), 250);
+    paintCmd();
+  }
+  function paintPicks() {
+    $("picks").innerHTML = INTROS.map((o) => `<button class="pick" type="button" data-id="${o.id}" aria-pressed="${o.id === pk.pick}"><b>${o.name}</b><small>${o.about}</small><span class="len">${o.len} s</span></button>`).join("");
+    $("picks").querySelectorAll(".pick").forEach((b) => b.onclick = () => { pk.pick = b.dataset.id; commitPick(); paintPicks(); showMode(); });
+  }
+  const isHF = () => pk.pick !== "classic";
+  function showMode() {
+    document.body.classList.toggle("hf", isHF());
+    if (isHF()) { player.pause(); $("hfNext").checked = !!st.autoNext; mountHF(INTROS.find((o) => o.id === pk.pick).poster); }
+    else { if (hfFrame) { hfFrame.remove(); hfFrame = null; } fitStage(); player.set(st); }
+  }
+
+  /* preview */
+  let hfFrame = null, hfReady = false, hfPlaying = false, hfDur = 10, hfNow = 0;
+  const schemas = {};
+  const hfTell = (cmd, extra) => { if (hfFrame && hfFrame.contentWindow) hfFrame.contentWindow.postMessage(Object.assign({ awymOutro: 1, cmd, muted: !$("hfSound").checked }, extra || {}), "*"); };
+  function fitHF() { if (hfFrame) hfFrame.style.transform = `scale(${$("frame").clientWidth / 1920})`; }
+  addEventListener("resize", fitHF);
+  function mountHF(at) {
+    hfReady = false; hfPlaying = false; paintHFPlay();
+    const f = document.createElement("iframe");
+    f.title = "Intro preview";
+    f.src = "intros/" + pk.pick + ".html?muted=1&at=" + (at || 0) + "&vars=" + encodeURIComponent(JSON.stringify(pk.vars[pk.pick] || {}));
+    $("hfHost").appendChild(f);
+    const old = hfFrame; hfFrame = f; fitHF();
+    if (old) setTimeout(() => old.remove(), 350);
+  }
+  addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || !m.awymOutro || !hfFrame || e.source !== hfFrame.contentWindow) return;
+    if (m.ev === "ready") {
+      hfReady = true; hfDur = m.duration; $("hfScrub").max = hfDur;
+      schemas[pk.pick] = m.schema || [];
+      if ($("hfFields").dataset.view !== pk.pick) buildHF();
+      hfSetTime(+new URL(hfFrame.src).searchParams.get("at") || 0);
+    } else if (m.ev === "time") { hfPlaying = m.playing; hfSetTime(m.t); paintHFPlay(); }
+    else if (m.ev === "done") { hfPlaying = false; paintHFPlay(); }
+  });
+  function hfSetTime(t) { hfNow = t; $("hfScrub").value = t; $("hfTime").textContent = `${t.toFixed(1)} / ${hfDur.toFixed(1)} s`; }
+  function paintHFPlay() { $("hfPlayLbl").textContent = hfPlaying ? "Pause" : "Play"; }
+  $("hfPlay").onclick = () => {
+    if (!hfReady) return;
+    if (hfPlaying) { hfTell("pause"); hfPlaying = false; } else { hfTell("play", { t: hfNow >= hfDur - .1 ? 0 : hfNow }); hfPlaying = true; }
+    paintHFPlay();
+  };
+  $("hfScrub").oninput = () => { if (hfReady) { hfTell("seek", { t: +$("hfScrub").value }); hfPlaying = false; paintHFPlay(); hfSetTime(+$("hfScrub").value); } };
+  $("hfSound").onchange = () => hfTell("noop");
+
+  /* words */
+  const escH = (v) => String(v == null ? "" : v).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const valOf = (v) => (pk.vars[pk.pick] && pk.vars[pk.pick][v.id] !== undefined ? pk.vars[pk.pick][v.id] : v.default);
+  const lbl = (v) => String(v.label || v.id).replace(/\s*\(.*\)\s*$/, "");
+  function fieldHTML(v) {
+    const hint = HINTS[v.id] ? `<small>${HINTS[v.id]}</small>` : "";
+    if (HFLISTS[v.id]) return `<label class="hfield"><span>${escH(lbl(v))}</span><textarea data-hv="${v.id}" rows="6" spellcheck="false">${escH(String(valOf(v)).split("|").map((x) => x.trim()).join("\n"))}</textarea>${hint}</label>`;
+    return `<label class="hfield"><span>${escH(lbl(v))}</span><input type="text" data-hv="${v.id}" value="${escH(valOf(v))}">${hint}</label>`;
+  }
+  function buildHF() {
+    const sc = schemas[pk.pick] || [], box = $("hfFields"); box.dataset.view = pk.pick;
+    let html = "";
+    const used = new Set();
+    for (const a of sc) {
+      if (used.has(a.id)) continue;
+      // left/right pairs side by side (leftName + rightName, leftStats + rightStats…)
+      const partner = /^left/.test(a.id) && sc.find((x) => x.id === a.id.replace(/^left/, "right"));
+      if (partner) { used.add(partner.id); html += `<div class="htwo">${fieldHTML(a)}${fieldHTML(partner)}</div>`; }
+      else html += fieldHTML(a);
+    }
+    box.innerHTML = html || '<p class="note">This intro has no words to change.</p>';
+    box.querySelectorAll("[data-hv]").forEach((el) => el.addEventListener("input", () => {
+      const val = HFLISTS[el.dataset.hv] ? el.value.split("\n").map((x) => x.trim()).filter(Boolean).join("|") : el.value;
+      pk.vars[pk.pick] = Object.assign({}, pk.vars[pk.pick] || {}, { [el.dataset.hv]: val });
+      commitPick();
+      clearTimeout(buildHF.t); buildHF.t = setTimeout(() => mountHF(hfPlaying ? INTROS.find((o) => o.id === pk.pick).poster : hfNow), 350);
+    }));
+  }
+  $("hfReset").onclick = () => { delete pk.vars[pk.pick]; commitPick(); $("hfFields").dataset.view = ""; mountHF(hfNow); };
+  $("hfNext").onchange = () => { st.autoNext = $("hfNext").checked; syncControls(); commit(); };
+
+  /* MP4 command */
+  function paintCmd() {
+    if (!isHF()) return;
+    const vars = pk.vars[pk.pick] || {};
+    $("hfCmd").value = `cd ${FOLDER[pk.pick]}\nnpx hyperframes render` + (Object.keys(vars).length ? ` --variables '${JSON.stringify(vars).replace(/'/g, "\u2019")}'` : "");
+  }
+  $("hfCopy").onclick = () => copyText($("hfCmd").value, $("hfCopy"));
+
+  /* OBS: the source gets the pick too */
+  AWYM.listen((m) => { if (m.from === "intro" && m.cmd === "hello") AWYM.send({ to: "intro", cmd: "pick", data: pk }); });
+  $("playObs").addEventListener("click", () => AWYM.send({ to: "intro", cmd: "pick", data: pk }), true);
+  /** Guests page names → the HyperFrames intros that show people:
+      Tale of the Tape (top-left / top-right), Arcade Mode (P1 / P2), Starting Lineup (all four seats). */
+  function namesToVars(vars, plates) {
+    vars = Object.assign({}, vars || {});
+    const P = ["tl", "tr", "ll", "lr"].map((k) => (plates && plates[k]) || {});
+    const tale = Object.assign({}, vars["tale-of-the-tape"] || {});
+    if (P[0].name) { tale.leftName = P[0].name; tale.leftRole = P[0].role || ""; }
+    if (P[1].name) { tale.rightName = P[1].name; tale.rightRole = P[1].role || ""; }
+    vars["tale-of-the-tape"] = tale;
+    const arc = Object.assign({}, vars["arcade-mode"] || {});
+    if (P[0].name) arc.p1 = P[0].name;
+    if (P[1].name) arc.p2 = P[1].name;
+    vars["arcade-mode"] = arc;
+    if (P.some((p) => p.name)) {
+      const sl = Object.assign({}, vars["starting-lineup"] || {});
+      P.forEach((p, i) => { sl["p" + (i + 1) + "Name"] = p.name || ""; sl["p" + (i + 1) + "Pos"] = p.role || ""; if (!p.name) sl["p" + (i + 1) + "Stat"] = ""; });
+      vars["starting-lineup"] = sl;
+    }
+    return vars;
+  }
+  AWYM.listen((m) => {
+    if (m.to !== "intro" || m.cmd !== "names" || !m.plates) return;
+    pk.vars = namesToVars(pk.vars, m.plates);
+    try { localStorage.setItem(PKEY, JSON.stringify(pk)); } catch (e) {}
+    if (["tale-of-the-tape", "arcade-mode", "starting-lineup"].includes(pk.pick)) { $("hfFields").dataset.view = ""; mountHF(hfNow); paintCmd(); }
+  });
+
+
+  paintPicks(); paintCmd(); showMode();
 })();
 </script>
 </body>

@@ -6,8 +6,11 @@ This kit includes or uses the following. Everything else was written for this pr
 |---|---|---|
 | [anime.js](https://github.com/juliangarnier/anime) 4.5.0 by Julian Garnier | `lib/anime.umd.min.js` | MIT, see `lib/anime-LICENSE.txt` |
 | [SFX Kit](https://github.com/wyzowl/sfx-kit) by Wyzowl: applause, cha-ching, correct, wrong, swoosh, boing and mic drop (converted to Ogg and levelled) | `sounds/kit/` | CC0 1.0 (public domain), see `sounds/kit/LICENSE-CC0.txt` and `sounds/kit/CREDITS.txt` |
-| Emoji on the key pictures and the placeholder faces ([Noto Color Emoji](https://github.com/googlefonts/noto-emoji), Google) | `icons/hotkeys/*.png`, `avatars/seat1/*.jpg`, `avatars/thumbs.js` | SIL Open Font License 1.1 / Apache 2.0 |
+| Emoji on the key pictures in `icons/hotkeys/` ([Noto Color Emoji](https://github.com/googlefonts/noto-emoji), Google) | `icons/hotkeys/*.png` | SIL Open Font License 1.1 / Apache 2.0 |
 | Web fonts (Google Fonts), loaded at runtime, not included | `theme.css`, overlays | SIL Open Font License 1.1 (per font) |
+| [GSAP](https://gsap.com) 3 by GreenSock (Webflow) | `outros/assets/gsap.min.js` | GSAP Standard License (free to use), see gsap.com/standard-license |
+| Bungee, Anton, Barlow Condensed and Press Start 2P fonts (via [Fontsource](https://fontsource.org)) | `outros/assets/fonts/` | SIL Open Font License 1.1, see the LICENSE files there |
+| The outros are [HyperFrames](https://github.com/heygen-com/hyperframes) compositions (HeyGen); the framework itself is not included | `outros/` | — |
 
 Services used at runtime (not included, subject to their own terms):
 

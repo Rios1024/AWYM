@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"p1Name","type":"string","label":"Player 1","default":"The Moderator"},
+  {"id":"p1Pos","type":"string","label":"Player 1 position","default":"Keeper of the peace"},
+  {"id":"p1Stat","type":"string","label":"Player 1 stat","default":"0 arguments won, 100 refereed"},
+  {"id":"p2Name","type":"string","label":"Player 2","default":"The Hosts"},
+  {"id":"p2Pos","type":"string","label":"Player 2 position","default":"Hot take specialists"},
+  {"id":"p2Stat","type":"string","label":"Player 2 stat","default":"87 takes, 12 receipts"},
+  {"id":"p3Name","type":"string","label":"Player 3","default":"Yo Momma"},
+  {"id":"p3Pos","type":"string","label":"Player 3 position","default":"Undisputed closer"},
+  {"id":"p3Stat","type":"string","label":"Player 3 stat","default":"Never lost an argument. Ever."},
+  {"id":"p4Name","type":"string","label":"Player 4","default":""},
+  {"id":"p4Pos","type":"string","label":"Player 4 position","default":""},
+  {"id":"p4Stat","type":"string","label":"Player 4 stat","default":""}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Intro: Starting Lineup</title>
+  <script src="../outros/player.js"></script>
+  <script src="../outros/assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="../outros/assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel) -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #bg { background: radial-gradient(ellipse 70% 60% at 50% 70%, #24123f 0%, #12081f 60%, #050208 100%); }
+    #floor { left: -10%; right: -10%; bottom: -2px; height: 420px; transform: perspective(700px) rotateX(60deg); transform-origin: 50% 100%; opacity: .4;
+      background: repeating-linear-gradient(90deg, rgba(0,0,0,.2) 0 2px, transparent 2px 110px), linear-gradient(180deg, #6b3a17, #b8652a);
+      -webkit-mask-image: linear-gradient(180deg, transparent, #000 60%); mask-image: linear-gradient(180deg, transparent, #000 60%); }
+    .beam { top: -120px; width: 700px; height: 1400px; margin-left: -350px; transform-origin: 50% 0; mix-blend-mode: screen;
+      background: linear-gradient(180deg, rgba(255,230,180,.55), rgba(255,230,180,0) 85%); clip-path: polygon(46% 0, 54% 0, 100% 100%, 0 100%); }
+    #b1 { left: 30%; } #b2 { left: 70%; }
+    #pool { left: 50%; top: 820px; width: 900px; height: 160px; margin-left: -450px; border-radius: 50%; background: radial-gradient(ellipse, rgba(255,230,180,.45), transparent 70%); }
+    #ann { z-index: 5; flex-direction: column; }
+    #ann .a1 { font-family: var(--font-body); font-weight: 700; font-size: 54px; letter-spacing: 16px; text-transform: uppercase; color: var(--gold); }
+    #ann .a2 { margin-top: 10px; font-family: var(--font-display); font-size: 150px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center;
+      text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.45); }
+    .pl { z-index: 6; left: 0; right: 0; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; gap: 70px; }
+    .jersey { width: 360px; height: 420px; flex: none; position: relative; }
+    .jersey svg { width: 100%; height: 100%; filter: drop-shadow(0 26px 40px rgba(0,0,0,.6)); }
+    .jersey .num { position: absolute; left: 0; right: 0; top: 150px; text-align: center; font-family: var(--font-heading); font-size: 170px; line-height: 1; color: var(--light);
+      -webkit-text-stroke: 6px var(--dark); paint-order: stroke fill; }
+    .info { width: 900px; display: flex; flex-direction: column; }
+    .info .pos { font-family: var(--font-body); font-weight: 700; font-size: 46px; letter-spacing: 8px; text-transform: uppercase; color: var(--gold); }
+    .info .nm { font-family: var(--font-display); font-size: 140px; line-height: .95; text-transform: uppercase; color: var(--light); text-shadow: 0 10px 0 rgba(0,0,0,.45); }
+    .info .st { margin-top: 22px; align-self: flex-start; font-family: var(--font-heading); font-size: 50px; letter-spacing: 2px; text-transform: uppercase;
+      color: var(--dark); background: var(--light); padding: 6px 26px 10px; border-radius: 10px; box-shadow: 0 8px 0 rgba(0,0,0,.35); }
+    #final { z-index: 7; flex-direction: column; gap: 40px; }
+    #final .t { font-family: var(--font-display); font-size: 130px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center;
+      text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.45); }
+    #final .t em { font-style: normal; color: var(--primary); }
+    #row { display: flex; gap: 26px; }
+    .chip { width: 330px; padding: 16px 18px 18px; border-radius: 16px; background: rgba(18,10,31,.8); border: 4px solid var(--primary); text-align: center; }
+    .chip b { display: block; font-family: var(--font-heading); font-size: 50px; line-height: 1.05; text-transform: uppercase; color: var(--light); }
+    .chip span { display: block; font-family: var(--font-body); font-weight: 700; font-size: 26px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); }
+    #flash { z-index: 30; background: #fff; }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="starting-lineup" data-start="0" data-duration="12" data-width="1920" data-height="1080" data-fps="30">
+    <div id="arena" class="clip" data-start="0" data-duration="12" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="floor" class="abs"></div>
+      <div id="pool" class="abs"></div>
+      <div id="b1" class="abs beam"></div>
+      <div id="b2" class="abs beam"></div>
+    </div>
+    <div id="ann" class="clip center" data-start="0.4" data-duration="2.2" data-track-index="1">
+      <div class="a1">And now&hellip; tonight's</div>
+      <div class="a2">Starting<br>Lineup</div>
+    </div>
+    <div id="players" class="clip" data-start="2.5" data-duration="7.7" data-track-index="2"></div>
+    <div id="final" class="clip center" data-start="10.1" data-duration="1.9" data-track-index="3">
+      <div class="t">Argue with <em>Yo Momma!</em></div>
+      <div id="row"></div>
+    </div>
+    <div id="flash" class="clip" data-start="10.05" data-duration="0.6" data-track-index="4"></div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="12" data-track-index="5" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="12" data-track-index="5" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="11.4" data-duration="0.6" data-track-index="6"></div>
+
+    <audio id="sfx-01-crowd" data-start="0" data-duration="6" data-track-index="10" src="../outros/assets/sfx/crowd.wav" data-volume="0.3" data-fade-in="1"></audio>
+    <audio id="sfx-02-riser" data-start="0.2" data-duration="2" data-track-index="11" src="../outros/assets/sfx/riser.wav" data-volume="0.45"></audio>
+    <audio id="sfx-03-beat" data-start="2.3" data-duration="9.7" data-track-index="12" src="../outros/assets/sfx/beat.wav" data-volume="0.5" data-fade-out="1"></audio>
+    <audio id="sfx-04-hit" data-start="2.55" data-duration="1.6" data-track-index="13" src="../outros/assets/sfx/hit.wav" data-volume="0.55"></audio>
+    <audio id="sfx-05-hit" data-start="4.45" data-duration="1.6" data-track-index="14" src="../outros/assets/sfx/hit.wav" data-volume="0.55"></audio>
+    <audio id="sfx-06-hit" data-start="6.35" data-duration="1.6" data-track-index="15" src="../outros/assets/sfx/hit.wav" data-volume="0.55"></audio>
+    <audio id="sfx-07-hit" data-start="8.25" data-duration="1.6" data-track-index="16" src="../outros/assets/sfx/hit.wav" data-volume="0.55"></audio>
+    <audio id="sfx-08-crowd" data-start="10.0" data-duration="2" data-track-index="17" src="../outros/assets/sfx/crowd.wav" data-volume="0.45" data-fade-out="1"></audio>
+    <audio id="sfx-09-hit" data-start="10.1" data-duration="1.6" data-track-index="18" src="../outros/assets/sfx/hit.wav" data-volume="0.8"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === null ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const DEF = [["The Moderator", "Keeper of the peace", "0 arguments won, 100 refereed"], ["The Hosts", "Hot take specialists", "87 takes, 12 receipts"],
+                 ["Yo Momma", "Undisputed closer", "Never lost an argument. Ever."], ["", "", ""]];
+    const NUMS = ["00", "23", "1", "34"];
+    const people = [1, 2, 3, 4].map((i) => ({ n: get("p" + i + "Name", DEF[i - 1][0]).trim(), p: get("p" + i + "Pos", DEF[i - 1][1]), s: get("p" + i + "Stat", DEF[i - 1][2]), num: NUMS[i - 1] }))
+      .filter((x) => x.n);
+    const COLORS = ["#F26B1D", "#FF3D7F", "#A238FF", "#FFB23E"];
+    const box = document.getElementById("players");
+    box.innerHTML = people.map((x, i) => `
+      <div class="pl abs" id="pl${i}" style="flex-direction:${i % 2 ? "row-reverse" : "row"}">
+        <div class="jersey"><svg viewBox="0 0 360 420"><path d="M95,10 L140,10 Q180,60 220,10 L265,10 L350,70 L310,170 L280,150 L280,410 L80,410 L80,150 L50,170 L10,70 Z" fill="${COLORS[i]}" stroke="#120A1F" stroke-width="8"/>
+          <path d="M140,10 Q180,60 220,10" fill="none" stroke="#FFF4E0" stroke-width="10"/></svg><div class="num">${x.num}</div></div>
+        <div class="info" style="text-align:${i % 2 ? "right" : "left"};align-items:${i % 2 ? "flex-end" : "flex-start"}">
+          <div class="pos">${esc(x.p)}</div><div class="nm">${esc(x.n)}</div>${x.s ? `<div class="st" style="align-self:${i % 2 ? "flex-end" : "flex-start"}">${esc(x.s)}</div>` : ""}</div>
+      </div>`).join("");
+    document.querySelectorAll(".nm").forEach((el) => { const n = el.textContent.length; if (n > 11) el.style.fontSize = Math.max(70, 140 * 11 / n) + "px"; });
+    document.getElementById("row").innerHTML = people.map((x) => `<div class="chip"><b>${esc(x.n)}</b><span>${esc(x.p)}</span></div>`).join("");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#b1", { rotation: -35 }, { rotation: 25, duration: 2.4, ease: "sine.inOut" }, 0);
+    tl.fromTo("#b2", { rotation: 35 }, { rotation: -25, duration: 2.4, ease: "sine.inOut" }, 0);
+    tl.fromTo(".beam", { opacity: 0 }, { opacity: 1, duration: .5 }, 0);
+    tl.fromTo("#ann .a1", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .5, ease: "power3.out" }, .4);
+    tl.fromTo("#ann .a2", { opacity: 0, scale: 1.6 }, { opacity: 1, scale: 1, duration: .45, ease: "power3.out" }, .9);
+    tl.to("#ann", { opacity: 0, scale: .9, duration: .3 }, 2.25);
+    // each player gets a 1.9 s slot from 2.5 s (in time with the hits); the last one holds until 10.1 s
+    ["sfx-04-hit", "sfx-05-hit", "sfx-06-hit", "sfx-07-hit"].forEach((id, i) => { if (i >= people.length) document.getElementById(id).setAttribute("data-volume", "0"); });
+    people.forEach((x, i) => {
+      const at = 2.5 + i * 1.9, share = i === people.length - 1 ? 10.1 - at : 1.9, sel = "#pl" + i, side = i % 2 ? 1 : -1;
+      tl.set(sel, { opacity: 0 }, 0);
+      tl.set(sel, { opacity: 1 }, at);
+      tl.to(".beam", { rotation: (k) => (k === 0 ? 8 : -8) * -side, duration: .4, ease: "power2.out" }, at);
+      tl.fromTo(sel + " .jersey", { x: side * 900, rotation: side * 25 }, { x: 0, rotation: 0, duration: .45, ease: "power3.out" }, at);
+      tl.fromTo(sel + " .nm", { x: -side * 600, opacity: 0 }, { x: 0, opacity: 1, duration: .4, ease: "power3.out" }, at + .1);
+      tl.fromTo(sel + " .pos", { y: -30, opacity: 0 }, { y: 0, opacity: 1, duration: .35, ease: "power3.out" }, at + .3);
+      if (x.s) tl.fromTo(sel + " .st", { scaleX: 0 }, { scaleX: 1, duration: .35, ease: "back.out(2)" }, at + .5);
+      tl.to(sel, { scale: 1.04, duration: share - .5, ease: "none" }, at + .1);
+      tl.to(sel, { opacity: 0, x: side * -300, duration: .3, ease: "power2.in" }, at + share - .3);
+    });
+    tl.fromTo("#flash", { opacity: .9 }, { opacity: 0, duration: .5 }, 10.05);
+    tl.fromTo("#final .t", { scale: 1.8, opacity: 0 }, { scale: 1, opacity: 1, duration: .35, ease: "power4.in" }, 10.1);
+    tl.fromTo(".chip", { y: 120, opacity: 0 }, { y: 0, opacity: 1, duration: .35, stagger: .08, ease: "back.out(1.8)" }, 10.35);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .55 }, 11.4);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["starting-lineup"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

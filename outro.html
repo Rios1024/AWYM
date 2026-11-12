@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AWYM Show Outro</title>
+<!--
+  SHOW OUTRO: OBS browser source
+  Source size: 1920 x 1080 (same as your canvas). It's full screen, so it can be
+  the only source in its scene ("Outro", made by the setup script).
+
+  What it does: plays the outro picked in the Outro Editor (Final Buzzer,
+  Final Score, Chalk Talk Credits, Mic Drop End Screen, Postgame Presser,
+  Highlight Reel, Group Chat Wrap-Up, Power Rankings or Lights Out) with your words,
+  names and scores. The outros themselves are in the outros folder; they
+  are HyperFrames compositions, so the same files also render to MP4.
+
+  Plays: every time its scene goes live (tick "Refresh browser when scene
+  becomes active"), when "Play in OBS" is pressed in the Outro Editor, or when
+  it's sent {to:"outro", cmd:"play"}. It holds the last frame (black) at the end.
+
+  URL settings (all optional; the setup script fills them in):
+    ?scene=Outro                  the name of the scene this source is in
+    &next=Thanks%20for%20Watching when the outro ends, switch to this scene (only if
+                                  the "scene" scene is the one on air and "Then switch"
+                                  is on in the editor). Needs the source's Page
+                                  permissions set to "Advanced access to OBS".
+    &autoplay=0                   don't play on load; wait for "Play in OBS"
+    &pick=final-score             always play this outro (ignores the editor's pick)
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      OBS browser source, 1920 × 1080.
+  Uses:      shared.js; outros/<name>.html in an iframe, driven by outros/player.js.
+  Settings:  localStorage "awym-outro-v1" = {pick, vars: {<outro>: {<variable>: value}}, autoNext}
+  Messages:  listens to:"outro"  play | stop | ping | update {data: settings}
+             sends   from:"outro" {cmd:"hello"} on load · {cmd:"here", playing, pick, duration}
+                                  (answer to ping) · {cmd:"state", playing} · {cmd:"done"}
+             Clear (🚨) hides it until it plays again.
+-->
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  #stage iframe { position: absolute; inset: 0; width: 1920px; height: 1080px; border: 0; background: transparent; }
+  body.hidden #stage { visibility: hidden; }
+</style>
+</head>
+<body>
+  <div id="stage"></div>
+<script src="shared.js"></script>
+<script>
+(function () {
+  const KEY = "awym-outro-v1";
+  const OUTROS = ["final-buzzer", "final-score", "chalk-credits", "mic-drop-endscreen", "postgame-presser", "highlight-reel", "group-chat-wrap", "power-rankings", "lights-out"];
+  const stage = document.getElementById("stage");
+  function fit() {
+    const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+    stage.style.transform = `translate(${(innerWidth - 1920 * s) / 2}px, ${(innerHeight - 1080 * s) / 2}px) scale(${s})`;
+  }
+  addEventListener("resize", fit); fit();
+
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } };
+  const save = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} };
+  const clean = (s) => {
+    s = s && typeof s === "object" ? s : {};
+    const pick = OUTROS.includes(AWYM.param("pick")) ? AWYM.param("pick") : (OUTROS.includes(s.pick) ? s.pick : OUTROS[0]);
+    return { pick, vars: s.vars && typeof s.vars === "object" ? s.vars : {}, autoNext: !!s.autoNext };
+  };
+
+  let settings = clean(load()), pending = null;
+  let frame = null, ready = false, playing = false, duration = 0, wantPlay = AWYM.param("autoplay") !== "0";
+  const say = (msg) => AWYM.send(Object.assign({ from: "outro" }, msg));
+  const tell = (cmd, extra) => { if (frame && frame.contentWindow) frame.contentWindow.postMessage(Object.assign({ awymOutro: 1, cmd }, extra || {}), "*"); };
+
+  /** (Re)load the picked outro with its words. Starts it if a play is waiting. */
+  function mount() {
+    ready = false; playing = false;
+    const vars = settings.vars[settings.pick] || {};
+    const f = document.createElement("iframe");
+    f.setAttribute("allow", "autoplay");
+    f.src = "outros/" + settings.pick + ".html?vars=" + encodeURIComponent(JSON.stringify(vars));
+    stage.appendChild(f);
+    if (frame) { const old = frame; setTimeout(() => old.remove(), 400); }   // swap without a blank flash
+    frame = f;
+  }
+
+  addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || !m.awymOutro || !frame || e.source !== frame.contentWindow) return;
+    if (m.ev === "ready") {
+      ready = true; duration = m.duration;
+      if (wantPlay) play(); else tell("seek", { t: 0 });
+    } else if (m.ev === "done") {
+      playing = false; say({ cmd: "state", playing: false }); say({ cmd: "done" });
+      if (pending) { settings = pending; pending = null; wantPlay = false; mount(); }
+      setTimeout(goNext, 400);
+    }
+  });
+
+  function play() {
+    document.body.classList.remove("hidden");
+    if (!ready) { wantPlay = true; return; }
+    wantPlay = false; playing = true;
+    tell("play", { t: 0, muted: false });
+    say({ cmd: "state", playing: true });
+  }
+
+  /** Switch OBS to the next scene, but only if the outro's own scene is the one on air. */
+  function goNext() {
+    const next = AWYM.param("next"), mine = AWYM.param("scene");
+    const o = window.obsstudio;
+    if (!settings.autoNext || !next || !o || typeof o.setCurrentScene !== "function") return;
+    const go = () => { try { o.setCurrentScene(next); } catch (e) {} };
+    if (mine && typeof o.getCurrentScene === "function") {
+      try { o.getCurrentScene((sc) => { if (sc && sc.name === mine) go(); }); } catch (e) {}
+    } else if (!mine) go();
+  }
+
+  AWYM.listen((m) => {
+    if (m.to !== "outro") return;
+    if (m.cmd === "play") play();
+    else if (m.cmd === "stop") { tell("stop"); playing = false; say({ cmd: "state", playing: false }); }
+    else if (m.cmd === "ping") say({ cmd: "here", playing, pick: settings.pick, duration: Math.round(duration) });
+    else if (m.cmd === "update" && m.data) {
+      const next = clean(m.data);
+      if (JSON.stringify(next) === JSON.stringify(settings)) return;
+      if (playing) { pending = next; return; }       // don't restart an outro that's on air
+      settings = next; mount();
+    }
+  });
+  AWYM.onClear(() => { tell("stop"); playing = false; document.body.classList.add("hidden"); });
+
+  // OBS: play again whenever this source goes live (covers sources without "Refresh when active")
+  addEventListener("obsSourceActiveChanged", (e) => { if (e.detail && e.detail.active && !playing) { wantPlay = true; if (ready) play(); } });
+  // if the settings were saved by the editor in another window, pick them up
+  addEventListener("storage", (e) => { if (e.key === KEY && !playing) { const n = clean(load()); if (JSON.stringify(n) !== JSON.stringify(settings)) { settings = n; mount(); } } });
+
+  mount();
+  say({ cmd: "hello" });
+})();
+</script>
+</body>
+</html>

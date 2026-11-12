@@ -84,7 +84,16 @@ What's in this folder
                       the title, name plates; then it switches to Main Show
   intro-editor.html   Dock: change the intro's words, stamps, names, fonts, colors and
                       motion with a live preview, and play it in OBS
-  intro.js / intro.css  The intro's animation and look (no need to touch)
+  intro.js / intro.css  The Classic intro's animation and look (no need to touch)
+  intros/             Three more intros to pick from in the Intro Editor (Tip-Off, Tale
+                      of the Tape, Breaking Take; HyperFrames compositions that also
+                      render to MP4). They share outros/player.js and outros/assets.
+  outro.html          Full-screen show outro: plays the outro picked in the Outro
+                      Editor (it can then switch to Thanks for Watching)
+  outro-editor.html   Dock: pick the outro, change its names, scores and credits with
+                      a live preview, and play it in OBS
+  outros/             The four outros (HyperFrames compositions; they also render to
+                      MP4) with their fonts, sounds and player.js
   shot-clock.html     Segment timer styled like an arena shot clock (buzzer included)
   lower-third.html    Name / role / handle / jersey-number graphic
   frame.html          Themed ring + name plate for circle-cutout cameras
@@ -259,9 +268,36 @@ SHOW INTRO (plays at the start of the show)
   the tagline, the episode badge and up to four name plates, and it wipes to
   black and switches to Main Show by itself.
 
+  Pick an intro: the Intro Editor's top row has four. The one marked
+  "● IN OBS" is what the Intro scene plays.
+    Classic            the one described above, with every control below
+    Tip-Off       9 s  a jump ball flies into the camera, the title slams in
+                       on a basketball, episode badge, tagline, tonight's topic
+    Tale of the Tape 10 s  fight-night matchup: two corners (names and a line
+                       each), up to four stats, VS lightning, then the title.
+                       The Guests page's "Send names" fills the two corners
+                       from the top-left and top-right seats.
+    Breaking Take 9 s  sports-news BREAKING parody: headline typed out in a
+                       lower third, a scrolling ticker, LIVE badge, episode
+    Starting Lineup 12 s  spotlights and jerseys for up to four people (name,
+                       position line, stat); "Send names" on the Guests page
+                       fills all four seats
+    Draft Night  10 s  "With the 1st pick in tonight's argument, Yo Momma
+                       selects…" and tonight's topic gets drafted, cap on
+    Arcade Mode   9 s  insert coin, select your players (P1/P2 from the Guests
+                       page), pixel title, chiptune, Round 1: your topic
+    Family Group Chat 10 s  texts pop in on a phone (one per line, "Name:
+                       message"; "Me:" is on the right), then "Momma is typing…"
+    Film Room    10 s  VHS tape: play, rewind, pause, a telestrator circles the
+                       play and writes your note, "Let's go to the tape"
+  All but Classic have their own Words card (stats and ticker items are
+  separated by |), "When it ends, switch to the next scene", and a render
+  command for an MP4 (with the HyperFrames projects in
+  AWYM-intros-projects.zip, Node.js 22+ and FFmpeg).
+
   To change it, add intro-editor.html as a dock (Docks → Custom Browser
   Docks…, dock name "Intro Editor"; the address is in START-HERE and in the
-  Scripts window). It has a live preview and sliders for:
+  Scripts window). For Classic it has a live preview and sliders for:
     Words       top line, big line, tagline, episode label, the two bubbles
     Name plates four corners, each with name, role, handle and jersey number
                 (built like the lower thirds; blank name = no plate). The
@@ -284,6 +320,60 @@ SHOW INTRO (plays at the start of the show)
   lets it switch to Main Show; it only switches while Intro is on air).
     &scene=…  the intro's own scene   &next=…  the scene to go to afterwards
     &autoplay=0  wait for "Play in OBS"   &bg=0  transparent until the corners arrive
+
+
+SHOW OUTRO
+----------
+  "Build my scenes" makes an Outro scene for you (just before Thanks for
+  Watching). Switch to it and the outro plays. There are four:
+    Final Buzzer         12 s  shot clock 0:05 → buzzer, "THAT'S THE GAME!",
+                               confetti, show title, Subscribe · Like · Argue
+    Final Score          14 s  scoreboard, scores roll up, WINNER ribbon, take
+                               of the night, next episode teaser
+    Chalk Talk Credits   16 s  a play drawn in chalk while the credits roll,
+                               eraser wipe, "See y'all next week"
+    Mic Drop End Screen  20 s  mic drop, then a YouTube end screen with dashed
+                               boxes for two videos and the Subscribe button
+    Postgame Presser     13 s  press-conference podium, camera flashes, a
+                               closing quote, "No further questions."
+    Highlight Reel       15 s  countdown of the night's top takes (up to five);
+                               "Fill from receipts" uses the last five takes
+                               logged in the Show Runner's Receipts
+    Group Chat Wrap-Up   12 s  the family reacts in texts, then "Momma left the
+                               chat"
+    Power Rankings       13 s  up to five names shuffle into tonight's order
+                               with up/down arrows; #1 gets the crown
+    Lights Out           12 s  the arena lights shut off bank by bank, a broom
+                               sweeps the court, the scoreboard signs off
+
+  To pick one and change its words, add outro-editor.html as a dock (Docks →
+  Custom Browser Docks…, dock name "Outro Editor"; the address is in
+  START-HERE and in the Scripts window). It has:
+    Pick an outro     the one marked "● IN OBS" plays in the Outro scene
+    Words             names, scores, take of the night, next episode,
+                      credits (one "Role = Name" per line), sign-off…
+    After the outro   switch to Thanks for Watching when it ends (only while
+                      Outro is on air), or hold on black
+    Preview           play or scrub the preview (muted unless you tick Sound)
+    Play in OBS       plays it in the Outro source now
+  Every change goes straight to the Outro source and is saved. Opened in a
+  normal web browser, the editor can't reach OBS: use Copy settings there and
+  Paste settings in the dock.
+
+  Video files (e.g. a YouTube end screen): the outros are HyperFrames
+  compositions. With the HyperFrames projects (AWYM-outros-projects.zip),
+  Node.js 22+ and FFmpeg, the editor's "Copy command" gives the line that
+  renders an MP4 with your words. Or record the Outro scene in OBS.
+
+  The outros follow theme.css (colors and fonts) and carry their own fonts and
+  sounds in outros/assets, so they work offline too.
+
+  Adding it by hand: Browser source,
+  outro.html?scene=Outro&next=Thanks%20for%20Watching, 1920 x 1080, in a scene
+  called "Outro". Untick Local file, tick Control audio via OBS and Refresh
+  browser when scene becomes active, and set Page permissions to "Advanced
+  access to OBS". &autoplay=0 waits for "Play in OBS"; &pick=final-score
+  always plays that outro.
 
 
 SHOW PACKS (for your other shows)

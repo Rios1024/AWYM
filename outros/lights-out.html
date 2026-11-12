@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"message","type":"string","label":"Scoreboard message","default":"See y’all next week"},
+  {"id":"sub","type":"string","label":"Scoreboard second line","default":"Next: all-time starting five"},
+  {"id":"thanks","type":"string","label":"First line on the scoreboard","default":"Thanks for watching"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Lights Out</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #arena { background: linear-gradient(180deg, #1c1030 0%, #2c1a48 45%, #1a0f2c 62%); }
+    .seats { left: 0; right: 0; height: 60px; background: repeating-linear-gradient(90deg, #3a2560 0 26px, #2a1a46 26px 34px); opacity: .8; }
+    #floor { left: -10%; right: -10%; top: 640px; bottom: -2px; background: repeating-linear-gradient(90deg, rgba(0,0,0,.15) 0 3px, transparent 3px 120px), linear-gradient(180deg, #b8692c, #d98c46);
+      transform: perspective(900px) rotateX(48deg); transform-origin: 50% 0; }
+    #floor svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #floor svg path, #floor svg circle { fill: none; stroke: rgba(255,255,255,.8); stroke-width: 8; }
+    .bank { top: 30px; width: 300px; height: 70px; display: flex; gap: 12px; justify-content: center; align-items: center; background: #120A1F; border-radius: 10px; padding: 8px; z-index: 3; }
+    .bank i { width: 50px; height: 50px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #fff, #ffe9b8 55%, #e0a84a); box-shadow: 0 0 30px #ffe2a0, 0 0 70px rgba(255,226,160,.6); }
+    .bank.off i { background: #2e2638; box-shadow: none; }
+    .glow { top: 90px; width: 700px; height: 900px; margin-left: -200px; background: radial-gradient(ellipse 50% 60% at 50% 0%, rgba(255,230,180,.35), transparent 70%); z-index: 2; mix-blend-mode: screen; }
+    #dark { z-index: 4; background: #05030a; pointer-events: none; }
+    #board { left: 50%; top: 170px; width: 1100px; height: 400px; margin-left: -550px; z-index: 6; background: #0b0710; border: 14px solid #2b2236; border-radius: 22px;
+      box-shadow: 0 30px 60px rgba(0,0,0,.6); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 20px 40px; }
+    #board::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(255,255,255,.07) 0 2px, transparent 2.5px) 0 0 / 10px 10px; border-radius: 10px; }
+    .led { font-family: var(--font-display); text-transform: uppercase; text-align: center; line-height: 1.05; }
+    #l1 { font-size: 46px; color: var(--gold); text-shadow: 0 0 12px var(--gold); letter-spacing: 4px; }
+    #l2 { font-size: 92px; color: var(--primary); text-shadow: 0 0 18px var(--primary), 0 0 40px rgba(242,107,29,.6); }
+    #l3 { font-family: var(--font-heading); font-size: 50px; letter-spacing: 4px; color: var(--light); text-shadow: 0 0 12px rgba(255,244,224,.7); text-transform: uppercase; text-align: center; }
+    #stand { left: 50%; top: 0; width: 20px; height: 180px; margin-left: -10px; background: #2b2236; z-index: 5; }
+    #broom { z-index: 7; left: -500px; top: 600px; width: 420px; height: 420px; }
+    #broom svg { width: 100%; height: 100%; }
+    .dust { z-index: 7; width: 60px; height: 60px; border-radius: 50%; background: radial-gradient(circle, rgba(230,210,180,.6), transparent 70%); }
+    #logo { z-index: 8; left: 0; right: 0; top: 760px; text-align: center; font-family: var(--font-display); font-size: 54px; color: rgba(255,244,224,.0); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="lights-out" data-start="0" data-duration="12" data-width="1920" data-height="1080" data-fps="30">
+    <div id="hall" class="clip" data-start="0" data-duration="12" data-track-index="0">
+      <div id="arena" class="abs" style="inset:0"></div>
+      <div class="abs seats" style="top:470px"></div><div class="abs seats" style="top:540px;opacity:.6"></div>
+      <div id="floor" class="abs"><svg viewBox="0 0 2100 900" preserveAspectRatio="none"><path d="M60,0 V900"/><path d="M2040,0 V900"/><circle cx="1050" cy="0" r="220"/><path d="M0,0 H2100"/><path d="M850,0 V380 H1250 V0"/></svg></div>
+      <div class="abs glow" style="left:240px"></div><div class="abs glow" style="left:640px"></div><div class="abs glow" style="left:1040px"></div><div class="abs glow" style="left:1440px"></div>
+      <div class="abs" id="dark" style="inset:0;opacity:0"></div>
+      <div class="abs bank" id="k1" style="left:90px"><i></i><i></i><i></i><i></i></div>
+      <div class="abs bank" id="k2" style="left:560px"><i></i><i></i><i></i><i></i></div>
+      <div class="abs bank" id="k3" style="left:1060px"><i></i><i></i><i></i><i></i></div>
+      <div class="abs bank" id="k4" style="left:1530px"><i></i><i></i><i></i><i></i></div>
+      <div id="stand" class="abs"></div>
+      <div id="board" class="abs"><div class="led" id="l1"></div><div class="led" id="l2"></div><div id="l3"></div></div>
+      <div id="broom" class="abs"><svg viewBox="0 0 420 420">
+        <rect x="200" y="0" width="16" height="300" rx="8" fill="#8a5a2b" transform="rotate(28 208 300)"/>
+        <path d="M120,300 L300,300 L330,410 L90,410 Z" fill="#d9b25a" stroke="#7a5a1c" stroke-width="6"/>
+        <rect x="112" y="285" width="196" height="30" rx="8" fill="#A238FF"/>
+      </svg></div>
+      <div class="abs dust" id="d1" style="left:400px;top:960px"></div><div class="abs dust" id="d2" style="left:900px;top:980px"></div><div class="abs dust" id="d3" style="left:1400px;top:960px"></div>
+    </div>
+    <div id="black" class="clip" data-start="11.2" data-duration="0.8" data-track-index="1"></div>
+
+    <audio id="sfx-01-crowd" data-start="0" data-duration="3.5" data-track-index="10" src="assets/sfx/crowd.wav" data-volume="0.35" data-fade-out="2.5"></audio>
+    <audio id="sfx-02-buzzer" data-start="0.2" data-duration="1.5" data-track-index="11" src="assets/sfx/buzzer.wav" data-volume="0.35"></audio>
+    <audio id="sfx-03-clunk" data-start="2.6" data-duration="1.4" data-track-index="12" src="assets/sfx/clunk.wav" data-volume="0.8"></audio>
+    <audio id="sfx-04-clunk" data-start="3.5" data-duration="1.4" data-track-index="13" src="assets/sfx/clunk.wav" data-volume="0.8"></audio>
+    <audio id="sfx-05-clunk" data-start="4.4" data-duration="1.4" data-track-index="14" src="assets/sfx/clunk.wav" data-volume="0.8"></audio>
+    <audio id="sfx-06-clunk" data-start="5.3" data-duration="1.4" data-track-index="15" src="assets/sfx/clunk.wav" data-volume="0.9"></audio>
+    <audio id="sfx-07-whoosh" data-start="6.2" data-duration="0.8" data-track-index="16" src="assets/sfx/whoosh.wav" data-volume="0.35"></audio>
+    <audio id="sfx-08-whoosh" data-start="7.4" data-duration="0.8" data-track-index="17" src="assets/sfx/whoosh.wav" data-volume="0.35"></audio>
+    <audio id="sfx-09-beat" data-start="6.0" data-duration="6" data-track-index="18" src="assets/sfx/beat.wav" data-volume="0.35" data-fade-in="1" data-fade-out="1.5"></audio>
+    <audio id="sfx-10-clunk" data-start="10.4" data-duration="1.4" data-track-index="19" src="assets/sfx/clunk.wav" data-volume="0.7"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    document.getElementById("l1").textContent = get("thanks", "Thanks for watching");
+    const msg = get("message", "See y’all next week");
+    document.getElementById("l2").textContent = msg;
+    if (msg.length > 18) document.getElementById("l2").style.fontSize = Math.max(50, 92 * 18 / msg.length) + "px";
+    document.getElementById("l3").textContent = get("sub", "Next: all-time starting five");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#hall", { scale: 1.08 }, { scale: 1, duration: 3, ease: "power2.out" }, 0);
+    tl.fromTo("#board", { y: -500 }, { y: 0, duration: .6, ease: "back.out(1.4)" }, .1);
+    tl.fromTo(".led, #l3", { opacity: 0 }, { opacity: 1, duration: .15, stagger: .2, repeat: 1, yoyo: false, ease: "steps(1)" }, .5);
+    // banks off, outside in: k1, k4, k2, k3
+    const glows = document.querySelectorAll(".glow");
+    [["#k1", 0, 2.6, .22], ["#k4", 3, 3.5, .42], ["#k2", 1, 4.4, .62], ["#k3", 2, 5.3, .8]].forEach(([k, g, at, dark]) => {
+      tl.set(k, { className: "abs bank off" }, at);
+      tl.to(glows[g], { opacity: 0, duration: .08, ease: "none" }, at);
+      tl.to("#dark", { opacity: dark, duration: .08, ease: "none" }, at);
+      tl.to("#hall", { y: 6, duration: .05, yoyo: true, repeat: 1 }, at);
+    });
+    // the janitor's broom sweeps through
+    tl.fromTo("#broom", { x: 0, rotation: -6 }, { x: 2600, rotation: 6, duration: 3.4, ease: "none" }, 6.0);
+    tl.to("#broom", { y: -14, duration: .2, yoyo: true, repeat: 15, ease: "sine.inOut" }, 6.0);
+    [["#d1", 6.6], ["#d2", 7.3], ["#d3", 8.0]].forEach(([d, at]) => tl.fromTo(d, { scale: .2, opacity: .9 }, { scale: 3, opacity: 0, y: -40, duration: .9, ease: "power2.out" }, at));
+    tl.to("#board", { scale: 1.06, duration: 4, ease: "none" }, 6.0);
+    // last: the scoreboard clicks off
+    tl.to(["#l1", "#l3"], { opacity: 0, duration: .05 }, 10.4);
+    tl.to("#l2", { opacity: 0, duration: .05 }, 10.6);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .7 }, 11.2);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["lights-out"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

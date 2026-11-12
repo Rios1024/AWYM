@@ -9,7 +9,8 @@
   It creates the scenes and every overlay (with the right addresses, sizes and
   positions): Main Show in the layout you pick, a "Show: …" scene for every
   layout (1–4 people, 2–5 + moderator), the Intro (plays the show intro, then
-  switches to Main Show), the stream screens, and Show Overlays.
+  switches to Main Show), the Outro (plays the outro from the Outro Editor),
+  the stream screens, and Show Overlays.
   Each person's camera, avatar, frame and frame effects are a colored group
   ("Seat 1"…). Scenes that already exist are left alone, so it's safe to click
   again.
@@ -30,7 +31,7 @@ obs = obslua
 
 --- Options chosen in the script panel (filled in by script_update).
 local cfg = { people = 2, layout = "2", layouts = true, cameras = true, frames = true, screens = true, halftime = true,
-              clock = true, stats = true, content = true, runner = true, update = true, intro = true, status = "",
+              clock = true, stats = true, content = true, runner = true, update = true, intro = true, outro = true, status = "",
               guest_room = "", guest_pass = "", guest_seats = "" }
 
 --- The kit's hotkey actions: { id, name in OBS Settings → Hotkeys, suggested key }.
@@ -1043,6 +1044,23 @@ local function build()
     if cfg.halftime then
       screen_scene("Halftime", "Halftime Screen", { { "type", "halftime" }, { "minutes", "10" } }, true)
     end
+  end
+
+  -- the show outro (outro.html): plays the outro picked in the Outro Editor every time its scene
+  -- goes live; can then switch to Thanks for Watching (only while Outro is on air)
+  if cfg.outro then
+    local sc = new_scene("Outro")
+    if sc == nil then skipped[#skipped + 1] = "Outro"
+    else
+      local params = { { "scene", "Outro" } }
+      if cfg.screens then params[#params + 1] = { "next", "Thanks for Watching" } end
+      full(sc, "Show Outro", url("outro.html", params), { restart = true, audio = true, control = 4 })
+      made[#made + 1] = "Outro"
+      obs.obs_scene_release(sc)
+    end
+  end
+
+  if cfg.screens then
     screen_scene("Thanks for Watching", "Thanks for Watching Screen", { { "type", "ending" } }, false)
   end
 
@@ -1109,8 +1127,8 @@ Choose your options below, then click <b>Build my scenes</b>.</p>
 <p>Scenes that already exist are left alone, so it's safe to click again.
 If Main Show already exists, ticking "Add missing overlays" puts in just the new ones.
 Afterwards, add the five docks by hand (addresses below):
-<b>Docks → Custom Browser Docks…</b>, one row each, then Apply. The Intro Editor dock is optional:
-it changes the show intro's words, names, fonts and colors.</p>
+<b>Docks → Custom Browser Docks…</b>, one row each, then Apply. The Intro Editor and Outro Editor
+docks are optional: they change the show intro's and the outro's words, names, fonts and colors.</p>
 <p><b>Hotkeys:</b> keep this script loaded. It adds "AWYM: …" actions to <b>Settings → Hotkeys</b>
 (next segment, clear screen, shot clock, scores, sounds, names, clips) for your keyboard or stream deck.</p>
 <p><b>Scenes:</b> Main Show uses the layout you pick; "Also make a scene for every layout" adds
@@ -1170,6 +1188,7 @@ function script_properties()
   obs.obs_properties_add_bool(p, "prekeys", "Hotkeys: fill in the suggested keys (Ctrl+Alt+Shift+…) the first time")
   obs.obs_properties_add_bool(p, "screens", "Add the stream screen scenes (Starting Soon, Be Right Back, …)")
   obs.obs_properties_add_bool(p, "intro", "Add the Intro scene (plays the show intro, then switches to Main Show)")
+  obs.obs_properties_add_bool(p, "outro", "Add the Outro scene (plays the outro picked in the Outro Editor)")
   obs.obs_properties_add_bool(p, "halftime", "Include a Halftime scene")
   obs.obs_properties_add_button(p, "build", "Build my scenes", on_build)
   obs.obs_properties_add_button(p, "lineup", "Line up cameras with their frames", on_line_up)
@@ -1182,6 +1201,7 @@ function script_properties()
   obs.obs_properties_add_text(p, "dock_runner", "Show Runner dock URL (copy)", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_guests", "Remote guests page / optional dock (copy)", obs.OBS_TEXT_DEFAULT)
   obs.obs_properties_add_text(p, "dock_intro", "Intro Editor / optional dock (copy)", obs.OBS_TEXT_DEFAULT)
+  obs.obs_properties_add_text(p, "dock_outro", "Outro Editor / optional dock (copy)", obs.OBS_TEXT_DEFAULT)
   return p
 end
 
@@ -1201,6 +1221,7 @@ function script_defaults(settings)
   obs.obs_data_set_default_bool(settings, "prekeys", true)
   obs.obs_data_set_default_bool(settings, "screens", true)
   obs.obs_data_set_default_bool(settings, "intro", true)
+  obs.obs_data_set_default_bool(settings, "outro", true)
   obs.obs_data_set_default_bool(settings, "halftime", true)
 end
 
@@ -1221,6 +1242,7 @@ function script_update(settings)
   cfg.guest_seats = obs.obs_data_get_string(settings, "guest_seats")
   cfg.screens = obs.obs_data_get_bool(settings, "screens")
   cfg.intro = obs.obs_data_get_bool(settings, "intro")
+  cfg.outro = obs.obs_data_get_bool(settings, "outro")
   cfg.halftime = obs.obs_data_get_bool(settings, "halftime")
   -- always show the current addresses for the docks (they follow the folder)
   obs.obs_data_set_string(settings, "dock_control", url("control-panel.html"))
@@ -1230,6 +1252,7 @@ function script_update(settings)
   obs.obs_data_set_string(settings, "dock_runner", url("show-runner.html"))
   obs.obs_data_set_string(settings, "dock_guests", url("guests.html"))
   obs.obs_data_set_string(settings, "dock_intro", url("intro-editor.html"))
+  obs.obs_data_set_string(settings, "dock_outro", url("outro-editor.html"))
 end
 
 ---------------------------------------------------------------- hotkeys

@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AWYM Outro Editor</title>
+<!--
+  OUTRO EDITOR: add it as a dock in OBS (Docks → Custom Browser Docks…).
+  Pick the outro that plays at the end of the show, change its words, names,
+  scores and credits with a live preview, and play it in OBS. Every change goes
+  straight to the Outro source (outro.html); settings are saved for you.
+
+  Opened in a normal web browser instead, it works the same but OBS keeps its
+  own copy of the settings: use "Copy settings" here and "Paste settings" in
+  the dock to move them across.
+
+  ── For developers ─────────────────────────────────────────────
+  Type:      control dock (also works as a tool page in a normal browser).
+  Uses:      theme.css, shared.js; previews outros/<name>.html (outros/player.js) in an iframe.
+  Settings:  localStorage "awym-outro-v1" = {pick, vars: {<outro>: {...}}, autoNext}; every change
+             is also sent as {to:"outro", cmd:"update", data} (debounced). Answers the source's
+             {from:"outro", cmd:"hello"} with the current settings. "Play in OBS" sends {to:"outro", cmd:"play"}.
+  Status:    pings {to:"outro", cmd:"ping"} every 4 s; the light is green while the source answers.
+  Fields:    built from each outro's data-composition-variables (sent by the player when it's ready).
+-->
+<link rel="stylesheet" href="theme.css">
+<style>
+  :root { --ui-bg: #15121C; --ui-panel: #201B2B; --ui-line: #33294A; --ui-text: #F3EEF9; --ui-dim: #A99DBD; --ok: #3DDC84; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ui-bg); color: var(--ui-text); }
+  body { font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; line-height: 1.4; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+  header { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px;
+    padding: 10px 14px; background: var(--ui-panel); border-bottom: 1px solid var(--ui-line); }
+  header h1 { margin: 0; font-family: var(--font-display); font-weight: 400; font-size: 20px; color: var(--primary); line-height: 1.1; }
+  header h1 small { display: block; font-family: system-ui, sans-serif; font-size: 12px; color: var(--ui-dim); letter-spacing: .3px; margin-top: 2px; }
+  header .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .conn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ui-dim); white-space: nowrap; }
+  .conn i { width: 10px; height: 10px; border-radius: 50%; background: #6b6378; flex: none; }
+  .conn.on i { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 12px; border-radius: 8px;
+    border: 1px solid var(--ui-line); background: var(--ui-bg); font-weight: 700; cursor: pointer; white-space: nowrap; }
+  .btn:hover { border-color: var(--ui-dim); }
+  .btn.go { background: var(--primary); color: var(--dark); border-color: transparent; }
+  .btn:disabled { opacity: .45; cursor: default; }
+
+  .wrap { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; padding: 14px; max-width: 1500px; margin: 0 auto; align-items: start; }
+  @media (max-width: 860px) { .wrap { grid-template-columns: minmax(0, 1fr); padding: 10px; } .preview { order: -1; } }
+  .col { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .preview { position: sticky; top: 66px; }
+  @media (max-width: 860px) { .preview { position: static; } }
+
+  .frame { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 12px; border: 1px solid var(--ui-line); background: #000; }
+  .frame iframe { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; border: 0; transform-origin: 0 0; pointer-events: none; }
+  .transport { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .scrub { flex: 1 1 160px; min-width: 0; accent-color: var(--primary); }
+  .time { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--ui-dim); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .hint { margin: 0; font-size: 13px; color: var(--ui-dim); }
+  .hint b { color: var(--ui-text); }
+  label.chk { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+  label.chk input { width: 18px; height: 18px; accent-color: var(--primary); }
+
+  .card { background: var(--ui-panel); border: 1px solid var(--ui-line); border-radius: 12px; padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .card h2 { margin: 0; font-family: var(--font-heading); font-weight: 400; font-size: 17px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--ui-dim); }
+  .card h2 .row { display: flex; }
+
+  .picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .pick { text-align: left; border: 2px solid var(--ui-line); background: var(--ui-bg); border-radius: 10px; padding: 9px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+  .pick:hover { border-color: var(--ui-dim); }
+  .pick b { font-size: 15px; }
+  .pick small { color: var(--ui-dim); font-size: 12px; line-height: 1.3; }
+  .pick .len { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; color: var(--ui-dim); }
+  .pick[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary) inset; }
+  .pick[aria-pressed="true"]::before { content: "● IN OBS"; color: var(--primary); font-size: 11px; font-weight: 800; letter-spacing: .8px; }
+  #fields { display: flex; flex-direction: column; gap: 12px; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field > span { font-weight: 600; font-size: 14px; }
+  .field input[type=text], .field input[type=number], .field textarea { width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--ui-line); background: var(--ui-bg); }
+  .field textarea { min-height: 150px; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  .field small { color: var(--ui-dim); font-size: 12px; }
+  .two { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 10px; }
+  .cmd { width: 100%; min-height: 70px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--ui-line); background: var(--ui-bg); font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: var(--ui-dim); resize: vertical; }
+  .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ui-panel); border: 1px solid var(--primary); border-radius: 10px; padding: 8px 14px; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 20; }
+  .toast.show { opacity: 1; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Outro Editor<small>The outro that plays at the end of the show</small></h1>
+  <div class="tools">
+    <span class="conn" id="conn" title="Green when the Outro source in OBS answers"><i></i><span id="connTxt">Outro source: not found</span></span>
+    <button class="btn go" id="playObs" title="Play the outro in OBS now (in the Outro source)">▶ Play in OBS</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="col">
+    <section class="card" aria-labelledby="hPick">
+      <h2 id="hPick">Pick an outro</h2>
+      <div class="picks" id="picks"></div>
+      <p class="hint">The one marked <b>● IN OBS</b> plays when you switch to the <b>Outro</b> scene.</p>
+    </section>
+
+    <section class="card" aria-labelledby="hWords">
+      <h2 id="hWords">Words</h2>
+      <div id="fields"><p class="hint">Loading…</p></div>
+      <div class="transport">
+        <button class="btn" id="reset" title="Put this outro's words back to how they came">Reset to the originals</button>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="hAfter">
+      <h2 id="hAfter">After the outro</h2>
+      <label class="chk"><input type="checkbox" id="autoNext"> Then switch to the <b>Thanks for Watching</b> scene</label>
+      <p class="hint">Only when the Outro scene is the one on air. Needs the Outro source's <b>Page permissions</b> set to <b>Advanced access to OBS</b> (the setup script does that). Otherwise it holds on black.</p>
+    </section>
+
+    <section class="card" aria-labelledby="hFile">
+      <h2 id="hFile">Make a video file (for YouTube)</h2>
+      <p class="hint">The outros are <b>HyperFrames</b> projects, so they also render to MP4 with these words. In the outro's project folder (from <b>AWYM-outros-projects.zip</b> or <b>AWYM-more-projects.zip</b>), run:</p>
+      <textarea class="cmd" id="cmd" readonly aria-label="Render command"></textarea>
+      <div class="transport">
+        <button class="btn" id="copyCmd">Copy command</button>
+        <button class="btn" id="copySet" title="Copy all outro settings (to paste in the dock or another computer)">Copy settings</button>
+        <button class="btn" id="pasteSet" title="Paste outro settings copied from another Outro Editor">Paste settings</button>
+      </div>
+      <p class="hint">Needs Node.js 22+ and FFmpeg. Or simply record the Outro scene in OBS.</p>
+    </section>
+  </div>
+
+  <div class="col preview">
+    <div class="frame" id="frame"></div>
+    <div class="transport">
+      <button class="btn" id="pp" aria-label="Play preview">▶ Preview</button>
+      <input type="range" class="scrub" id="scrub" min="0" max="12" step="0.05" value="0" aria-label="Preview time">
+      <span class="time" id="time">0.0 / 0.0 s</span>
+    </div>
+    <label class="chk"><input type="checkbox" id="sound"> Sound in the preview</label>
+    <p class="hint">Leave preview sound off while you're live: OBS may pick up this dock through Desktop Audio.</p>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script src="shared.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const KEY = "awym-outro-v1";
+  const OUTROS = [
+    { id: "final-buzzer", name: "Final Buzzer", len: 12, poster: 10, about: "Shot clock 0:05 → buzzer, “That's the game!”, confetti, subscribe" },
+    { id: "final-score", name: "Final Score", len: 14, poster: 8, about: "Scoreboard, winner ribbon, take of the night, next episode" },
+    { id: "chalk-credits", name: "Chalk Talk Credits", len: 16, poster: 7, about: "A play drawn in chalk while the credits roll" },
+    { id: "mic-drop-endscreen", name: "Mic Drop End Screen", len: 20, poster: 8, about: "Mic drop, then a YouTube end screen (20 s)" },
+    { id: "postgame-presser", name: "Postgame Presser", len: 13, poster: 7.6, about: "Press-conference podium, flashes, a closing quote, “No further questions”" },
+    { id: "highlight-reel", name: "Highlight Reel", len: 15, poster: 10.4, about: "Countdown of the night's top takes (can fill from your receipts)" },
+    { id: "group-chat-wrap", name: "Group Chat Wrap-Up", len: 12, poster: 6.8, about: "The family reacts in texts, then Momma leaves the chat" },
+    { id: "power-rankings", name: "Power Rankings", len: 13, poster: 7, about: "Ranked list that shuffles into tonight's order and crowns #1" },
+    { id: "lights-out", name: "Lights Out", len: 12, poster: 5.8, about: "Arena lights shut off bank by bank, a broom sweeps, the scoreboard signs off" }
+  ];
+  /* fields that hold a list: one item per line here, joined with | for the outro */
+  const LISTS = { credits: "Role = Name", takes: "Who = take", rankings: "Name = note", chat: "Name: message" };
+  const HINTS = {
+    credits: "One per line: Role = Name",
+    takes: "One per line: Who = take. Best take last (up to 5).",
+    rankings: "One per line, #1 first: Name = note (up to 5)",
+    chat: "One per line: Name: message (up to 6). “Me:” goes on the right.",
+    cta: "Buttons separated by · (the first one is red)",
+    headline: "The last word is the big one",
+    line1: "The words after the first are the big orange line",
+    showGuides: "Dashed boxes where YouTube's end-screen videos and Subscribe button go"
+  };
+
+  /* ---------- settings ---------- */
+  const load = () => { try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } };
+  const clean = (s) => {
+    s = s && typeof s === "object" ? s : {};
+    return { pick: OUTROS.some((o) => o.id === s.pick) ? s.pick : OUTROS[0].id, vars: s.vars && typeof s.vars === "object" ? s.vars : {}, autoNext: !!s.autoNext };
+  };
+  let S = clean(load());
+  let view = S.pick;                    // the outro being edited / previewed
+  const schemas = {};                   // outro id -> declared variables
+  let sendT = 0;
+  function commit() {
+    try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {}
+    clearTimeout(sendT); sendT = setTimeout(() => AWYM.send({ to: "outro", cmd: "update", data: S }), 250);
+    renderCmd();
+  }
+  const toast = (msg) => { const t = $("toast"); t.textContent = msg; t.classList.add("show"); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), 1800); };
+
+  /* ---------- outro picker ---------- */
+  function paintPicks() {
+    $("picks").innerHTML = OUTROS.map((o) => `<button class="pick" data-id="${o.id}" aria-pressed="${o.id === S.pick}">
+      <b>${o.name}</b><small>${o.about}</small><span class="len">${o.len} s</span></button>`).join("");
+    $("picks").querySelectorAll(".pick").forEach((b) => b.onclick = () => {
+      S.pick = b.dataset.id; view = S.pick; commit(); paintPicks(); mountPreview(OUTROS.find((o) => o.id === view).poster);
+    });
+  }
+
+  /* ---------- preview ---------- */
+  let frame = null, ready = false, playing = false, dur = 12, now = 0;
+  const tell = (cmd, extra) => { if (frame && frame.contentWindow) frame.contentWindow.postMessage(Object.assign({ awymOutro: 1, cmd, muted: !$("sound").checked }, extra || {}), "*"); };
+  function fitPreview() {
+    if (!frame) return;
+    const w = $("frame").clientWidth;
+    frame.style.transform = `scale(${w / 1920})`;
+  }
+  addEventListener("resize", fitPreview);
+  function mountPreview(at) {
+    ready = false; playing = false; paintPP();
+    const vars = S.vars[view] || {};
+    const f = document.createElement("iframe");
+    f.title = "Outro preview";
+    f.src = "outros/" + view + ".html?muted=1&at=" + (at || 0) + "&vars=" + encodeURIComponent(JSON.stringify(vars));
+    $("frame").appendChild(f);
+    const old = frame; frame = f; fitPreview();
+    if (old) setTimeout(() => old.remove(), 350);
+  }
+  addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || !m.awymOutro || !frame || e.source !== frame.contentWindow) return;
+    if (m.ev === "ready") {
+      ready = true; dur = m.duration; $("scrub").max = dur;
+      const first = !schemas[view]; schemas[view] = m.schema || [];
+      if (first || $("fields").dataset.view !== view) buildFields();
+      setTime(+new URL(frame.src).searchParams.get("at") || 0);
+    } else if (m.ev === "time") { playing = m.playing; setTime(m.t); paintPP(); }
+    else if (m.ev === "done") { playing = false; paintPP(); }
+  });
+  function setTime(t) { now = t; $("scrub").value = t; $("time").textContent = `${t.toFixed(1)} / ${dur.toFixed(1)} s`; }
+  function paintPP() { $("pp").textContent = playing ? "❚❚ Pause" : "▶ Preview"; }
+  $("pp").onclick = () => {
+    if (!ready) return;
+    if (playing) { tell("pause"); playing = false; }
+    else { tell("play", { t: now >= dur - .1 ? 0 : now }); playing = true; }
+    paintPP();
+  };
+  $("scrub").oninput = () => { if (ready) { tell("seek", { t: +$("scrub").value }); playing = false; paintPP(); setTime(+$("scrub").value); } };
+  $("sound").onchange = () => tell($("sound").checked ? "noop" : "noop");
+
+  /* ---------- fields ---------- */
+  const valOf = (v) => (S.vars[view] && S.vars[view][v.id] !== undefined ? S.vars[view][v.id] : v.default);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  function label(v) { return String(v.label || v.id).replace(/\s*\(.*\)\s*$/, ""); }
+  function buildFields() {
+    const sc = schemas[view] || [];
+    const box = $("fields"); box.dataset.view = view;
+    if (!sc.length) { box.innerHTML = '<p class="hint">This outro has no words to change.</p>'; return; }
+    let html = "", i = 0;
+    while (i < sc.length) {
+      const v = sc[i], n = sc[i + 1];
+      // name + score side by side
+      if (v.type === "string" && n && n.type === "number") {
+        html += `<div class="two">${fieldHTML(v)}${fieldHTML(n)}</div>`; i += 2; continue;
+      }
+      html += fieldHTML(v); i++;
+    }
+    box.innerHTML = html;
+    const fr = $("fromReceipts");
+    if (fr) fr.onclick = () => {
+      let items = [];
+      try { items = ((JSON.parse(localStorage.getItem("awym-runner-v1") || "{}").receipts || {}).items || []).filter((t) => t && t.take); } catch (e) {}
+      if (!items.length) { toast("No receipts logged yet (Show Runner → Receipts)"); return; }
+      const ta = box.querySelector('[data-var="takes"]');
+      ta.value = items.slice(-5).map((t) => (t.who ? t.who + " = " : "") + String(t.take).replace(/\|/g, "/")).join("\n");
+      onField(ta); toast("Filled from your last " + Math.min(5, items.length) + " receipts");
+    };
+    box.querySelectorAll("[data-var]").forEach((el) => {
+      const ev = el.type === "checkbox" ? "change" : "input";
+      el.addEventListener(ev, () => onField(el));
+    });
+  }
+  function fieldHTML(v) {
+    const val = valOf(v), hint = HINTS[v.id] ? `<small>${HINTS[v.id]}</small>` : "";
+    if (v.type === "boolean") return `<div class="field"><label class="chk"><input type="checkbox" data-var="${v.id}" ${val === false || val === "false" ? "" : "checked"}> ${esc(label(v))}</label>${hint}</div>`;
+    if (v.type === "number") return `<label class="field"><span>${esc(label(v))}</span><input type="number" data-var="${v.id}" value="${esc(val)}" step="1"></label>`;
+    if (LISTS[v.id]) return `<label class="field"><span>${esc(label(v))}</span><textarea data-var="${v.id}" spellcheck="false">${esc(String(val).split("|").map((s) => s.trim()).join("\n"))}</textarea>${hint}</label>`
+      + (v.id === "takes" ? `<div class="transport"><button class="btn" type="button" id="fromReceipts" title="Use the last five takes logged in the Show Runner's Receipts">Fill from receipts</button></div>` : "");
+    return `<label class="field"><span>${esc(label(v))}</span><input type="text" data-var="${v.id}" value="${esc(val)}">${hint}</label>`;
+  }
+  let reloadT = 0;
+  function onField(el) {
+    const id = el.dataset.var;
+    let v = el.type === "checkbox" ? el.checked : el.type === "number" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+    if (LISTS[id]) v = el.value.split("\n").map((s) => s.trim()).filter(Boolean).join("|");
+    S.vars[view] = Object.assign({}, S.vars[view] || {}, { [id]: v });
+    commit();
+    clearTimeout(reloadT); reloadT = setTimeout(() => mountPreview(playing ? OUTROS.find((o) => o.id === view).poster : now), 350);
+  }
+  $("reset").onclick = () => { delete S.vars[view]; commit(); buildFields(); mountPreview(now); toast("Back to the original words"); };
+  $("autoNext").checked = S.autoNext;
+  $("autoNext").onchange = () => { S.autoNext = $("autoNext").checked; commit(); };
+
+  /* ---------- MP4 render command ---------- */
+  const FOLDER = { "final-buzzer": "1-final-buzzer", "final-score": "2-final-score", "chalk-credits": "3-chalk-credits", "mic-drop-endscreen": "4-mic-drop-endscreen",
+    "postgame-presser": "outro-postgame-presser", "highlight-reel": "outro-highlight-reel", "group-chat-wrap": "outro-group-chat-wrap", "power-rankings": "outro-power-rankings", "lights-out": "outro-lights-out" };
+  function renderCmd() {
+    const vars = S.vars[view] || {};
+    const json = JSON.stringify(vars).replace(/'/g, "’");
+    $("cmd").value = `cd ${FOLDER[view]}\nnpx hyperframes render` + (Object.keys(vars).length ? ` --variables '${json}'` : "");
+  }
+  async function copy(text, msg) {
+    try { await navigator.clipboard.writeText(text); toast(msg); }
+    catch (e) { const t = document.createElement("textarea"); t.value = text; document.body.appendChild(t); t.select(); try { document.execCommand("copy"); toast(msg); } catch (x) { toast("Couldn't copy"); } t.remove(); }
+  }
+  $("copyCmd").onclick = () => copy($("cmd").value, "Command copied");
+  $("copySet").onclick = () => copy(JSON.stringify(S), "Settings copied");
+  $("pasteSet").onclick = async () => {
+    let text = "";
+    try { text = await navigator.clipboard.readText(); } catch (e) { text = prompt("Paste the outro settings here:") || ""; }
+    try { const n = clean(JSON.parse(text)); S = n; view = S.pick; commit(); paintPicks(); $("autoNext").checked = S.autoNext; mountPreview(OUTROS.find((o) => o.id === view).poster); toast("Settings pasted"); }
+    catch (e) { toast("That isn't outro settings"); }
+  };
+
+  /* ---------- OBS link ---------- */
+  $("playObs").onclick = () => { AWYM.send({ to: "outro", cmd: "update", data: S }); setTimeout(() => AWYM.send({ to: "outro", cmd: "play" }), 120); toast("Playing in OBS"); };
+  let seen = 0;
+  AWYM.listen((m) => {
+    if (m.from !== "outro") return;
+    seen = Date.now();
+    if (m.cmd === "hello") AWYM.send({ to: "outro", cmd: "update", data: S });
+    paintConn(m);
+  });
+  function paintConn(m) {
+    const on = Date.now() - seen < 9000;
+    $("conn").classList.toggle("on", on);
+    $("connTxt").textContent = on ? (m && m.playing ? "Outro source: playing" : "Outro source: ready") : "Outro source: not found";
+  }
+  setInterval(() => { AWYM.send({ to: "outro", cmd: "ping" }); paintConn(); }, 4000);
+  AWYM.send({ to: "outro", cmd: "ping" });
+
+  paintPicks(); renderCmd();
+  mountPreview(OUTROS.find((o) => o.id === view).poster);
+})();
+</script>
+</body>
+</html>

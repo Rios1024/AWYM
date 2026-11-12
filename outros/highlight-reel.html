@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"heading","type":"string","label":"Heading","default":"Top takes of the night"},
+  {"id":"takes","type":"string","label":"Takes, best last (Who = take, separated by |; up to 5)","default":"Cousin Tay = Westbrook is a top-10 point guard ever|Unc = The ’90s were softer than people think|The Hosts = Steph changed the game more than LeBron|Unc = LeBron is the GOAT and it isn’t close|Yo Momma = Y’all can’t even name the ’86 Celtics bench"},
+  {"id":"signoff","type":"string","label":"Last line","default":"See y’all next week"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Highlight Reel</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #bg { background: linear-gradient(135deg, #1a0d30, #2a1747 50%, #170b29); }
+    .strip { left: 0; right: 0; height: 110px; background: #0a0610; z-index: 2; overflow: hidden; }
+    #st1 { top: 0; } #st2 { bottom: 0; }
+    .holes { position: absolute; left: 0; top: 30px; width: 4000px; height: 50px; background: repeating-linear-gradient(90deg, transparent 0 40px, #f3ece2 40px 90px, transparent 90px 130px); border-radius: 8px; opacity: .85; }
+    #open { z-index: 5; flex-direction: column; }
+    #open .k { font-family: var(--font-body); font-weight: 700; font-size: 50px; letter-spacing: 14px; text-transform: uppercase; color: var(--gold); }
+    #open .t { font-family: var(--font-display); font-size: 140px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center; text-shadow: 0 10px 0 var(--secondary), 0 0 50px rgba(242,107,29,.45); }
+    .card { z-index: 6; left: 150px; right: 150px; top: 200px; bottom: 200px; display: flex; align-items: center; gap: 70px; }
+    .card .rk { flex: none; width: 360px; text-align: center; font-family: var(--font-display); font-size: 400px; line-height: .8; color: var(--primary); text-shadow: 0 16px 0 rgba(0,0,0,.45); }
+    .card .rk small { display: block; font-family: var(--font-body); font-weight: 700; font-size: 44px; letter-spacing: 10px; color: var(--light); margin-bottom: 10px; text-shadow: none; }
+    .card .tk { flex: 1; display: flex; flex-direction: column; gap: 26px; }
+    .card .tx { font-family: var(--font-heading); font-size: 86px; line-height: 1.05; text-transform: uppercase; color: var(--light); }
+    .card .tx em { font-style: normal; color: var(--primary); font-family: var(--font-display); }
+    .card .wh { align-self: flex-start; font-family: var(--font-body); font-weight: 700; font-size: 44px; letter-spacing: 5px; text-transform: uppercase; color: var(--dark); background: var(--gold); padding: 6px 24px 8px; border-radius: 10px; }
+    .card.top .rk { color: var(--gold); text-shadow: 0 0 40px rgba(255,178,62,.7), 0 16px 0 rgba(0,0,0,.45); }
+    .card.top .wh { background: var(--accent); color: #fff; }
+    #flash { z-index: 20; background: #fff; }
+    #end { z-index: 25; flex-direction: column; background: var(--dark); }
+    #end .t { font-family: var(--font-display); font-size: 140px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center; text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.4); }
+    #end .t em { font-style: normal; color: var(--primary); }
+    #end .s { margin-top: 30px; font-family: var(--font-body); font-weight: 700; font-size: 46px; letter-spacing: 10px; text-transform: uppercase; color: var(--gold); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="highlight-reel" data-start="0" data-duration="15" data-width="1920" data-height="1080" data-fps="30">
+    <div id="reel" class="clip" data-start="0" data-duration="12" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="st1" class="abs strip"><div class="holes"></div></div>
+      <div id="st2" class="abs strip"><div class="holes"></div></div>
+      <div id="open" class="abs center" style="inset:0"><div class="k">The countdown</div><div class="t" id="heading"></div></div>
+      <div id="cards"></div>
+    </div>
+    <div id="flash" class="clip" data-start="0" data-duration="12" data-track-index="1"></div>
+    <div id="end" class="clip center" data-start="11.9" data-duration="3.1" data-track-index="2">
+      <div class="t">Argue with<br><em>Yo Momma!</em></div>
+      <div class="s" id="signoff"></div>
+    </div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="15" data-track-index="3" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="15" data-track-index="3" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="14.3" data-duration="0.7" data-track-index="4"></div>
+
+    <audio id="sfx-01-beat" data-start="0" data-duration="10.43" data-track-index="10" src="assets/sfx/beat.wav" data-volume="0.5" data-fade-in="0.4"></audio>
+    <audio id="sfx-02-beat" data-start="10.43" data-duration="4.57" data-track-index="11" src="assets/sfx/beat.wav" data-volume="0.5" data-fade-out="1.6"></audio>
+    <audio id="sfx-03-whoosh" data-start="1.75" data-duration="0.8" data-track-index="12" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-04-whoosh" data-start="3.75" data-duration="0.8" data-track-index="13" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-05-whoosh" data-start="5.75" data-duration="0.8" data-track-index="14" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-06-whoosh" data-start="7.75" data-duration="0.8" data-track-index="15" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-07-riser" data-start="8.0" data-duration="2" data-track-index="16" src="assets/sfx/riser.wav" data-volume="0.45"></audio>
+    <audio id="sfx-08-hit" data-start="9.8" data-duration="1.6" data-track-index="17" src="assets/sfx/hit.wav" data-volume="0.8"></audio>
+    <audio id="sfx-09-crowd" data-start="9.85" data-duration="4" data-track-index="18" src="assets/sfx/crowd.wav" data-volume="0.45" data-fade-out="1.5"></audio>
+    <audio id="sfx-10-hit" data-start="11.95" data-duration="1.6" data-track-index="19" src="assets/sfx/hit.wav" data-volume="0.5"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    document.getElementById("heading").textContent = get("heading", "Top takes of the night");
+    document.getElementById("signoff").textContent = get("signoff", "See y’all next week");
+    const takes = get("takes", "Cousin Tay = Westbrook is a top-10 point guard ever|Unc = The ’90s were softer than people think|The Hosts = Steph changed the game more than LeBron|Unc = LeBron is the GOAT and it isn’t close|Yo Momma = Y’all can’t even name the ’86 Celtics bench")
+      .split("|").map((s) => s.trim()).filter(Boolean).slice(-5).map((s) => { const i = s.indexOf("="); return i > 0 ? { who: s.slice(0, i).trim(), take: s.slice(i + 1).trim() } : { who: "", take: s }; });
+    const n = takes.length;
+    // card k is shown at 11.8 - 2*(n-k): the countdown always ends at 11.8 s (in time with the sounds)
+    document.getElementById("cards").innerHTML = takes.map((t, k) => `<div class="abs card${k === n - 1 ? " top" : ""}" id="c${k}"><div class="rk"><small>No.</small>${n - k}</div>
+      <div class="tk"><div class="tx"><em>&ldquo;</em>${esc(t.take)}<em>&rdquo;</em></div>${t.who ? `<div class="wh">${esc(t.who)}</div>` : ""}</div></div>`).join("");
+    document.querySelectorAll(".tx").forEach((el) => { const L = el.textContent.length; if (L > 40) el.style.fontSize = Math.max(48, 86 * 40 / L) + "px"; });
+    // card sounds for missing cards go quiet (the last card has the hit)
+    ["sfx-03-whoosh", "sfx-04-whoosh", "sfx-05-whoosh", "sfx-06-whoosh"].forEach((id, i) => { if (i < 5 - n) document.getElementById(id).setAttribute("data-volume", "0"); });
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo(".holes", { x: 0 }, { x: -1040, duration: 12, ease: "none" }, 0);
+    tl.fromTo("#open .k", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .4 }, .1);
+    tl.fromTo("#open .t", { scale: 1.8, opacity: 0 }, { scale: 1, opacity: 1, duration: .45, ease: "power3.out" }, .3);
+    const first = 11.8 - 2 * n;
+    tl.to("#open", { opacity: 0, scale: .85, duration: .3 }, first - .3);
+    tl.set("#flash", { opacity: 0 }, 0);
+    takes.forEach((t, k) => {
+      const at = first + 2 * k, sel = "#c" + k, last = k === n - 1;
+      tl.set(sel, { opacity: 0 }, 0).set(sel, { opacity: 1 }, at);
+      tl.fromTo(sel + " .rk", { x: -700, rotation: -20 }, { x: 0, rotation: 0, duration: .4, ease: "power3.out" }, at);
+      tl.fromTo(sel + " .tx", { x: 900, opacity: 0 }, { x: 0, opacity: 1, duration: .45, ease: "power3.out" }, at + .1);
+      if (t.who) tl.fromTo(sel + " .wh", { scaleX: 0 }, { scaleX: 1, duration: .3, ease: "back.out(2)" }, at + .45);
+      if (last) {
+        tl.fromTo("#flash", { opacity: .9 }, { opacity: 0, duration: .5 }, at);
+        tl.to(sel + " .rk", { scale: 1.1, duration: .35, yoyo: true, repeat: 3, ease: "sine.inOut" }, at + .5);
+      } else tl.to(sel, { x: -1900, duration: .35, ease: "power3.in" }, at + 1.65);
+    });
+    tl.fromTo("#end .t", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: .35, ease: "power4.in" }, 11.95);
+    tl.fromTo("#end .s", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .45, ease: "power3.out" }, 12.5);
+    tl.to("#end", { scale: 1.04, duration: 3.1, ease: "none" }, 11.9);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .65 }, 14.3);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["highlight-reel"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

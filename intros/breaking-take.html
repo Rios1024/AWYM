@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"headline","type":"string","label":"Headline","default":"Momma says the midrange is BACK"},
+  {"id":"ticker","type":"string","label":"Ticker (items separated by |)","default":"Group chat in shambles|Receipts have been pulled|Thanksgiving seating chart under review|Sources: nobody is backing down"},
+  {"id":"episode","type":"string","label":"Episode","default":"Episode 1"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Intro: Breaking Take</title>
+  <script src="../outros/player.js"></script>
+  <script src="../outros/assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="../outros/assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel) -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    :root { --red: #E8112D; --red-d: #8e0a1b; }
+    #bg { background: linear-gradient(160deg, #1b0f30 0%, #0d0717 70%); }
+    #grid { opacity: .25; background:
+        linear-gradient(rgba(255,255,255,.07) 2px, transparent 2px) 0 0 / 120px 120px,
+        linear-gradient(90deg, rgba(255,255,255,.07) 2px, transparent 2px) 0 0 / 120px 120px; }
+    #globe { left: 50%; top: 50%; width: 900px; height: 900px; margin: -450px 0 0 -450px; opacity: .22; }
+    #globe svg { width: 100%; height: 100%; }
+    #globe ellipse, #globe circle, #globe path { fill: none; stroke: var(--light); stroke-width: 3; }
+    .bar { left: -10%; width: 120%; height: 160px; transform: rotate(-8deg); }
+    #bar1 { top: 220px; background: var(--red); box-shadow: 0 12px 0 var(--red-d); }
+    #bar2 { top: 430px; height: 120px; background: var(--light); box-shadow: 0 10px 0 rgba(0,0,0,.4); }
+    #bar3 { top: 600px; height: 60px; background: var(--primary); }
+    #brk { left: 0; right: 0; top: 190px; z-index: 5; display: flex; justify-content: center; gap: 28px; transform: rotate(-8deg); }
+    #brk .w1 { font-family: var(--font-display); font-size: 200px; line-height: 1; color: #fff; letter-spacing: 6px; text-shadow: 0 10px 0 var(--red-d); }
+    #brk .w2 { align-self: center; font-family: var(--font-display); font-size: 150px; line-height: 1; color: var(--dark); background: var(--gold);
+      padding: 4px 34px 10px; border-radius: 16px; box-shadow: 0 12px 0 #a5660f; transform: rotate(4deg); }
+    #live { left: 120px; top: 880px; z-index: 6; display: flex; align-items: center; gap: 16px; font-family: var(--font-heading); font-size: 52px; letter-spacing: 6px; color: #fff; }
+    #live i { width: 28px; height: 28px; border-radius: 50%; background: var(--red); box-shadow: 0 0 22px var(--red); }
+    #live span { background: var(--red); padding: 2px 20px 4px; border-radius: 8px; }
+    #ep { left: 340px; top: 888px; z-index: 6; font-family: var(--font-body); font-weight: 700; font-size: 44px; letter-spacing: 6px; text-transform: uppercase; color: var(--gold); }
+
+    #lt { left: 120px; right: 120px; top: 640px; z-index: 7; display: flex; flex-direction: column; }
+    #lt .tag { align-self: flex-start; background: var(--red); color: #fff; font-family: var(--font-heading); font-size: 44px; letter-spacing: 6px; padding: 4px 24px 6px; border-radius: 8px 8px 0 0; }
+    #lt .box { background: var(--light); color: var(--dark); border-left: 18px solid var(--red); padding: 18px 36px 22px; box-shadow: 0 14px 0 rgba(0,0,0,.35); overflow: hidden; }
+    #hl { font-family: var(--font-heading); font-size: 92px; line-height: 1.05; text-transform: uppercase; white-space: nowrap; }
+    #hl .cur { display: inline-block; width: 8px; height: 76px; background: var(--red); margin-left: 8px; vertical-align: -6px; }
+    #tick { left: 0; right: 0; bottom: 0; height: 96px; z-index: 7; background: var(--dark); border-top: 6px solid var(--red); display: flex; align-items: center; overflow: hidden; }
+    #tick .lbl { flex: none; height: 100%; display: flex; align-items: center; padding: 0 30px; background: var(--red); color: #fff; font-family: var(--font-display); font-size: 40px; z-index: 2; }
+    #tickTrack { white-space: nowrap; font-family: var(--font-body); font-weight: 700; font-size: 46px; letter-spacing: 3px; text-transform: uppercase; color: var(--light); padding-left: 40px; }
+    #tickTrack b { color: var(--primary); margin: 0 26px; }
+
+    #wipe { z-index: 20; background: var(--red); }
+    #card { z-index: 21; flex-direction: column; background: var(--dark); }
+    #card .t { font-family: var(--font-display); font-size: 150px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center;
+      text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(232,17,45,.45); }
+    #card .t em { font-style: normal; color: var(--primary); }
+    #card .s { margin-top: 34px; display: flex; align-items: center; gap: 16px; font-family: var(--font-heading); font-size: 60px; letter-spacing: 8px; color: #fff; }
+    #card .s i { width: 26px; height: 26px; border-radius: 50%; background: var(--red); box-shadow: 0 0 22px var(--red); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="breaking-take" data-start="0" data-duration="9" data-width="1920" data-height="1080" data-fps="30">
+    <div id="news" class="clip" data-start="0" data-duration="6.9" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="grid" class="abs" style="inset:0"></div>
+      <div id="globe" class="abs"><svg viewBox="0 0 900 900">
+        <circle cx="450" cy="450" r="430"/><ellipse cx="450" cy="450" rx="200" ry="430"/><ellipse cx="450" cy="450" rx="340" ry="430"/>
+        <path d="M20,450 H880"/><ellipse cx="450" cy="450" rx="430" ry="160"/><ellipse cx="450" cy="450" rx="430" ry="300"/>
+      </svg></div>
+      <div id="bar1" class="abs bar"></div>
+      <div id="bar2" class="abs bar"></div>
+      <div id="bar3" class="abs bar"></div>
+      <div id="brk" class="abs"><span class="w1">BREAKING</span><span class="w2">TAKE</span></div>
+      <div id="live" class="abs"><i></i><span>LIVE</span></div>
+      <div id="ep" class="abs"></div>
+      <div id="lt" class="abs"><div class="tag">JUST IN</div><div class="box"><div id="hl"><span id="hlTxt"></span><span class="cur"></span></div></div></div>
+      <div id="tick" class="abs"><div class="lbl">AWYM</div><div id="tickTrack"></div></div>
+    </div>
+    <div id="wipe" class="clip" data-start="6.5" data-duration="0.9" data-track-index="1"></div>
+    <div id="card" class="clip center" data-start="6.9" data-duration="2.1" data-track-index="2">
+      <div class="t">Argue with<br><em>Yo Momma!</em></div>
+      <div class="s"><i></i>LIVE NOW</div>
+    </div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="9" data-track-index="3" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="9" data-track-index="3" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="8.4" data-duration="0.6" data-track-index="4"></div>
+
+    <audio id="sfx-01-stinger" data-start="0" data-duration="2.6" data-track-index="10" src="../outros/assets/sfx/stinger.wav" data-volume="0.8"></audio>
+    <audio id="sfx-02-whoosh" data-start="0.9" data-duration="0.8" data-track-index="11" src="../outros/assets/sfx/whoosh.wav" data-volume="0.5"></audio>
+    <audio id="sfx-03-beat" data-start="2.4" data-duration="6.6" data-track-index="12" src="../outros/assets/sfx/beat.wav" data-volume="0.45" data-fade-in="0.3" data-fade-out="1"></audio>
+    <audio id="sfx-04-tick" data-start="2.6" data-duration="0.1" data-track-index="13" src="../outros/assets/sfx/tick.wav" data-volume="0.5"></audio>
+    <audio id="sfx-05-whoosh" data-start="6.45" data-duration="0.8" data-track-index="14" src="../outros/assets/sfx/whoosh.wav" data-volume="0.7"></audio>
+    <audio id="sfx-06-hit" data-start="6.95" data-duration="1.6" data-track-index="15" src="../outros/assets/sfx/hit.wav" data-volume="0.7"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const headline = get("headline", "Momma says the midrange is BACK");
+    document.getElementById("ep").textContent = get("episode", "Episode 1");
+    if (headline.length > 30) document.getElementById("hl").style.fontSize = Math.max(52, 92 * 30 / headline.length) + "px";
+    const items = get("ticker", "Group chat in shambles|Receipts have been pulled|Thanksgiving seating chart under review|Sources: nobody is backing down").split("|").map((s) => s.trim()).filter(Boolean);
+    const line = items.map(esc).join("<b>●</b>") + "<b>●</b>";
+    document.getElementById("tickTrack").innerHTML = line + line + line;
+    const hlTxt = document.getElementById("hlTxt");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#grid", { backgroundPositionY: 0 }, { backgroundPositionY: 240, duration: 6.9, ease: "none" }, 0);
+    tl.fromTo("#globe", { rotation: 0, scale: .9 }, { rotation: 40, scale: 1.1, duration: 6.9, ease: "none" }, 0);
+    tl.fromTo("#bar1", { xPercent: -110 }, { xPercent: 0, duration: .35, ease: "power4.out" }, .1);
+    tl.fromTo("#bar2", { xPercent: 110 }, { xPercent: 0, duration: .35, ease: "power4.out" }, .25);
+    tl.fromTo("#bar3", { xPercent: -110 }, { xPercent: 0, duration: .35, ease: "power4.out" }, .4);
+    tl.fromTo("#brk .w1", { x: -1400 }, { x: 0, duration: .4, ease: "power4.out" }, 1.0);
+    tl.fromTo("#brk .w2", { scale: 3.5, opacity: 0, rotation: 30 }, { scale: 1, opacity: 1, rotation: 4, duration: .25, ease: "power4.in" }, 1.36);
+    tl.to("#news", { x: 14, y: -8, duration: .05, yoyo: true, repeat: 5, ease: "none" }, 1.6).set("#news", { x: 0, y: 0 }, 1.9);
+    tl.fromTo("#live", { opacity: 0, x: -60 }, { opacity: 1, x: 0, duration: .35, ease: "power3.out" }, 1.4);
+    tl.fromTo("#live i", { opacity: 1 }, { opacity: .25, duration: .45, yoyo: true, repeat: 9, ease: "sine.inOut" }, 1.8);
+    tl.fromTo("#ep", { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: .35, ease: "power3.out" }, 1.5);
+    // breaking banner moves up, lower third comes in
+    tl.to(["#brk", "#bar1", "#bar2", "#bar3"], { y: -70, duration: .5, ease: "power3.inOut" }, 2.2);
+    tl.fromTo("#lt", { x: -1800 }, { x: 0, duration: .5, ease: "power4.out" }, 2.4);
+    const TYPE_AT = 2.9, TYPE_DUR = Math.min(1.8, headline.length * .05);
+    const typeTo = (t) => { const k = Math.max(0, Math.min(1, (t - TYPE_AT) / TYPE_DUR)); hlTxt.textContent = headline.slice(0, Math.round(k * headline.length)); };
+    tl.eventCallback("onUpdate", () => typeTo(tl.time()));
+    tl.fromTo("#hl .cur", { opacity: 1 }, { opacity: 0, duration: .25, repeat: 7, yoyo: true, ease: "steps(1)" }, TYPE_AT + TYPE_DUR);
+    tl.fromTo("#tick", { yPercent: 100 }, { yPercent: 0, duration: .4, ease: "power3.out" }, 2.6);
+    tl.fromTo("#tickTrack", { x: 0 }, { x: -1400, duration: 4.3, ease: "none" }, 2.6);
+    // out: red wipe to the title card
+    tl.fromTo("#wipe", { xPercent: -100, skewX: -12 }, { xPercent: 0, skewX: -12, duration: .4, ease: "power3.in" }, 6.5);
+    tl.to("#wipe", { xPercent: 110, duration: .45, ease: "power3.out" }, 6.92);
+    tl.fromTo("#card .t", { scale: 2.4, opacity: 0 }, { scale: 1, opacity: 1, duration: .32, ease: "power4.in" }, 6.95);
+    tl.fromTo("#card .s", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .4, ease: "power3.out" }, 7.4);
+    tl.fromTo("#card .s i", { opacity: 1 }, { opacity: .25, duration: .4, yoyo: true, repeat: 3, ease: "sine.inOut" }, 7.6);
+    tl.to("#card", { scale: 1.04, duration: 2.1, ease: "none" }, 6.9);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .55, ease: "power1.in" }, 8.4);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["breaking-take"] = tl;
+    tl.seek(0); typeTo(0);
+  </script>
+</body>
+</html>

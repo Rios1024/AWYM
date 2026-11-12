@@ -807,7 +807,8 @@
     row($("rows-docks"), { title: "Content Panel", kind: "Dock", value: url("content-panel.html"), notes: "Dock name: <b>Content Panel</b>. Type text (bold, lists, emojis, photos) and show it on screen, or import a whole show script from Google Docs / Word (template in <b>templates/</b>)." });
     if ($("rows-guests")) { $("rows-guests").innerHTML = ""; row($("rows-guests"), { title: "Guests (optional dock)", kind: "Dock", value: url("guests.html"), notes: "Dock name: <b>Guests</b>. Only needed if you want <b>Send names to the Control Panel</b>; the links work from your normal browser too." }); }
     row($("rows-docks"), { title: "Show Runner", kind: "Dock", value: url("show-runner.html"), notes: "Dock name: <b>Show Runner</b>. Rundown, debate scoreboard, hot-take receipts, sound board, faces, frame effects, talk time (speaking light), mute, clips &amp; replays, and Backup." });
-    row($("rows-docks"), { title: "Intro Editor (optional dock)", kind: "Dock", value: url("intro-editor.html"), notes: "Dock name: <b>Intro Editor</b>. The show intro's words, VS stamp, name plates, fonts, colors and motion, with a live preview and <b>Play in OBS</b>." });
+    row($("rows-docks"), { title: "Intro Editor (optional dock)", kind: "Dock", value: url("intro-editor.html"), notes: "Dock name: <b>Intro Editor</b>. Pick one of nine intros (Classic, Tip-Off, Tale of the Tape, Breaking Take, Starting Lineup, Draft Night, Arcade Mode, Family Group Chat, Film Room) and change its words, names, fonts, colors and motion, with a live preview and <b>Play in OBS</b>." });
+    row($("rows-docks"), { title: "Outro Editor (optional dock)", kind: "Dock", value: url("outro-editor.html"), notes: "Dock name: <b>Outro Editor</b>. Pick one of nine outros (Final Buzzer, Final Score, Chalk Talk Credits, Mic Drop End Screen, Postgame Presser, Highlight Reel, Group Chat Wrap-Up, Power Rankings, Lights Out), change its names, scores and credits with a live preview, and <b>Play in OBS</b>." });
     row($("rows-bg"), { title: "Background", kind: "Browser source", value: url("background.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
     renderClock();
     row($("rows-stats"), { title: "Stats overlay", kind: "Browser source", value: url("stats-card.html"), w: 1920, h: 1080, ticks: ["Untick Local file"] });
@@ -825,6 +826,9 @@
     row($("rows-screens"), { title: "Show intro", kind: "Browser source", value: url("intro.html", { scene: "Intro", next: "Main Show" }),
       w: 1920, h: 1080, ticks: ["Untick Local file", "Control audio via OBS", "Refresh browser when scene becomes active", "Page permissions: Advanced access to OBS"],
       notes: "Put it in a scene called <b>Intro</b>. It plays each time you switch to that scene, then switches to <b>Main Show</b> (change the names at the end of the address if yours differ). Change everything in the <b>Intro Editor</b> dock." });
+    row($("rows-screens"), { title: "Show outro", kind: "Browser source", value: url("outro.html", { scene: "Outro", next: "Thanks for Watching" }),
+      w: 1920, h: 1080, ticks: ["Untick Local file", "Control audio via OBS", "Refresh browser when scene becomes active", "Page permissions: Advanced access to OBS"],
+      notes: "Put it in a scene called <b>Outro</b>. It plays the outro picked in the <b>Outro Editor</b> dock each time you switch to that scene, and can then switch to <b>Thanks for Watching</b>." });
     row($("rows-screens"), { title: "Custom message screen", kind: "Browser source", value: url("screen.html", { type: "custom", title: "Your Message Here", message: "Type anything you like" }),
       w: 1920, h: 1080, ticks: ["Untick Local file"], notes: "Make your own words in the <a href='screen-maker.html' target='_blank'>Screen Maker</a>, or change them live from the Control Panel." });
     renderPeople();

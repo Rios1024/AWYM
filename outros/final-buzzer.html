@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"headline","type":"string","label":"Headline (three words)","default":"That’s the game!"},
+  {"id":"thanks","type":"string","label":"Thank-you line","default":"Thanks for arguing with us"},
+  {"id":"cta","type":"string","label":"Call to action","default":"Subscribe · Like · Argue in the comments"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Final Buzzer</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    /* ---------- stage ---------- */
+    #bg { background:
+        radial-gradient(ellipse 70% 55% at 50% 38%, #3a1f63 0%, #22123d 45%, var(--dark) 80%); }
+    #floor { left: -10%; right: -10%; bottom: -2px; height: 380px; transform-origin: 50% 100%;
+      background:
+        repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 2px, transparent 2px 120px),
+        linear-gradient(180deg, #8a4a1c 0%, #c4702c 40%, #e08a3a 100%);
+      transform: perspective(700px) rotateX(58deg); opacity: .55;
+      -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 55%); mask-image: linear-gradient(180deg, transparent 0%, #000 55%); }
+    .beam { top: -200px; width: 520px; height: 1500px; transform-origin: 50% 0;
+      background: linear-gradient(180deg, rgba(255,214,150,.30), rgba(255,214,150,0) 80%);
+      clip-path: polygon(44% 0, 56% 0, 100% 100%, 0 100%); mix-blend-mode: screen; }
+    #beamL { left: 300px; transform: rotate(18deg); }
+    #beamR { right: 300px; transform: rotate(-18deg); }
+
+    /* ---------- shot clock ---------- */
+    #cam { transform-origin: 50% 45%; }
+    #clock { left: 50%; top: 50%; width: 760px; height: 470px; margin: -280px 0 0 -380px; transform-origin: 50% 50%; }
+    #clock .housing { position: absolute; inset: 0; border-radius: 42px; background: linear-gradient(180deg, #1b1030, #0d0717);
+      border: 10px solid var(--primary);
+      box-shadow: inset 0 0 0 4px rgba(255,255,255,.08), 0 22px 0 -4px #8f3b0c, 0 40px 90px rgba(0,0,0,.6), 0 0 80px rgba(242,107,29,.35); }
+    #clock .bar { position: absolute; left: 0; right: 0; top: 0; height: 96px; border-radius: 32px 32px 0 0;
+      background: linear-gradient(90deg, #d9561a, var(--primary), #d9561a); display: flex; align-items: center; justify-content: space-between; padding: 0 44px; }
+    #clock .bar b { font-family: var(--font-display); font-size: 40px; letter-spacing: 2px; color: #fff; text-shadow: 0 3px 0 rgba(0,0,0,.3); }
+    #clock .bar i { font-style: normal; font-family: var(--font-heading); font-size: 34px; letter-spacing: 3px; background: #fff; color: var(--primary); padding: 2px 20px 4px; border-radius: 14px; }
+    #digits { position: absolute; left: 50%; top: 128px; width: 620px; height: 300px; margin-left: -310px; }
+    #digits svg { width: 100%; height: 100%; overflow: visible; }
+    .seg { fill: var(--gold); }
+    #digits.red .seg { fill: var(--warning); }
+    .lit { filter: drop-shadow(0 0 10px var(--gold)) drop-shadow(0 0 24px rgba(255,178,62,.6)); }
+    #digits.red .lit { filter: drop-shadow(0 0 10px var(--warning)) drop-shadow(0 0 26px rgba(255,46,59,.7)); }
+    .ghost .seg { fill: #fff; opacity: .05; }
+
+    #flash { background: #fff; opacity: 0; z-index: 40; mix-blend-mode: screen; }
+    #ring { left: 50%; top: 45%; width: 400px; height: 400px; margin: -200px 0 0 -200px; border-radius: 50%;
+      border: 26px solid var(--gold); opacity: 0; box-shadow: 0 0 60px var(--gold); }
+
+    /* ---------- the slam ---------- */
+    #slam { z-index: 20; flex-direction: column; gap: 0; top: -40px; }
+    .w { display: block; font-family: var(--font-display); text-transform: uppercase; line-height: .95; text-align: center;
+      -webkit-text-stroke: 6px var(--dark); paint-order: stroke fill;
+      text-shadow: 0 10px 0 var(--dark), 0 18px 40px rgba(0,0,0,.6); }
+    #w1 { font-size: 150px; color: var(--light); }
+    #w2 { font-size: 110px; color: var(--accent); }
+    #w3 { font-size: 270px; color: var(--primary); }
+
+    /* ---------- end card ---------- */
+    #card { z-index: 21; flex-direction: column; }
+    #show { font-family: var(--font-display); font-size: 118px; text-transform: uppercase; color: var(--light);
+      letter-spacing: 2px; white-space: nowrap; text-shadow: 0 8px 0 var(--secondary), 0 0 50px rgba(242,107,29,.45); }
+    #show span { display: inline-block; }
+    #show .o { color: var(--primary); }
+    #show .p { color: var(--accent); }
+    #rule { width: 980px; height: 8px; margin: 26px 0 30px; border-radius: 4px; transform-origin: 50% 50%;
+      background: linear-gradient(90deg, transparent, var(--primary), var(--gold), var(--accent), transparent); }
+    #thanks { font-family: var(--font-heading); font-size: 64px; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); }
+    #cta { margin-top: 34px; display: flex; gap: 22px; }
+    .pill { font-family: var(--font-body); font-weight: 700; font-size: 40px; letter-spacing: 2px; text-transform: uppercase;
+      padding: 10px 34px 12px; border-radius: 999px; border: 4px solid var(--light); color: var(--light); background: rgba(18,10,31,.55); }
+    .pill.hot { background: var(--warning); border-color: var(--warning); color: #fff; box-shadow: 0 0 30px rgba(255,46,59,.55); }
+
+    .conf { width: 18px; height: 30px; border-radius: 3px; top: -60px; z-index: 30; }
+    #black { background: #000; opacity: 0; z-index: 60; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="final-buzzer" data-start="0" data-duration="12" data-width="1920" data-height="1080" data-fps="30">
+
+    <div id="cam" class="clip" data-start="0" data-duration="12" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="beamL" class="abs beam"></div>
+      <div id="beamR" class="abs beam"></div>
+      <div id="floor" class="abs"></div>
+      <div id="ring" class="abs"></div>
+      <div id="clock" class="abs">
+        <div class="housing"></div>
+        <div class="bar"><b>SHOT CLOCK</b><i>FINAL</i></div>
+        <div id="digits"><svg viewBox="0 0 620 300" id="dsvg"></svg></div>
+      </div>
+    </div>
+
+    <div id="slam" class="clip center" data-start="5.7" data-duration="2.6" data-track-index="1">
+      <span class="w" id="w1">That's</span>
+      <span class="w" id="w2">the</span>
+      <span class="w" id="w3">Game!</span>
+    </div>
+
+    <div id="card" class="clip center" data-start="7.9" data-duration="4.1" data-track-index="2">
+      <div id="show"></div>
+      <div id="rule"></div>
+      <div id="thanks">Thanks for arguing with us</div>
+      <div id="cta"></div>
+    </div>
+
+    <div id="confetti" class="clip" data-start="5.7" data-duration="6.3" data-track-index="3" style="z-index:30"></div>
+    <div id="flash" class="clip" data-start="0" data-duration="12" data-track-index="4"></div>
+    <div id="grain-1" class="clip grain" data-layout-allow-occlusion data-start="0" data-duration="12" data-track-index="5"></div>
+    <div id="vignette-2" class="clip vignette" data-layout-allow-occlusion data-start="0" data-duration="12" data-track-index="5"></div>
+    <div id="black" class="clip" data-start="11.2" data-duration="0.8" data-track-index="6"></div>
+
+    <!-- sound -->
+    <audio id="sfx-01-tick" data-start="0.5" data-duration="0.1" data-track-index="10" src="assets/sfx/tick.wav" data-volume="0.8"></audio>
+    <audio id="sfx-02-tick" data-start="1.5" data-duration="0.1" data-track-index="11" src="assets/sfx/tick.wav" data-volume="0.8"></audio>
+    <audio id="sfx-03-tick" data-start="2.5" data-duration="0.1" data-track-index="12" src="assets/sfx/tick.wav" data-volume="0.9"></audio>
+    <audio id="sfx-04-tick" data-start="3.5" data-duration="0.1" data-track-index="13" src="assets/sfx/tick.wav" data-volume="1"></audio>
+    <audio id="sfx-05-tick" data-start="4.5" data-duration="0.1" data-track-index="14" src="assets/sfx/tick.wav" data-volume="1"></audio>
+    <audio id="sfx-06-riser" data-start="3.6" data-duration="2" data-track-index="15" src="assets/sfx/riser.wav" data-volume="0.55"></audio>
+    <audio id="sfx-07-buzzer" data-start="5.5" data-duration="1.5" data-track-index="16" src="assets/sfx/buzzer.wav" data-volume="0.75"></audio>
+    <audio id="sfx-08-crowd" data-start="5.75" data-duration="6" data-track-index="17" src="assets/sfx/crowd.wav" data-volume="0.45" data-fade-out="1.5"></audio>
+    <audio id="sfx-09-hit" data-start="5.85" data-duration="1.6" data-track-index="18" src="assets/sfx/hit.wav" data-volume="0.5"></audio>
+    <audio id="sfx-10-hit" data-start="6.55" data-duration="1.6" data-track-index="19" src="assets/sfx/hit.wav" data-volume="0.8"></audio>
+    <audio id="sfx-11-whoosh" data-start="7.85" data-duration="0.8" data-track-index="20" src="assets/sfx/whoosh.wav" data-volume="0.7"></audio>
+    <audio id="sfx-12-beat" data-start="8.6" data-duration="3.4" data-track-index="21" src="assets/sfx/beat.wav" data-volume="0.55" data-fade-in="0.3" data-fade-out="1.2"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const headline = (V.headline || "That’s the game!").split(/\s+/);
+    document.getElementById("w1").textContent = headline[0] || "";
+    document.getElementById("w2").textContent = headline.slice(1, -1).join(" ") || "";
+    document.getElementById("w3").textContent = headline.length > 1 ? headline[headline.length - 1] : "";
+    document.getElementById("thanks").textContent = V.thanks || "Thanks for arguing with us";
+    const ctaParts = (V.cta || "Subscribe · Like · Argue in the comments").split("·").map(s => s.trim()).filter(Boolean);
+    document.getElementById("cta").innerHTML = ctaParts.map((p, i) => `<span class="pill${i === 0 ? " hot" : ""}">${p}</span>`).join("");
+
+    /* show title, letter by letter (two colour accents like the intro) */
+    const title = "Argue with Yo Momma!";
+    document.getElementById("show").innerHTML = [...title].map(ch => {
+      const cls = /[!]/.test(ch) ? "p" : "";
+      return ch === " " ? '<span>&nbsp;</span>' : `<span class="L ${cls}">${ch}</span>`;
+    }).join("").replace(/(<span class="L ">Y<\/span><span class="L ">o<\/span>)/, m => m.replace(/class="L "/g, 'class="L o"'));
+
+    /* seven-segment digits: ":05" -> "0.0"  (two digits + a colon) */
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.getElementById("dsvg");
+    const SEG = { // segment polygons in a 160x280 cell, slight italic
+      a: "30,0 130,0 112,22 48,22", d: "18,258 118,258 100,280 0,280",
+      g: "28,129 108,129 120,140 108,151 28,151 16,140",
+      f: "24,6 44,26 36,124 22,136 10,124", b: "136,6 148,124 136,136 122,124 128,26",
+      e: "10,146 22,138 36,150 30,252 12,272 0,262", c: "126,146 140,138 152,150 146,262 130,276 116,254"
+    };
+    const MAP = { 0: "abcdef", 1: "bc", 2: "abdeg", 3: "abcdg", 4: "bcfg", 5: "acdfg", 6: "acdefg", 7: "abc", 8: "abcdefg", 9: "abcdfg" };
+    function cell(x) {
+      const ghost = document.createElementNS(NS, "g"); ghost.setAttribute("class", "ghost"); ghost.setAttribute("transform", `translate(${x},10)`);
+      const lit = document.createElementNS(NS, "g"); lit.setAttribute("class", "lit"); lit.setAttribute("transform", `translate(${x},10)`);
+      const segs = {};
+      for (const k in SEG) {
+        const a = document.createElementNS(NS, "polygon"); a.setAttribute("points", SEG[k]); a.setAttribute("class", "seg"); ghost.appendChild(a);
+        const b = document.createElementNS(NS, "polygon"); b.setAttribute("points", SEG[k]); b.setAttribute("class", "seg"); lit.appendChild(b); segs[k] = b;
+      }
+      svg.appendChild(ghost); svg.appendChild(lit); return segs;
+    }
+    const D0 = cell(10), D1 = cell(250), D2 = cell(440);
+    const dotsLit = document.createElementNS(NS, "g"); dotsLit.setAttribute("class", "lit");
+    const colon = [[215, 95], [205, 205]].map(([cx, cy]) => { const c = document.createElementNS(NS, "circle"); c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", 15); c.setAttribute("class", "seg"); dotsLit.appendChild(c); return c; });
+    const dot = document.createElementNS(NS, "circle"); dot.setAttribute("cx", 422); dot.setAttribute("cy", 282); dot.setAttribute("r", 16); dot.setAttribute("class", "seg"); dotsLit.appendChild(dot);
+    svg.appendChild(dotsLit);
+
+    /* deterministic confetti */
+    let seed = 20261112; const rnd = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+    const confColors = ["#F26B1D", "#FFB23E", "#FF3D7F", "#FFF4E0", "#A238FF", "#3DD6FF"];
+    const conf = document.getElementById("confetti"); const pieces = [];
+    for (let i = 0; i < 110; i++) {
+      const d = document.createElement("div"); d.className = "abs conf";
+      d.style.left = (rnd() * 1920) + "px"; d.style.background = confColors[i % confColors.length];
+      if (i % 3 === 0) { d.style.width = "14px"; d.style.height = "14px"; d.style.borderRadius = "50%"; }
+      conf.appendChild(d); pieces.push({ d, fall: 1100 + rnd() * 300, delay: rnd() * 1.4, dur: 2.6 + rnd() * 2.2, drift: (rnd() - .5) * 360, spin: (rnd() - .5) * 1440 });
+    }
+
+    /* ---------- timeline ---------- */
+    const tl = gsap.timeline({ paused: true });
+    const show = (segs, digit, at) => { for (const k in segs) tl.set(segs[k], { opacity: MAP[digit].includes(k) ? 1 : 0 }, at); };
+    tl.fromTo("#clock .housing, #clock .bar, #digits", { scale: .6, y: 80, opacity: 0 }, { scale: 1, y: 0, opacity: 1, duration: .55, ease: "back.out(1.7)" }, .05);
+    tl.fromTo(".beam", { opacity: 0 }, { opacity: 1, duration: 1.2 }, 0);
+    tl.to("#beamL", { rotation: 8, duration: 5.5, ease: "sine.inOut" }, 0).to("#beamR", { rotation: -8, duration: 5.5, ease: "sine.inOut" }, 0);
+    tl.fromTo("#cam", { scale: 1 }, { scale: 1.12, duration: 5.5, ease: "power1.in" }, 0);
+
+    tl.set(dot, { opacity: 0 }, 0);
+    show(D0, 0, 0); show(D1, 0, 0); show(D2, 5, 0);
+    [4, 3, 2, 1, 0].forEach((n, i) => {
+      const t = .5 + i;
+      show(D2, n, t);
+      if (n <= 3) tl.set("#digits", { className: "red" }, t);
+      tl.to("#clock", { scale: 1.06, duration: .06, ease: "power2.out" }, t).to("#clock", { scale: 1, duration: .3, ease: "power2.out" }, t + .06);
+    });
+    /* final buzzer at 5.5 */
+    /* buzzer: 0:00 flips to 0.0 like the show clock */
+    tl.set(colon, { opacity: 0 }, 5.5).set(dot, { opacity: 1 }, 5.5);
+    for (const k in D0) tl.set(D0[k], { opacity: 0 }, 5.5);
+    show(D1, 0, 5.5); show(D2, 0, 5.5);
+    tl.to("#flash", { opacity: .9, duration: .06 }, 5.5).to("#flash", { opacity: 0, duration: .5 }, 5.56);
+    tl.fromTo("#ring", { scale: .4, opacity: 1 }, { scale: 4.5, opacity: 0, duration: .9, ease: "power2.out" }, 5.5);
+    tl.to("#cam", { x: 26, y: -14, duration: .05, yoyo: true, repeat: 7, ease: "none" }, 5.5).set("#cam", { x: 0, y: 0 }, 5.9);
+    tl.to("#clock", { scale: .55, y: -260, opacity: .0, duration: .45, ease: "power3.in" }, 5.65);
+    tl.to("#cam", { scale: 1.0, duration: .6, ease: "power2.out" }, 5.7);
+
+    /* THAT'S THE GAME */
+    tl.fromTo("#w1", { scale: 3, opacity: 0, rotation: -8 }, { scale: 1, opacity: 1, rotation: -4, duration: .28, ease: "power4.in" }, 5.75);
+    tl.fromTo("#w2", { scale: 3, opacity: 0, rotation: 6 }, { scale: 1, opacity: 1, rotation: 3, duration: .26, ease: "power4.in" }, 6.15);
+    tl.fromTo("#w3", { scale: 4, opacity: 0, rotation: -6 }, { scale: 1, opacity: 1, rotation: -3, duration: .3, ease: "power4.in" }, 6.5);
+    tl.to("#slam", { x: -18, y: 12, duration: .05, yoyo: true, repeat: 5, ease: "none" }, 6.8).set("#slam", { x: 0, y: 0 }, 7.1);
+    tl.to("#slam", { scale: 1.05, duration: .9, ease: "sine.inOut" }, 6.85);
+    tl.to("#slam", { y: -900, scale: .6, opacity: 0, duration: .5, ease: "power3.in" }, 7.8);
+
+    /* confetti */
+    pieces.forEach(p => {
+      tl.fromTo(p.d, { y: 0, x: 0, rotation: 0 }, { y: p.fall, x: p.drift, rotation: p.spin, duration: p.dur, ease: "power1.in" }, 5.75 + p.delay);
+    });
+
+    /* end card */
+    const letters = document.querySelectorAll("#show .L");
+    tl.fromTo(letters, { y: -300, opacity: 0, rotation: () => 0 }, { y: 0, opacity: 1, duration: .45, ease: "bounce.out", stagger: .045 }, 8.0);
+    tl.fromTo("#rule", { scaleX: 0 }, { scaleX: 1, duration: .6, ease: "power3.out" }, 8.9);
+    tl.fromTo("#thanks", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .5, ease: "power3.out" }, 9.1);
+    tl.fromTo("#cta .pill", { y: 60, opacity: 0, scale: .8 }, { y: 0, opacity: 1, scale: 1, duration: .45, ease: "back.out(2)", stagger: .14 }, 9.45);
+    tl.to("#cta .pill.hot", { scale: 1.07, duration: .35, yoyo: true, repeat: 3, ease: "sine.inOut" }, 10.2);
+    tl.to("#card", { scale: 1.04, duration: 4, ease: "none" }, 8);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .8, ease: "power1.in" }, 11.2);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["final-buzzer"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"group","type":"string","label":"Group chat name","default":"The Family (do not leave)"},
+  {"id":"chat","type":"string","label":"Messages (Name: text, separated by |; “Me:” is on the right)","default":"Unc: y’all were WRONG about Kobe|Cousin Tay: Momma ended that man’s whole career|Me: we’ll run it back next week|Momma: and I’ll win again|Unc: ……|Momma: good night babies"},
+  {"id":"leaver","type":"string","label":"Who leaves the chat at the end","default":"Momma"},
+  {"id":"signoff","type":"string","label":"Last line","default":"See y’all next week"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Group Chat Wrap-Up</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #bg { background: radial-gradient(ellipse 60% 70% at 50% 50%, #3a1f66 0%, #1b0e30 60%, #0b0614 100%); }
+    #dots { opacity: .18; background: radial-gradient(var(--light) 2px, transparent 2.5px) 0 0 / 46px 46px; }
+    #phone { left: 50%; top: 50%; width: 640px; height: 1010px; margin: -505px 0 0 -320px; border-radius: 70px; background: #0b0710; z-index: 3;
+      box-shadow: 0 0 0 14px #2b2236, 0 0 0 18px #463a55, 0 40px 90px rgba(0,0,0,.7); overflow: hidden; }
+    #screen { position: absolute; inset: 14px; border-radius: 58px; background: #f6f1ea; overflow: hidden; display: flex; flex-direction: column; }
+    #notch { position: absolute; left: 50%; top: 14px; width: 180px; height: 40px; margin-left: -90px; border-radius: 22px; background: #0b0710; z-index: 4; }
+    #head { flex: none; height: 170px; padding-top: 70px; background: #ece3d8; border-bottom: 2px solid #ddd2c4; text-align: center; }
+    #head b { display: block; font-family: var(--font-body); font-weight: 700; font-size: 34px; color: #1d1424; }
+    #head span { font-family: var(--font-body); font-weight: 600; font-size: 24px; color: #5e5468; }
+    #msgs { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 0; padding: 0 26px 26px; overflow: hidden; }
+    .m { display: flex; flex-direction: column; overflow: hidden; max-height: 0; }
+    .m .who { font-family: var(--font-body); font-weight: 700; font-size: 26px; letter-spacing: 1px; margin: 14px 0 4px 14px; }
+    .m .b { max-width: 470px; padding: 14px 22px 16px; border-radius: 30px; font-family: var(--font-body); font-weight: 500; font-size: 34px; line-height: 1.2; color: #1d1424; background: #e3dbd1; align-self: flex-start; }
+    .m.me .b { align-self: flex-end; background: var(--primary); color: #fff; margin-top: 14px; }
+    .sys { align-self: center; margin-top: 18px; font-family: var(--font-body); font-weight: 600; font-size: 26px; color: #8a7f92; background: #ece3d8; padding: 6px 18px; border-radius: 14px; }
+    .typing { align-self: flex-start; margin-top: 16px; display: flex; gap: 10px; align-items: center; padding: 22px 26px; border-radius: 30px; background: #e3dbd1; }
+    .typing i { width: 16px; height: 16px; border-radius: 50%; background: #8a7f92; }
+    #typeName { font-family: var(--font-body); font-weight: 700; font-size: 26px; color: var(--accent); margin: 14px 0 0 14px; }
+    #bubble { z-index: 6; left: 50%; top: 50%; width: 300px; height: 300px; margin: -150px 0 0 -150px; border-radius: 50%; background: var(--dark); }
+    #title { z-index: 7; flex-direction: column; }
+    #title .t { font-family: var(--font-display); font-size: 150px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center; text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.4); }
+    #title .t em { font-style: normal; color: var(--primary); }
+    #title .s { margin-top: 34px; font-family: var(--font-body); font-weight: 700; font-size: 46px; letter-spacing: 10px; text-transform: uppercase; color: var(--gold); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="group-chat-wrap" data-start="0" data-duration="12" data-width="1920" data-height="1080" data-fps="30">
+    <div id="room" class="clip" data-start="0" data-duration="12" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="dots" class="abs" style="inset:0"></div>
+    </div>
+    <div id="phoneClip" class="clip" data-start="0" data-duration="9.4" data-track-index="1">
+      <div id="phone" class="abs">
+        <div id="screen">
+          <div id="head"><b id="group"></b><span id="members"></span></div>
+          <div id="msgs"></div>
+        </div>
+        <div id="notch"></div>
+      </div>
+    </div>
+    <div id="bubbleClip" class="clip" data-start="8.7" data-duration="3.3" data-track-index="2"><div id="bubble" class="abs"></div></div>
+    <div id="title" class="clip center" data-start="9.1" data-duration="2.9" data-track-index="3">
+      <div class="t">Argue with<br><em>Yo Momma!</em></div>
+      <div class="s" id="signoff"></div>
+    </div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="12" data-track-index="4" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="11.3" data-duration="0.7" data-track-index="5"></div>
+
+    <audio id="sfx-01-pop" data-start="0.7" data-duration="0.16" data-track-index="10" src="assets/sfx/pop.wav" data-volume="0.8"></audio>
+    <audio id="sfx-02-pop" data-start="1.6" data-duration="0.16" data-track-index="11" src="assets/sfx/pop.wav" data-volume="0.8"></audio>
+    <audio id="sfx-03-pop" data-start="2.5" data-duration="0.16" data-track-index="12" src="assets/sfx/pop.wav" data-volume="0.8"></audio>
+    <audio id="sfx-04-pop" data-start="3.4" data-duration="0.16" data-track-index="13" src="assets/sfx/pop.wav" data-volume="0.8"></audio>
+    <audio id="sfx-05-pop" data-start="4.3" data-duration="0.16" data-track-index="14" src="assets/sfx/pop.wav" data-volume="0.8"></audio>
+    <audio id="sfx-06-pop" data-start="5.2" data-duration="0.16" data-track-index="15" src="assets/sfx/pop.wav" data-volume="0.8"></audio>
+    <audio id="sfx-07-beat" data-start="0" data-duration="8.8" data-track-index="16" src="assets/sfx/beat.wav" data-volume="0.35" data-fade-in="0.6" data-fade-out="0.8"></audio>
+    <audio id="sfx-08-leave" data-start="6.3" data-duration="0.35" data-track-index="17" src="assets/sfx/blip.wav" data-volume="0.7"></audio>
+    <audio id="sfx-09-whoosh" data-start="8.5" data-duration="0.8" data-track-index="18" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-10-hit" data-start="9.1" data-duration="1.6" data-track-index="19" src="assets/sfx/hit.wav" data-volume="0.6"></audio>
+    <audio id="sfx-11-beat" data-start="9.1" data-duration="2.9" data-track-index="20" src="assets/sfx/beat.wav" data-volume="0.5" data-fade-out="1.2"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    document.getElementById("group").textContent = get("group", "The Family (do not leave)");
+    const chat = get("chat", "Unc: y’all were WRONG about Kobe|Cousin Tay: Momma ended that man’s whole career|Me: we’ll run it back next week|Momma: and I’ll win again|Unc: ……|Momma: good night babies")
+      .split("|").map((s) => s.trim()).filter(Boolean).slice(0, 6).map((s) => { const i = s.indexOf(":"); return i > 0 ? { who: s.slice(0, i).trim(), text: s.slice(i + 1).trim() } : { who: "", text: s }; });
+    const leaver = get("leaver", "Momma");
+    const names = [...new Set(chat.map((c) => c.who).filter((w) => w && w.toLowerCase() !== "me").concat([leaver]))];
+    document.getElementById("members").textContent = names.slice(0, 3).join(", ") + (names.length > 3 ? " +" + (names.length - 3) : "") + ", you";
+    const NAMECOL = ["#6f17c4", "#1d6b3f", "#a63d0c", "#1552a6", "#b8174f"];
+    const col = (w) => NAMECOL[Math.max(0, names.indexOf(w)) % NAMECOL.length];
+    document.getElementById("msgs").innerHTML = chat.map((c, i) => {
+      const me = c.who.toLowerCase() === "me";
+      return `<div class="m${me ? " me" : ""}" id="m${i}">${me || !c.who ? "" : `<div class="who" style="color:${col(c.who)}">${esc(c.who)}</div>`}<div class="b">${esc(c.text)}</div></div>`;
+    }).join("") + `<div class="m" id="mt"><div class="sys">${esc(leaver)} left the chat</div></div>`;
+    document.getElementById("signoff").textContent = get("signoff", "See y’all next week");
+    for (let i = chat.length; i < 6; i++) document.getElementById("sfx-0" + (i + 1) + "-pop").setAttribute("data-volume", "0");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#dots", { backgroundPositionY: 0 }, { backgroundPositionY: 92, duration: 12, ease: "none" }, 0);
+    tl.fromTo("#phone", { y: 900, rotation: -8 }, { y: 0, rotation: 3, duration: .6, ease: "power3.out" }, 0);
+    tl.to("#phone", { rotation: -2, duration: 7, ease: "sine.inOut" }, .6);
+    chat.forEach((c, i) => {
+      const at = .7 + i * .9;
+      tl.fromTo("#m" + i, { maxHeight: 0 }, { maxHeight: 400, duration: .35, ease: "power2.out" }, at);
+      tl.fromTo("#m" + i + " .b", { scale: .5, opacity: 0 }, { scale: 1, opacity: 1, duration: .3, ease: "back.out(2.5)", transformOrigin: c.who.toLowerCase() === "me" ? "100% 100%" : "0% 100%" }, at);
+    });
+    tl.fromTo("#mt", { maxHeight: 0 }, { maxHeight: 200, duration: .35, ease: "power2.out" }, 6.3);
+    tl.fromTo("#mt .sys", { scale: .6, opacity: 0 }, { scale: 1, opacity: 1, duration: .3, ease: "back.out(2)" }, 6.3);
+    tl.to("#phone", { y: -1400, rotation: -12, duration: .7, ease: "power3.in" }, 8.0);
+    tl.fromTo("#bubble", { scale: 0 }, { scale: 9, duration: .6, ease: "power3.in" }, 8.7);
+    tl.fromTo("#title .t", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: .35, ease: "power4.in" }, 9.1);
+    tl.fromTo("#title .s", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .4, ease: "power3.out" }, 9.6);
+    tl.to("#title", { scale: 1.04, duration: 2.9, ease: "none" }, 9.1);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .65 }, 11.3);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["group-chat-wrap"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>
