@@ -1,0 +1,23 @@
+/* Argue with Yo Momma! — outro look: fonts and colours from the show's theme.css */
+@font-face { font-family: "Bungee"; src: url("fonts/bungee-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Anton"; src: url("fonts/anton-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 500; src: url("fonts/barlow-condensed-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Press Start 2P"; src: url("fonts/press-start-2p-latin-400-normal.woff2") format("woff2"); }
+:root {
+  --primary: #F26B1D; --secondary: #2A1747; --accent: #FF3D7F; --dark: #120A1F; --light: #FFF4E0;
+  --gold: #FFB23E; --warning: #FF2E3B; --purple: #A238FF;
+  --font-display: "Bungee", sans-serif; --font-heading: "Anton", sans-serif;
+  --font-body: "Barlow Condensed", sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--dark); color: var(--light); }
+#root { position: relative; width: 1920px; height: 1080px; overflow: hidden; font-family: var(--font-body); }
+.clip { position: absolute; inset: 0; }
+.abs { position: absolute; }
+.center { display: flex; align-items: center; justify-content: center; }
+.title-word { font-family: var(--font-display); color: var(--light); line-height: .9; text-transform: uppercase; }
+.grain { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: .07; mix-blend-mode: overlay; pointer-events: none; z-index: 50; }
+.vignette { background: radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,.65) 100%); pointer-events: none; z-index: 49; }

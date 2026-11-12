@@ -8,12 +8,18 @@
   Source size: 1920 x 1080 (same as your canvas). It's full screen, so it can be
   the only source in its scene ("Intro", made by the setup script).
 
-  What it does: the two corners slam together, a VS stamp (or your own words
-  or logo), a quick argument in speech bubbles, then the show title lands with
-  confetti, the tagline, the episode badge and up to four name plates, and it
-  wipes to black. Every word, color, font, speed and effect is set in the
-  Intro Editor (intro-editor.html, add it as a dock), which updates this
-  source live and has a "Play in OBS" button.
+  What it does: plays the intro picked in the Intro Editor (intro-editor.html,
+  add it as a dock):
+    Classic           the two corners slam together, a VS stamp (or your own
+                      words or logo), a quick argument in speech bubbles, then
+                      the show title with confetti, the tagline, the episode
+                      badge and up to four name plates; every word, color, font,
+                      speed and effect is set in the editor
+    Tip-Off, Tale of the Tape, Breaking Take, Starting Lineup, Draft Night,
+    Arcade Mode, Family Group Chat, Film Room
+                      HyperFrames intros in the intros folder (they also render
+                      to MP4), with their own words set in the editor
+  The editor updates this source live and has a "Play in OBS" button.
 
   Plays: every time its scene goes live (tick "Refresh browser when scene
   becomes active"), when "Play in OBS" is pressed in the Intro Editor, or when
@@ -31,10 +37,15 @@
   ── For developers ─────────────────────────────────────────────
   Type:      OBS browser source, 1920 × 1080.
   Uses:      theme.css, intro.css, shared.js, lib/anime.umd.min.js (anime.js v4), intro.js
-             (the stage and its timeline; settings in localStorage "awym-intro-v1").
+             (the Classic stage and its timeline; settings in localStorage "awym-intro-v1").
+             The other intros: intros/<name>.html in an iframe, driven by outros/player.js;
+             which intro and their words in localStorage "awym-intro-pick-v1" = {pick, vars}.
   Messages:  listens to:"intro"  play | stop | hide | update {data: settings} | ping
-                                 names {plates: {tl, tr, ll, lr: {name, role}}}  (from the Guests page)
-             sends   from:"intro" {cmd:"hello"} on load · {cmd:"here", playing, duration}
+                                 pick {data: {pick, vars}}  (which intro, and the HyperFrames intros' words)
+                                 names {plates: {tl, tr, ll, lr: {name, role}}}  (from the Guests page;
+                                 also fills Tale of the Tape and Arcade Mode from tl/tr, and
+                                 Starting Lineup from all four)
+             sends   from:"intro" {cmd:"hello"} on load · {cmd:"here", playing, duration, pick}
                                   (answer to ping) · {cmd:"state", playing} · {cmd:"done"}
              Clear (🚨) hides it until it plays again.
 -->
@@ -45,10 +56,17 @@
 <style>
   /* The page is transparent; the 1920×1080 stage (.awi, see intro.css) is scaled to the source size. */
   html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; }
+  /* the HyperFrames intros play in this 1920×1080 frame instead of the Classic stage */
+  #hf { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; display: none; }
+  #hf iframe { position: absolute; inset: 0; width: 1920px; height: 1080px; border: 0; background: transparent; }
+  body.hfmode #stage { display: none; }
+  body.hfmode #hf { display: block; }
+  body.hfhide #hf { visibility: hidden; }
 </style>
 </head>
 <body>
   <div id="stage"></div>
+  <div id="hf"></div>
 
 <script src="shared.js"></script>
 <script src="lib/anime.umd.min.js"></script>
@@ -57,9 +75,11 @@
 (function () {
   const stage = document.getElementById("stage");
   /** Scale the 1920×1080 design to the OBS source size, centred. */
+  const hfBox = document.getElementById("hf");
   function fit() {
     const s = Math.min(innerWidth / 1920, innerHeight / 1080);
     stage.style.transform = `translate(${(innerWidth - 1920 * s) / 2}px, ${(innerHeight - 1080 * s) / 2}px) scale(${s})`;
+    hfBox.style.transform = stage.style.transform;
   }
   addEventListener("resize", fit); fit();
 
@@ -70,6 +90,65 @@
   let settings = I.load();
   let pending = null;                         // settings that arrived mid-intro, used when it ends
   const say = (msg) => AWYM.send(Object.assign({ from: "intro" }, msg));
+
+  /* ---------- which intro: Classic (above) or one of the HyperFrames intros ---------- */
+  const PKEY = "awym-intro-pick-v1";
+  const HF = ["tip-off", "tale-of-the-tape", "breaking-take", "starting-lineup", "draft-night", "arcade-mode", "group-chat", "film-room"];
+  const cleanPick = (p) => {
+    p = p && typeof p === "object" ? p : {};
+    return { pick: HF.includes(p.pick) ? p.pick : "classic", vars: p.vars && typeof p.vars === "object" ? p.vars : {} };
+  };
+  const loadPick = () => { try { return cleanPick(JSON.parse(localStorage.getItem(PKEY) || "{}")); } catch (e) { return cleanPick({}); } };
+  const savePick = (p) => { try { localStorage.setItem(PKEY, JSON.stringify(p)); } catch (e) {} };
+  let pk = loadPick(), pkPending = null;
+  let hfFrame = null, hfReady = false, hfPlaying = false, hfWant = false, hfDur = 0;
+  const isHF = () => pk.pick !== "classic";
+  const hfTell = (cmd, extra) => { if (hfFrame && hfFrame.contentWindow) hfFrame.contentWindow.postMessage(Object.assign({ awymOutro: 1, cmd }, extra || {}), "*"); };
+  /** Show the picked intro: the Classic stage, or (re)load a HyperFrames intro with its words. */
+  function mountPick() {
+    document.body.classList.toggle("hfmode", isHF());
+    if (!isHF()) { if (hfFrame) { hfFrame.remove(); hfFrame = null; } hfReady = hfPlaying = false; return; }
+    hfReady = false; hfPlaying = false;
+    const f = document.createElement("iframe");
+    f.setAttribute("allow", "autoplay");
+    f.src = "intros/" + pk.pick + ".html?vars=" + encodeURIComponent(JSON.stringify(pk.vars[pk.pick] || {}));
+    hfBox.appendChild(f);
+    if (hfFrame) { const old = hfFrame; setTimeout(() => old.remove(), 400); }
+    hfFrame = f;
+  }
+  addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || !m.awymOutro || !hfFrame || e.source !== hfFrame.contentWindow) return;
+    if (m.ev === "ready") { hfReady = true; hfDur = m.duration; if (hfWant) play(); else hfTell("seek", { t: 0 }); }
+    else if (m.ev === "done") {
+      hfPlaying = false; say({ cmd: "state", playing: false }); say({ cmd: "done" });
+      if (pkPending) { pk = pkPending; pkPending = null; hfWant = false; mountPick(); }
+      if (settings.loop) setTimeout(() => { if (!hfPlaying) play(); }, 500);
+      else setTimeout(goNext, 250);
+    }
+  });
+  /** Guests page names → the HyperFrames intros that show people:
+      Tale of the Tape (top-left / top-right), Arcade Mode (P1 / P2), Starting Lineup (all four seats). */
+  function namesToVars(vars, plates) {
+    vars = Object.assign({}, vars || {});
+    const P = ["tl", "tr", "ll", "lr"].map((k) => (plates && plates[k]) || {});
+    const tale = Object.assign({}, vars["tale-of-the-tape"] || {});
+    if (P[0].name) { tale.leftName = P[0].name; tale.leftRole = P[0].role || ""; }
+    if (P[1].name) { tale.rightName = P[1].name; tale.rightRole = P[1].role || ""; }
+    vars["tale-of-the-tape"] = tale;
+    const arc = Object.assign({}, vars["arcade-mode"] || {});
+    if (P[0].name) arc.p1 = P[0].name;
+    if (P[1].name) arc.p2 = P[1].name;
+    vars["arcade-mode"] = arc;
+    if (P.some((p) => p.name)) {
+      const sl = Object.assign({}, vars["starting-lineup"] || {});
+      P.forEach((p, i) => { sl["p" + (i + 1) + "Name"] = p.name || ""; sl["p" + (i + 1) + "Pos"] = p.role || ""; if (!p.name) sl["p" + (i + 1) + "Stat"] = ""; });
+      vars["starting-lineup"] = sl;
+    }
+    return vars;
+  }
+  function namesToPick(plates) { return Object.assign({}, pk, { vars: namesToVars(pk.vars, plates) }); }
+
 
   /** Switch OBS to the next scene, but only if this intro's own scene is the one on air. */
   function goNext() {
@@ -90,18 +169,40 @@
     else setTimeout(goNext, 250);
   });
 
-  function play() { player.play(true); say({ cmd: "state", playing: true }); }
+  function play() {
+    document.body.classList.remove("hfhide");
+    if (isHF()) {
+      if (!hfReady) { hfWant = true; return; }
+      hfWant = false; hfPlaying = true; hfTell("play", { t: 0, muted: false });
+    } else player.play(true);
+    say({ cmd: "state", playing: true });
+  }
+  const playingNow = () => (isHF() ? hfPlaying : player.state().playing);
 
   AWYM.listen((m) => {
     if (m.to !== "intro") return;
     if (m.cmd === "play") play();
-    else if (m.cmd === "stop") { player.pause(); player.seek(player.state().duration); say({ cmd: "state", playing: false }); }
-    else if (m.cmd === "hide") player.hide(true);
-    else if (m.cmd === "ping") say({ cmd: "here", playing: player.state().playing, duration: Math.round(player.state().duration) });
+    else if (m.cmd === "stop") {
+      if (isHF()) { hfTell("stop"); hfPlaying = false; } else { player.pause(); player.seek(player.state().duration); }
+      say({ cmd: "state", playing: false });
+    }
+    else if (m.cmd === "hide") { player.hide(true); hfTell("stop"); hfPlaying = false; document.body.classList.add("hfhide"); }
+    else if (m.cmd === "ping") say({ cmd: "here", playing: playingNow(), pick: pk.pick, duration: Math.round(isHF() ? hfDur : player.state().duration) });
+    else if (m.cmd === "pick" && m.data) {
+      const next = cleanPick(m.data);
+      if (JSON.stringify(next) === JSON.stringify(pk)) return;
+      savePick(next);
+      if (playingNow()) { pkPending = next; return; }          // don't swap an intro that's on air
+      pk = next; mountPick();
+    }
     else if ((m.cmd === "update" && m.data) || (m.cmd === "names" && m.plates)) {
       // "names": the Guests page's people on the name plates (also works with the Intro Editor closed)
       const next = m.cmd === "names" ? I.applyNames(settings, m.plates) : I.clean(m.data);
-      if (m.cmd === "names") { I.save(next); say({ cmd: "names-ok" }); }
+      if (m.cmd === "names") {
+        I.save(next); say({ cmd: "names-ok" });
+        const np = namesToPick(m.plates); savePick(np);
+        if (playingNow()) pkPending = np; else if (JSON.stringify(np) !== JSON.stringify(pk)) { pk = np; if (["tale-of-the-tape", "arcade-mode", "starting-lineup"].includes(pk.pick)) mountPick(); }
+      }
       if (JSON.stringify(next) === JSON.stringify(settings)) return;
       if (player.state().playing) { pending = next; return; }      // don't restart an intro that's on air
       const t = player.state().time;
@@ -109,15 +210,17 @@
       player.set(settings, { at: t });
     }
   });
-  AWYM.onClear(() => player.hide(true));
+  AWYM.onClear(() => { player.hide(true); hfTell("stop"); hfPlaying = false; document.body.classList.add("hfhide"); });
 
   // OBS: play again whenever this source goes live (covers sources without "Refresh when active")
-  addEventListener("obsSourceActiveChanged", (e) => { if (e.detail && e.detail.active && !player.state().playing) play(); });
+  addEventListener("obsSourceActiveChanged", (e) => { if (e.detail && e.detail.active && !playingNow()) play(); });
 
   // start on the first frame (corners off screen), then play once the fonts are in (or after 1.5 s)
   const fontsIn = player.set(settings, { at: 0 });
   const ready = Promise.race([Promise.all([fontsIn, document.fonts ? document.fonts.ready : null]), new Promise((r) => setTimeout(r, 1500))]);
-  ready.then(() => { if (AWYM.param("autoplay") !== "0") play(); });
+  mountPick();
+  if (isHF()) hfWant = AWYM.param("autoplay") !== "0";
+  else ready.then(() => { if (AWYM.param("autoplay") !== "0" && !isHF()) play(); });
   say({ cmd: "hello" });
 })();
 </script>

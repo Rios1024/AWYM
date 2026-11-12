@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"episode","type":"string","label":"Episode badge","default":"Episode 1"},
+  {"id":"topic","type":"string","label":"Tonight’s topic","default":"Tonight: who’s the real GOAT?"},
+  {"id":"tagline","type":"string","label":"Tagline","default":"Settle it like family"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Intro: Tip-Off</title>
+  <script src="../outros/player.js"></script>
+  <script src="../outros/assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="../outros/assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel) -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #bg { background: radial-gradient(ellipse 60% 55% at 50% 55%, #2c1650 0%, #170b2b 55%, #07040d 100%); }
+    #court { left: 50%; top: 58%; width: 1500px; height: 1500px; margin: -750px 0 0 -750px; transform: perspective(1100px) rotateX(62deg); opacity: .9; }
+    #court svg { width: 100%; height: 100%; }
+    .cline { fill: none; stroke: var(--primary); stroke-width: 10; opacity: .85; }
+    #spot { background: radial-gradient(ellipse 22% 30% at 50% 60%, rgba(255,226,170,.35), transparent 70%); mix-blend-mode: screen; }
+    #ballwrap { left: 50%; top: 50%; width: 260px; height: 260px; margin: -130px 0 0 -130px; z-index: 4; }
+    #ball { width: 100%; height: 100%; }
+    #ballShadow { left: 50%; top: 74%; width: 300px; height: 50px; margin-left: -150px; border-radius: 50%; background: rgba(0,0,0,.55); filter: blur(12px); z-index: 3; }
+
+    #orange { z-index: 5; background:
+        radial-gradient(circle at 30% 30%, #ff9a4d 0%, var(--primary) 45%, #b8460f 100%); opacity: 0; }
+    #seams { z-index: 6; opacity: 0; }
+    #seams path { fill: none; stroke: #2a1205; stroke-width: 22; opacity: .5; }
+
+    #title { z-index: 8; flex-direction: column; gap: 0; top: -110px; }
+    .tw { display: block; font-family: var(--font-display); text-transform: uppercase; line-height: .92; text-align: center; color: var(--secondary);
+      -webkit-text-stroke: 8px var(--light); paint-order: stroke fill; text-shadow: 0 14px 0 rgba(42,23,71,.6); }
+    #t1 { font-size: 190px; } #t3 { font-size: 230px; }
+    #ep { z-index: 9; left: 120px; top: 110px; padding: 18px 34px 16px; border-radius: 16px; background: var(--secondary); color: var(--gold);
+      font-family: var(--font-display); font-size: 48px; letter-spacing: 3px; text-transform: uppercase; box-shadow: 0 10px 0 rgba(0,0,0,.35); }
+    #topicBar { z-index: 9; left: 0; right: 0; bottom: 90px; display: flex; justify-content: center; }
+    #topic { background: var(--dark); color: var(--light); font-family: var(--font-heading); font-size: 66px; letter-spacing: 3px; text-transform: uppercase;
+      padding: 14px 46px 18px; border-radius: 14px; box-shadow: 0 12px 0 rgba(0,0,0,.35); white-space: nowrap; overflow: hidden; }
+    #topic .cur { display: inline-block; width: 6px; height: 56px; background: var(--primary); margin-left: 8px; vertical-align: -6px; }
+    #tag { z-index: 9; left: 0; right: 0; top: 700px; text-align: center; font-family: var(--font-body); font-weight: 700; font-size: 44px;
+      letter-spacing: 12px; text-transform: uppercase; color: var(--dark); }
+    #iris { z-index: 40; }
+    #irisHole { left: 50%; top: 50%; width: 2400px; height: 2400px; margin: -1200px 0 0 -1200px; border-radius: 50%; box-shadow: 0 0 0 2400px #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="tip-off" data-start="0" data-duration="9" data-width="1920" data-height="1080" data-fps="30">
+    <div id="arena" class="clip" data-start="0" data-duration="3.2" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="court" class="abs">
+        <svg viewBox="0 0 1500 1500">
+          <circle class="cline c1" cx="750" cy="750" r="300"/>
+          <circle class="cline c2" cx="750" cy="750" r="110"/>
+          <path class="cline c3" d="M0,750 H1500"/>
+          <path class="cline c4" d="M100,100 H1400 V1400 H100 Z"/>
+        </svg>
+      </div>
+      <div id="spot" class="abs" style="inset:0"></div>
+      <div id="ballShadow" class="abs"></div>
+      <div id="ballwrap" class="abs">
+        <svg id="ball" viewBox="0 0 200 200">
+          <defs><radialGradient id="bg1" cx="35%" cy="30%" r="75%"><stop offset="0" stop-color="#ffa45c"/><stop offset=".6" stop-color="#F26B1D"/><stop offset="1" stop-color="#8f3b0c"/></radialGradient></defs>
+          <circle cx="100" cy="100" r="96" fill="url(#bg1)"/>
+          <g fill="none" stroke="#2a1205" stroke-width="6">
+            <path d="M100,4 V196"/><path d="M4,100 H196"/>
+            <path d="M30,30 C70,70 70,130 30,170"/><path d="M170,30 C130,70 130,130 170,170"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+
+    <div id="orange" class="clip" data-start="2.5" data-duration="6.5" data-track-index="1"></div>
+    <svg id="seams" class="clip" data-start="2.5" data-duration="6.5" data-track-index="2" viewBox="0 0 1920 1080" preserveAspectRatio="none">
+      <path d="M960,-20 V1100"/><path d="M-20,540 H1940"/>
+      <path d="M300,-40 C620,300 620,780 300,1120"/><path d="M1620,-40 C1300,300 1300,780 1620,1120"/>
+    </svg>
+
+    <div id="title" class="clip center" data-start="2.9" data-duration="6.1" data-track-index="3">
+      <span class="tw" id="t1">Argue with</span>
+      <span class="tw" id="t3">Yo Momma!</span>
+    </div>
+    <div id="epClip" class="clip" data-start="4.3" data-duration="4.7" data-track-index="4" style="z-index:9"><div id="ep" class="abs"></div></div>
+    <div id="tagClip" class="clip" data-start="4.9" data-duration="4.1" data-track-index="5" style="z-index:9"><div id="tag" class="abs"></div></div>
+    <div id="topicClip" class="clip" data-start="5.3" data-duration="3.7" data-track-index="6" style="z-index:9"><div id="topicBar" class="abs"><div id="topic"><span id="topicTxt"></span><span class="cur"></span></div></div></div>
+
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="9" data-track-index="7" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="9" data-track-index="7" data-layout-allow-occlusion></div>
+    <div id="iris" class="clip" data-start="8.2" data-duration="0.8" data-track-index="8"><div id="irisHole" class="abs"></div></div>
+
+    <audio id="sfx-01-crowd" data-start="0" data-duration="3" data-track-index="10" src="../outros/assets/sfx/crowd.wav" data-volume="0.35" data-fade-in="0.4"></audio>
+    <audio id="sfx-02-whoosh" data-start="0.6" data-duration="0.8" data-track-index="11" src="../outros/assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-03-riser" data-start="0.6" data-duration="2" data-track-index="12" src="../outros/assets/sfx/riser.wav" data-volume="0.5"></audio>
+    <audio id="sfx-04-hit" data-start="2.55" data-duration="1.6" data-track-index="13" src="../outros/assets/sfx/hit.wav" data-volume="0.8"></audio>
+    <audio id="sfx-05-hit" data-start="3.0" data-duration="1.6" data-track-index="14" src="../outros/assets/sfx/hit.wav" data-volume="0.45"></audio>
+    <audio id="sfx-06-hit" data-start="3.75" data-duration="1.6" data-track-index="15" src="../outros/assets/sfx/hit.wav" data-volume="0.7"></audio>
+    <audio id="sfx-07-beat" data-start="3.0" data-duration="6" data-track-index="16" src="../outros/assets/sfx/beat.wav" data-volume="0.5" data-fade-out="1"></audio>
+    <audio id="sfx-08-crowd" data-start="3.7" data-duration="5" data-track-index="17" src="../outros/assets/sfx/crowd.wav" data-volume="0.3" data-fade-out="1.5"></audio>
+    <audio id="sfx-09-whoosh" data-start="8.1" data-duration="0.8" data-track-index="18" src="../outros/assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    document.getElementById("ep").textContent = get("episode", "Episode 1");
+    document.getElementById("tag").textContent = get("tagline", "Settle it like family");
+    const topic = get("topic", "Tonight: who’s the real GOAT?");
+    const topicEl = document.getElementById("topicTxt");
+    if (topic.length > 34) document.getElementById("topic").style.fontSize = Math.max(40, 66 * 34 / topic.length) + "px";
+
+    const tl = gsap.timeline({ paused: true });
+    // court lines draw in
+    document.querySelectorAll(".cline").forEach((el, i) => {
+      const len = Math.ceil(el.getTotalLength()) + 4; el.style.strokeDasharray = len;
+      tl.fromTo(el, { strokeDashoffset: len }, { strokeDashoffset: 0, duration: .6, ease: "power2.out" }, .05 + i * .1);
+    });
+    tl.fromTo("#spot", { opacity: 0 }, { opacity: 1, duration: .6 }, .2);
+    tl.fromTo("#court", { scale: .9 }, { scale: 1.08, duration: 3, ease: "none" }, 0);
+    // the toss: up, spinning, growing, then straight at the camera
+    tl.fromTo("#ballwrap", { y: 420, scale: .55, rotation: 0 }, { y: -40, scale: 1, rotation: 260, duration: 1.2, ease: "power2.out" }, .55);
+    tl.fromTo("#ballShadow", { scale: 1, opacity: .9 }, { scale: .45, opacity: .3, duration: 1.2, ease: "power2.out" }, .55);
+    tl.to("#ballwrap", { y: -70, rotation: 330, duration: .35, ease: "sine.inOut" }, 1.75);
+    tl.to("#ballwrap", { y: 40, scale: 9, rotation: 420, duration: .55, ease: "power3.in" }, 2.05);
+    tl.to("#ballShadow", { opacity: 0, duration: .3 }, 2.05);
+    // inside the ball: orange with seams
+    tl.fromTo("#orange", { opacity: 0 }, { opacity: 1, duration: .12 }, 2.5);
+    tl.fromTo("#seams", { opacity: 0, scale: 1.6, rotation: -20 }, { opacity: 1, scale: 1, rotation: 0, duration: .7, ease: "power3.out" }, 2.5);
+    tl.to("#seams", { rotation: 6, scale: 1.05, duration: 5.8, ease: "none" }, 3.2);
+    // title slams
+    tl.fromTo("#t1", { scale: 3, opacity: 0, rotation: -6 }, { scale: 1, opacity: 1, rotation: -3, duration: .28, ease: "power4.in" }, 2.75);
+    tl.fromTo("#t3", { scale: 3.6, opacity: 0, rotation: 6 }, { scale: 1, opacity: 1, rotation: 2, duration: .3, ease: "power4.in" }, 3.45);
+    tl.to("#title", { x: -16, y: 10, duration: .05, yoyo: true, repeat: 5, ease: "none" }, 3.75).set("#title", { x: 0, y: 0 }, 4.05);
+    tl.to("#title", { scale: 1.05, duration: 4.4, ease: "none" }, 3.8);
+    tl.fromTo("#ep", { x: -520, rotation: -12 }, { x: 0, rotation: -4, duration: .55, ease: "back.out(1.8)" }, 4.3);
+    tl.fromTo("#tag", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .5, ease: "power3.out" }, 4.9);
+    tl.fromTo("#topic", { scaleX: 0 }, { scaleX: 1, duration: .4, ease: "power3.out" }, 5.3);
+    // typewriter: the letters shown follow the timeline's time (works when seeking either way)
+    const TYPE_AT = 5.6, TYPE_DUR = Math.min(1.6, topic.length * .045);
+    const typeTo = (t) => { const k = Math.max(0, Math.min(1, (t - TYPE_AT) / TYPE_DUR)); topicEl.textContent = topic.slice(0, Math.round(k * topic.length)); };
+    tl.eventCallback("onUpdate", () => typeTo(tl.time()));
+    tl.fromTo("#topic .cur", { opacity: 1 }, { opacity: 0, duration: .25, repeat: 5, yoyo: true, ease: "steps(1)" }, 7.3);
+    // iris out
+    tl.fromTo("#irisHole", { scale: 1 }, { scale: 0, duration: .7, ease: "power2.in" }, 8.2);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["tip-off"] = tl;
+    tl.seek(0); typeTo(0);
+  </script>
+</body>
+</html>

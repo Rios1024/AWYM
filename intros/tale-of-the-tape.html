@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"leftName","type":"string","label":"Left corner","default":"The Hosts"},
+  {"id":"leftRole","type":"string","label":"Left corner line","default":"Defending champs"},
+  {"id":"rightName","type":"string","label":"Right corner","default":"Yo Momma"},
+  {"id":"rightRole","type":"string","label":"Right corner line","default":"Undefeated at Thanksgiving"},
+  {"id":"statLabels","type":"string","label":"Stat names (separated by |)","default":"Hot takes|Receipts|Wins"},
+  {"id":"leftStats","type":"string","label":"Left stats (separated by |)","default":"87|12|3"},
+  {"id":"rightStats","type":"string","label":"Right stats (separated by |)","default":"99|40|∞"},
+  {"id":"topic","type":"string","label":"Tonight’s topic","default":"Tonight: the GOAT debate"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Intro: Tale of the Tape</title>
+  <script src="../outros/player.js"></script>
+  <script src="../outros/assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="../outros/assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel) -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #L { background: linear-gradient(135deg, #3a1f66, var(--secondary) 60%, #160b28); clip-path: polygon(0 0, 56% 0, 44% 100%, 0 100%); }
+    #R { background: linear-gradient(225deg, #ff8a3d, var(--primary) 55%, #8f3b0c); clip-path: polygon(56% 0, 100% 0, 100% 100%, 44% 100%); }
+    .stripes { opacity: .12; background: repeating-linear-gradient(-60deg, #fff 0 3px, transparent 3px 40px); }
+    #banner { left: 50%; top: 56px; width: 1100px; margin-left: -550px; height: 104px; display: flex; align-items: center; justify-content: center; z-index: 5;
+      background: var(--dark); border: 6px solid var(--gold); border-radius: 14px; box-shadow: 0 12px 0 rgba(0,0,0,.4);
+      font-family: var(--font-display); font-size: 62px; letter-spacing: 10px; color: var(--gold); }
+    .corner { top: 200px; width: 700px; display: flex; flex-direction: column; z-index: 4; }
+    #cl { left: 80px; align-items: flex-start; } #cr { right: 80px; align-items: flex-end; text-align: right; }
+    .cname { font-family: var(--font-display); font-size: 104px; line-height: .95; text-transform: uppercase; color: var(--light);
+      text-shadow: 0 9px 0 rgba(0,0,0,.4); white-space: nowrap; }
+    .crole { margin-top: 14px; font-family: var(--font-body); font-weight: 700; font-size: 40px; letter-spacing: 5px; text-transform: uppercase; color: var(--gold); }
+    #cr .crole { color: var(--dark); }
+    #stats { left: 50%; top: 500px; width: 1300px; margin-left: -650px; z-index: 4; display: flex; flex-direction: column; gap: 14px; }
+    .srow { display: grid; grid-template-columns: 1fr 380px 1fr; align-items: center; height: 86px; }
+    .sl, .sr { font-family: var(--font-heading); font-size: 76px; color: var(--light); text-shadow: 0 5px 0 rgba(0,0,0,.35); }
+    .sl { text-align: right; padding-right: 40px; } .sr { text-align: left; padding-left: 40px; color: var(--dark); text-shadow: 0 4px 0 rgba(255,244,224,.35); }
+    .sm { height: 72px; display: flex; align-items: center; justify-content: center; background: var(--dark); border-radius: 12px;
+      font-family: var(--font-body); font-weight: 700; font-size: 36px; letter-spacing: 6px; text-transform: uppercase; color: var(--light); box-shadow: 0 8px 0 rgba(0,0,0,.35); }
+    #vs { left: 50%; top: 220px; width: 300px; height: 230px; margin-left: -150px; z-index: 6; display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display); font-size: 170px; color: #fff; -webkit-text-stroke: 10px var(--dark); paint-order: stroke fill;
+      text-shadow: 0 0 40px var(--gold), 0 0 90px var(--accent); }
+    #bolt { z-index: 5; } #bolt path { fill: none; stroke: #fff; stroke-width: 14; stroke-linejoin: round; filter: drop-shadow(0 0 18px var(--gold)) drop-shadow(0 0 40px #fff); }
+    #flash { z-index: 30; background: #fff; }
+    #endcard { z-index: 20; background: var(--dark); flex-direction: column; }
+    #endcard .t { font-family: var(--font-display); font-size: 150px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center;
+      text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.4); }
+    #endcard .t em { font-style: normal; color: var(--primary); }
+    #endcard .topic { margin-top: 36px; font-family: var(--font-heading); font-size: 64px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="tale-of-the-tape" data-start="0" data-duration="10" data-width="1920" data-height="1080" data-fps="30">
+    <div id="halves" class="clip" data-start="0" data-duration="7.2" data-track-index="0">
+      <div id="L" class="abs" style="inset:0"><div class="abs stripes" style="inset:0"></div></div>
+      <div id="R" class="abs" style="inset:0"><div class="abs stripes" style="inset:0"></div></div>
+      <div id="banner" class="abs">TALE OF THE TAPE</div>
+      <div id="cl" class="abs corner"><div class="cname" id="ln"></div><div class="crole" id="lr"></div></div>
+      <div id="cr" class="abs corner"><div class="cname" id="rn"></div><div class="crole" id="rr"></div></div>
+      <div id="stats" class="abs"></div>
+      <svg id="bolt" class="abs" style="inset:0" viewBox="0 0 1920 1080"><path id="boltPath" d="M1075,-20 L930,330 L1010,345 L880,640 L975,655 L845,1100"/></svg>
+      <div id="vs" class="abs">VS</div>
+    </div>
+    <div id="endcard" class="clip center" data-start="6.9" data-duration="3.1" data-track-index="1">
+      <div class="t">Argue with<br><em>Yo Momma!</em></div>
+      <div class="topic" id="topic"></div>
+    </div>
+    <div id="flash" class="clip" data-start="4.5" data-duration="2.8" data-track-index="2"></div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="10" data-track-index="3" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="10" data-track-index="3" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="9.3" data-duration="0.7" data-track-index="4"></div>
+
+    <audio id="sfx-01-stinger" data-start="0" data-duration="2.6" data-track-index="10" src="../outros/assets/sfx/stinger.wav" data-volume="0.7"></audio>
+    <audio id="sfx-02-whoosh" data-start="1.2" data-duration="0.8" data-track-index="11" src="../outros/assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-03-whoosh" data-start="1.5" data-duration="0.8" data-track-index="12" src="../outros/assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-04-tick" data-start="2.6" data-duration="0.1" data-track-index="13" src="../outros/assets/sfx/tick.wav" data-volume="0.7"></audio>
+    <audio id="sfx-05-tick" data-start="3.1" data-duration="0.1" data-track-index="14" src="../outros/assets/sfx/tick.wav" data-volume="0.7"></audio>
+    <audio id="sfx-06-tick" data-start="3.6" data-duration="0.1" data-track-index="15" src="../outros/assets/sfx/tick.wav" data-volume="0.7"></audio>
+    <audio id="sfx-07-riser" data-start="2.6" data-duration="2" data-track-index="16" src="../outros/assets/sfx/riser.wav" data-volume="0.5"></audio>
+    <audio id="sfx-08-hit" data-start="4.5" data-duration="1.6" data-track-index="17" src="../outros/assets/sfx/hit.wav" data-volume="0.9"></audio>
+    <audio id="sfx-09-crowd" data-start="4.55" data-duration="5" data-track-index="18" src="../outros/assets/sfx/crowd.wav" data-volume="0.4" data-fade-out="1.5"></audio>
+    <audio id="sfx-10-hit" data-start="6.95" data-duration="1.6" data-track-index="19" src="../outros/assets/sfx/hit.wav" data-volume="0.55"></audio>
+    <audio id="sfx-11-beat" data-start="6.9" data-duration="3.1" data-track-index="20" src="../outros/assets/sfx/beat.wav" data-volume="0.5" data-fade-out="1"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const set = (id, v) => { document.getElementById(id).textContent = v; };
+    set("ln", get("leftName", "The Hosts")); set("lr", get("leftRole", "Defending champs"));
+    set("rn", get("rightName", "Yo Momma")); set("rr", get("rightRole", "Undefeated at Thanksgiving"));
+    set("topic", get("topic", "Tonight: the GOAT debate"));
+    ["ln", "rn"].forEach((id) => { const el = document.getElementById(id); const n = el.textContent.length; if (n > 11) el.style.fontSize = Math.max(56, 104 * 11 / n) + "px"; });
+    const split = (k, d) => get(k, d).split("|").map((x) => x.trim());
+    const labels = split("statLabels", "Hot takes|Receipts|Wins").slice(0, 4);
+    const ls = split("leftStats", "87|12|3"), rs = split("rightStats", "99|40|∞");
+    document.getElementById("stats").innerHTML = labels.map((lab, i) =>
+      `<div class="srow"><div class="sl">${esc(ls[i] || "")}</div><div class="sm">${esc(lab)}</div><div class="sr">${esc(rs[i] || "")}</div></div>`).join("");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#L", { xPercent: -100 }, { xPercent: 0, duration: .55, ease: "power4.out" }, .05);
+    tl.fromTo("#R", { xPercent: 100 }, { xPercent: 0, duration: .55, ease: "power4.out" }, .05);
+    tl.fromTo(".stripes", { backgroundPositionX: 0 }, { backgroundPositionX: 400, duration: 7.2, ease: "none" }, 0);
+    tl.fromTo("#banner", { y: -220, rotation: -4 }, { y: 0, rotation: 0, duration: .5, ease: "back.out(1.8)" }, .6);
+    tl.fromTo("#cl", { x: -900 }, { x: 0, duration: .55, ease: "power3.out" }, 1.2);
+    tl.fromTo("#cr", { x: 900 }, { x: 0, duration: .55, ease: "power3.out" }, 1.5);
+    document.querySelectorAll(".srow").forEach((row, i) => {
+      const at = 2.6 + i * .5;
+      tl.fromTo(row.querySelector(".sm"), { scaleX: 0 }, { scaleX: 1, duration: .3, ease: "power3.out" }, at);
+      tl.fromTo(row.querySelector(".sl"), { x: -120, opacity: 0 }, { x: 0, opacity: 1, duration: .3, ease: "power3.out" }, at + .1);
+      tl.fromTo(row.querySelector(".sr"), { x: 120, opacity: 0 }, { x: 0, opacity: 1, duration: .3, ease: "power3.out" }, at + .1);
+    });
+    // lightning + VS
+    const bp = document.getElementById("boltPath"); const bl = Math.ceil(bp.getTotalLength()) + 4; bp.style.strokeDasharray = bl;
+    tl.fromTo(bp, { strokeDashoffset: bl }, { strokeDashoffset: 0, duration: .18, ease: "power4.in" }, 4.35);
+    tl.fromTo("#bolt", { opacity: 1 }, { opacity: 0, duration: .5, ease: "power2.in" }, 4.9);
+    tl.fromTo("#flash", { opacity: .95 }, { opacity: 0, duration: .45, ease: "power2.out" }, 4.5);
+    tl.fromTo("#vs", { scale: 4, opacity: 0, rotation: -20 }, { scale: 1, opacity: 1, rotation: -6, duration: .25, ease: "power4.in" }, 4.5);
+    tl.to("#halves", { x: 20, y: -12, duration: .05, yoyo: true, repeat: 7, ease: "none" }, 4.75).set("#halves", { x: 0, y: 0 }, 5.15);
+    tl.to("#vs", { scale: 1.12, duration: .45, yoyo: true, repeat: 3, ease: "sine.inOut" }, 5.2);
+    // end card
+    tl.to("#L", { xPercent: -100, duration: .45, ease: "power3.in" }, 6.6);
+    tl.to("#R", { xPercent: 100, duration: .45, ease: "power3.in" }, 6.6);
+    tl.to(["#banner", "#cl", "#cr", "#stats", "#vs"], { opacity: 0, duration: .25 }, 6.6);
+    tl.fromTo("#endcard .t", { scale: 2.6, opacity: 0 }, { scale: 1, opacity: 1, duration: .35, ease: "power4.in" }, 6.95);
+    tl.fromTo("#endcard .topic", { y: 40, opacity: 0 }, { y: 0, opacity: 1, duration: .45, ease: "power3.out" }, 7.5);
+    tl.to("#endcard", { scale: 1.05, duration: 3.1, ease: "none" }, 6.9);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .6, ease: "power1.in" }, 9.3);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["tale-of-the-tape"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

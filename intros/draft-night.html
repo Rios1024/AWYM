@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"pick","type":"string","label":"Pick number","default":"1st"},
+  {"id":"team","type":"string","label":"Who’s picking","default":"Yo Momma"},
+  {"id":"topic","type":"string","label":"Tonight’s topic (the pick)","default":"The GOAT debate"},
+  {"id":"from","type":"string","label":"Drafted from","default":"The family group chat"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Intro: Draft Night</title>
+  <script src="../outros/player.js"></script>
+  <script src="../outros/assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="../outros/assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel) -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #wall { background: linear-gradient(180deg, #2a1747, #170c2a); }
+    #repeat { left: -200px; top: -200px; width: 2400px; height: 1500px; opacity: .14; display: grid; grid-template-columns: repeat(9, 1fr); grid-auto-rows: 150px; transform: rotate(-6deg);
+      font-family: var(--font-display); font-size: 54px; color: var(--light); align-items: center; justify-items: center; }
+    #stage { left: 0; right: 0; bottom: 0; height: 300px; background: linear-gradient(180deg, #0f0819, #050208); border-top: 6px solid var(--primary); }
+    #podium { left: 50%; bottom: 120px; width: 420px; height: 330px; margin-left: -210px; z-index: 3;
+      background: linear-gradient(90deg, #1c1030, #3a2260 50%, #1c1030); clip-path: polygon(8% 0, 92% 0, 100% 100%, 0 100%); }
+    #podium b { position: absolute; left: 0; right: 0; top: 90px; text-align: center; font-family: var(--font-display); font-size: 72px; color: var(--primary); }
+    #podium i { position: absolute; left: 0; right: 0; top: 180px; text-align: center; font-style: normal; font-family: var(--font-body); font-weight: 700; font-size: 26px; letter-spacing: 6px; color: var(--gold); }
+    #mic { left: 50%; bottom: 440px; width: 12px; height: 120px; margin-left: -6px; background: #444; z-index: 2; border-radius: 6px; }
+    .fl { z-index: 20; background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 60%); width: 520px; height: 520px; border-radius: 50%; opacity: 0; }
+    #ann { left: 0; right: 0; top: 150px; z-index: 5; text-align: center; }
+    #ann .l1 { font-family: var(--font-body); font-weight: 700; font-size: 58px; letter-spacing: 10px; text-transform: uppercase; color: var(--light); }
+    #ann .l1 b { color: var(--gold); }
+    #ann .l2 { margin-top: 18px; font-family: var(--font-display); font-size: 120px; line-height: 1; text-transform: uppercase; color: var(--primary); text-shadow: 0 8px 0 rgba(0,0,0,.45); }
+    #ann .l3 { margin-top: 8px; font-family: var(--font-heading); font-size: 76px; letter-spacing: 8px; text-transform: uppercase; color: var(--light); }
+    #cardwrap { left: 50%; top: 170px; width: 1200px; height: 560px; margin-left: -600px; z-index: 6; perspective: 1600px; }
+    #card { position: absolute; inset: 0; border-radius: 26px; background: linear-gradient(160deg, var(--light), #f3dcc0); color: var(--dark);
+      box-shadow: 0 30px 70px rgba(0,0,0,.6), inset 0 0 0 10px var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 80px; }
+    #card .k { font-family: var(--font-body); font-weight: 700; font-size: 40px; letter-spacing: 10px; text-transform: uppercase; color: var(--accent); }
+    #card .tp { margin-top: 10px; font-family: var(--font-display); font-size: 120px; line-height: 1; text-transform: uppercase; }
+    #card .fr { margin-top: 26px; font-family: var(--font-heading); font-size: 46px; letter-spacing: 3px; text-transform: uppercase; color: var(--secondary); }
+    #cap { left: 50%; top: 40px; width: 360px; height: 230px; margin-left: 300px; z-index: 8; }
+    #cap svg { width: 100%; height: 100%; filter: drop-shadow(0 16px 20px rgba(0,0,0,.5)); }
+    #end { z-index: 9; flex-direction: column; background: var(--dark); }
+    #end .t { font-family: var(--font-display); font-size: 150px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center; text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.4); }
+    #end .t em { font-style: normal; color: var(--primary); }
+    #end .s { margin-top: 30px; font-family: var(--font-heading); font-size: 60px; letter-spacing: 5px; text-transform: uppercase; color: var(--gold); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="draft-night" data-start="0" data-duration="10" data-width="1920" data-height="1080" data-fps="30">
+    <div id="hall" class="clip" data-start="0" data-duration="8" data-track-index="0">
+      <div id="wall" class="abs" style="inset:0"></div>
+      <div id="repeat" class="abs" aria-hidden="true" data-layout-ignore></div>
+      <div id="stage" class="abs"></div>
+      <div id="mic" class="abs"></div>
+      <div id="podium" class="abs"><b>AWYM</b><i>DRAFT NIGHT</i></div>
+      <div class="abs fl" id="f1" style="left:80px;top:420px"></div>
+      <div class="abs fl" id="f2" style="left:1400px;top:300px"></div>
+      <div class="abs fl" id="f3" style="left:300px;top:120px"></div>
+      <div class="abs fl" id="f4" style="left:1250px;top:560px"></div>
+    </div>
+    <div id="annClip" class="clip" data-start="0.3" data-duration="3.7" data-track-index="1"><div id="ann" class="abs">
+      <div class="l1">With the <b id="pick"></b> pick in tonight's argument</div>
+      <div class="l2" id="team"></div>
+      <div class="l3">selects&hellip;</div>
+    </div></div>
+    <div id="cardClip" class="clip" data-start="4.1" data-duration="3.9" data-track-index="2">
+      <div id="cardwrap" class="abs"><div id="card"><div class="k">Tonight's pick</div><div class="tp" id="topic"></div><div class="fr" id="from"></div></div></div>
+      <div id="cap" class="abs"><svg viewBox="0 0 360 230">
+        <path d="M40,150 Q40,30 180,30 Q320,30 320,150 Z" fill="#F26B1D" stroke="#120A1F" stroke-width="8"/>
+        <path d="M30,150 L330,150 Q350,150 350,165 L350,170 Q300,200 180,200 Q60,200 10,170 L10,165 Q10,150 30,150 Z" fill="#2A1747" stroke="#120A1F" stroke-width="8"/>
+        <circle cx="180" cy="34" r="12" fill="#2A1747"/>
+        <text x="180" y="122" text-anchor="middle" font-family="Bungee" font-size="44" fill="#FFF4E0">AWYM</text>
+      </svg></div>
+    </div>
+    <div id="end" class="clip center" data-start="7.8" data-duration="2.2" data-track-index="3">
+      <div class="t">Argue with<br><em>Yo Momma!</em></div>
+      <div class="s">Draft night is live</div>
+    </div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="10" data-track-index="4" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="10" data-track-index="4" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="9.4" data-duration="0.6" data-track-index="5"></div>
+
+    <audio id="sfx-01-crowd" data-start="0" data-duration="6" data-track-index="10" src="../outros/assets/sfx/crowd.wav" data-volume="0.25" data-fade-in="0.6"></audio>
+    <audio id="sfx-02-shutter" data-start="0.5" data-duration="0.32" data-track-index="11" src="../outros/assets/sfx/shutter.wav" data-volume="0.5"></audio>
+    <audio id="sfx-03-shutter" data-start="1.3" data-duration="0.32" data-track-index="12" src="../outros/assets/sfx/shutter.wav" data-volume="0.5"></audio>
+    <audio id="sfx-04-riser" data-start="2.2" data-duration="2" data-track-index="13" src="../outros/assets/sfx/riser.wav" data-volume="0.55"></audio>
+    <audio id="sfx-05-stinger" data-start="2.8" data-duration="2.6" data-track-index="14" src="../outros/assets/sfx/stinger.wav" data-volume="0.7"></audio>
+    <audio id="sfx-06-shutter" data-start="4.3" data-duration="0.32" data-track-index="15" src="../outros/assets/sfx/shutter.wav" data-volume="0.6"></audio>
+    <audio id="sfx-07-shutter" data-start="4.55" data-duration="0.32" data-track-index="16" src="../outros/assets/sfx/shutter.wav" data-volume="0.6"></audio>
+    <audio id="sfx-08-hit" data-start="5.35" data-duration="1.6" data-track-index="17" src="../outros/assets/sfx/hit.wav" data-volume="0.7"></audio>
+    <audio id="sfx-09-crowd" data-start="4.2" data-duration="5" data-track-index="18" src="../outros/assets/sfx/crowd.wav" data-volume="0.45" data-fade-out="1.5"></audio>
+    <audio id="sfx-10-beat" data-start="7.8" data-duration="2.2" data-track-index="19" src="../outros/assets/sfx/beat.wav" data-volume="0.5" data-fade-out="0.8"></audio>
+    <audio id="sfx-11-hit" data-start="7.85" data-duration="1.6" data-track-index="20" src="../outros/assets/sfx/hit.wav" data-volume="0.5"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    document.getElementById("pick").textContent = get("pick", "1st");
+    document.getElementById("team").textContent = get("team", "Yo Momma");
+    const topic = get("topic", "The GOAT debate");
+    document.getElementById("topic").textContent = topic;
+    if (topic.length > 14) document.getElementById("topic").style.fontSize = Math.max(60, 120 * 14 / topic.length) + "px";
+    document.getElementById("from").textContent = get("from", "The family group chat");
+    document.getElementById("repeat").innerHTML = Array.from({ length: 90 }, (_, i) => `<span>${i % 2 ? "AWYM" : "DRAFT"}</span>`).join("");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#repeat", { x: 0 }, { x: -240, duration: 8, ease: "none" }, 0);
+    tl.fromTo("#podium", { y: 400 }, { y: 0, duration: .6, ease: "power3.out" }, 0);
+    [["#f1", .5], ["#f3", 1.3], ["#f2", 4.3], ["#f4", 4.55]].forEach(([f, at]) => tl.fromTo(f, { opacity: 1, scale: .4 }, { opacity: 0, scale: 1.2, duration: .35, ease: "power2.out" }, at));
+    tl.fromTo("#ann .l1", { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: .5, ease: "power3.out" }, .4);
+    tl.fromTo("#ann .l2", { opacity: 0, scale: 1.5 }, { opacity: 1, scale: 1, duration: .4, ease: "power3.out" }, 1.4);
+    tl.fromTo("#ann .l3", { opacity: 0 }, { opacity: 1, duration: .4 }, 2.4);
+    tl.to("#ann .l3", { scale: 1.08, duration: .3, yoyo: true, repeat: 3, ease: "sine.inOut" }, 2.8);
+    tl.to("#ann", { y: -400, opacity: 0, duration: .45, ease: "power3.in" }, 3.6);
+    tl.fromTo("#card", { rotationY: -100, opacity: 0, scale: .7 }, { rotationY: 0, opacity: 1, scale: 1, duration: .7, ease: "back.out(1.4)" }, 4.15);
+    tl.fromTo("#card .tp", { scale: .5, opacity: 0 }, { scale: 1, opacity: 1, duration: .4, ease: "back.out(2.4)" }, 4.6);
+    tl.fromTo("#card .fr", { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: .4 }, 4.9);
+    tl.fromTo("#cap", { y: -500, rotation: -30 }, { y: 0, rotation: 12, duration: .5, ease: "bounce.out" }, 5.0);
+    tl.to("#cardwrap", { y: 10, duration: .08, yoyo: true, repeat: 1 }, 5.35);
+    tl.to(["#cardwrap", "#cap"], { scale: 1.04, duration: 2.4, ease: "none" }, 5.5);
+    tl.fromTo("#end .t", { scale: 2.4, opacity: 0 }, { scale: 1, opacity: 1, duration: .35, ease: "power4.in" }, 7.85);
+    tl.fromTo("#end .s", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .4, ease: "power3.out" }, 8.3);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .55 }, 9.4);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["draft-night"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

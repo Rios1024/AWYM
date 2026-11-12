@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"p1","type":"string","label":"Player 1","default":"The Hosts"},
+  {"id":"p2","type":"string","label":"Player 2","default":"Yo Momma"},
+  {"id":"topic","type":"string","label":"Round 1 topic","default":"Who’s the real GOAT?"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Intro: Arcade Mode</title>
+  <script src="../outros/player.js"></script>
+  <script src="../outros/assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="../outros/assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel) -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    :root { --px: "Press Start 2P", monospace; --cyan: #3DF2FF; --lime: #B6FF3D; }
+    #bg { background: radial-gradient(ellipse 80% 70% at 50% 50%, #1a0b33 0%, #07030f 100%); }
+    #stars { opacity: .8; background-image:
+        radial-gradient(#fff 1.5px, transparent 2px), radial-gradient(#ffd38a 1.5px, transparent 2px);
+      background-size: 120px 120px, 190px 190px; background-position: 0 0, 60px 80px; }
+    #scan { z-index: 40; pointer-events: none; background: repeating-linear-gradient(180deg, rgba(0,0,0,.28) 0 3px, transparent 3px 6px); }
+    #crt { z-index: 41; pointer-events: none; box-shadow: inset 0 0 220px rgba(0,0,0,.9); border-radius: 60px; }
+    .px { font-family: var(--px); text-transform: uppercase; line-height: 1.2; }
+    #coin { z-index: 5; flex-direction: column; gap: 60px; }
+    #coin .big { font-size: 96px; color: var(--gold); text-shadow: 8px 8px 0 #7a2c00; }
+    #coin .small { font-size: 34px; color: var(--light); }
+    #sel { z-index: 5; flex-direction: column; }
+    #sel .hd { font-size: 54px; color: var(--cyan); text-shadow: 6px 6px 0 #003a44; margin-bottom: 70px; }
+    #slots { display: flex; align-items: center; gap: 90px; }
+    .slot { width: 560px; height: 440px; border: 10px solid var(--light); background: #12082a; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; position: relative; }
+    .slot .tag { position: absolute; top: -34px; left: 30px; background: var(--primary); color: #fff; font-size: 30px; padding: 10px 16px; }
+    #s2 .tag { background: var(--accent); }
+    .face { width: 160px; height: 160px; display: grid; grid-template-columns: repeat(8, 1fr); }
+    .face i { display: block; }
+    .slot .nm { font-size: 40px; color: var(--light); text-align: center; padding: 0 20px; }
+    .slot .rdy { font-size: 26px; color: var(--lime); }
+    #vs { font-size: 110px; color: var(--gold); text-shadow: 8px 8px 0 #7a2c00; }
+    #title { z-index: 6; flex-direction: column; gap: 40px; }
+    .tl { font-size: 118px; text-align: center; line-height: 1.25; }
+    .tl span { display: inline-block; }
+    #rnd { font-size: 40px; color: var(--light); background: #12082a; border: 6px solid var(--cyan); padding: 22px 30px; max-width: 1600px; text-align: center; }
+    #rnd b { color: var(--cyan); font-weight: 400; }
+    #flash { z-index: 30; background: #fff; }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="arcade-mode" data-start="0" data-duration="9" data-width="1920" data-height="1080" data-fps="30">
+    <div class="clip" id="space" data-start="0" data-duration="9" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="stars" class="abs" style="inset:0"></div>
+    </div>
+    <div id="coin" class="clip center" data-start="0" data-duration="2.1" data-track-index="1">
+      <div class="px big" id="insert">Insert coin</div>
+      <div class="px small" id="credit">Credit 0</div>
+    </div>
+    <div id="sel" class="clip center" data-start="2.1" data-duration="3.5" data-track-index="2">
+      <div class="px hd">Select your players</div>
+      <div id="slots">
+        <div class="slot" id="s1"><div class="px tag">P1</div><div class="face" id="face1"></div><div class="px nm" id="n1"></div><div class="px rdy" id="r1">Ready!</div></div>
+        <div class="px" id="vs">VS</div>
+        <div class="slot" id="s2"><div class="px tag">P2</div><div class="face" id="face2"></div><div class="px nm" id="n2"></div><div class="px rdy" id="r2">Ready!</div></div>
+      </div>
+    </div>
+    <div id="title" class="clip center" data-start="5.5" data-duration="3.5" data-track-index="3">
+      <div class="px tl" id="tl"></div>
+      <div class="px" id="rnd"><b>Round 1:</b> <span id="topic"></span></div>
+    </div>
+    <div id="flash" class="clip" data-start="5.45" data-duration="0.4" data-track-index="4"></div>
+    <div id="scan" class="clip" data-start="0" data-duration="9" data-track-index="5" data-layout-allow-occlusion></div>
+    <div id="crt" class="clip" data-start="0" data-duration="9" data-track-index="5" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="8.5" data-duration="0.5" data-track-index="6"></div>
+
+    <audio id="sfx-01-coin" data-start="1.1" data-duration="0.45" data-track-index="10" src="../outros/assets/sfx/coin.wav" data-volume="0.7"></audio>
+    <audio id="sfx-02-start" data-start="1.7" data-duration="0.9" data-track-index="11" src="../outros/assets/sfx/start.wav" data-volume="0.6"></audio>
+    <audio id="sfx-03-chip" data-start="2.1" data-duration="6.9" data-track-index="12" src="../outros/assets/sfx/chip.wav" data-volume="0.55" data-fade-out="0.6"></audio>
+    <audio id="sfx-04-blip" data-start="3.5" data-duration="0.35" data-track-index="13" src="../outros/assets/sfx/blip.wav" data-volume="0.6"></audio>
+    <audio id="sfx-05-blip" data-start="4.1" data-duration="0.35" data-track-index="14" src="../outros/assets/sfx/blip.wav" data-volume="0.6"></audio>
+    <audio id="sfx-06-coin" data-start="5.5" data-duration="0.45" data-track-index="15" src="../outros/assets/sfx/coin.wav" data-volume="0.6"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    const p1 = get("p1", "The Hosts"), p2 = get("p2", "Yo Momma");
+    document.getElementById("n1").textContent = p1; document.getElementById("n2").textContent = p2;
+    [["n1", p1], ["n2", p2]].forEach(([id, t]) => { if (t.length > 11) document.getElementById(id).style.fontSize = Math.max(22, 40 * 11 / t.length) + "px"; });
+    const topic = get("topic", "Who’s the real GOAT?");
+    document.getElementById("topic").textContent = topic;
+    if (topic.length > 26) document.getElementById("rnd").style.fontSize = Math.max(24, 40 * 26 / topic.length) + "px";
+    // 8x8 pixel faces (0 empty, 1 skin, 2 hair, 3 eye, 4 mouth)
+    const FACES = [
+      ["02222220", "22222222", "21111112", "13111131", "11111111", "11444411", "01111110", "00111100"],
+      ["22222222", "22222222", "21111112", "13111131", "11111111", "11144111", "01111110", "00111100"]];
+    const PAL = [["transparent", "#c98b5a", "#2b1a10", "#120A1F", "#FF3D7F"], ["transparent", "#8d5a37", "#f2efe4", "#120A1F", "#FF3D7F"]];
+    [1, 2].forEach((k) => { document.getElementById("face" + k).innerHTML = FACES[k - 1].join("").split("").map((c) => `<i style="background:${PAL[k - 1][+c]}"></i>`).join(""); });
+    const COLS = ["#F26B1D", "#FFB23E", "#B6FF3D", "#3DF2FF", "#FF3D7F", "#A238FF"];
+    let ci = 0;
+    document.getElementById("tl").innerHTML = ["Argue with", "Yo Momma!"].map((line) =>
+      [...line].map((ch) => ch === " " ? "<span>&nbsp;</span>" : `<span class="L" style="color:${COLS[ci++ % COLS.length]};text-shadow:8px 8px 0 #120A1F">${esc(ch)}</span>`).join("")).join("<br>");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#stars", { backgroundPosition: "0px 0px, 60px 80px" }, { backgroundPosition: "0px 360px, 60px 680px", duration: 9, ease: "none" }, 0);
+    tl.fromTo("#insert", { opacity: 1 }, { opacity: 0, duration: .25, repeat: 3, yoyo: true, ease: "steps(1)" }, .1);
+    tl.set("#credit", { textContent: "Credit 1" }, 1.1);
+    tl.set("#insert", { textContent: "Press start", color: "#B6FF3D" }, 1.1);
+    tl.fromTo("#coin", { scale: 1 }, { scale: 1.06, duration: .1, yoyo: true, repeat: 1, ease: "steps(2)" }, 1.1);
+    tl.fromTo("#insert", { opacity: 1 }, { opacity: 0, duration: .12, repeat: 5, yoyo: true, ease: "steps(1)" }, 1.4);
+    tl.fromTo("#sel .hd", { y: -200 }, { y: 0, duration: .4, ease: "steps(6)" }, 2.1);
+    tl.fromTo("#s1", { x: -1100 }, { x: 0, duration: .5, ease: "steps(8)" }, 2.4);
+    tl.fromTo("#s2", { x: 1100 }, { x: 0, duration: .5, ease: "steps(8)" }, 2.6);
+    tl.fromTo("#vs", { scale: 0 }, { scale: 1, duration: .3, ease: "steps(4)" }, 3.1);
+    tl.set(["#r1", "#r2"], { opacity: 0 }, 0);
+    tl.set("#r1", { opacity: 1 }, 3.5).set("#r2", { opacity: 1 }, 4.1);
+    tl.fromTo("#s1", { borderColor: "#FFF4E0" }, { borderColor: "#B6FF3D", duration: .2, repeat: 3, yoyo: true, ease: "steps(1)" }, 3.5);
+    tl.fromTo("#s2", { borderColor: "#FFF4E0" }, { borderColor: "#B6FF3D", duration: .2, repeat: 3, yoyo: true, ease: "steps(1)" }, 4.1);
+    tl.to("#vs", { scale: 1.2, duration: .25, yoyo: true, repeat: 3, ease: "steps(2)" }, 4.4);
+    tl.fromTo("#flash", { opacity: 1 }, { opacity: 0, duration: .35, ease: "steps(3)" }, 5.45);
+    tl.fromTo("#tl .L", { y: -700 }, { y: 0, duration: .35, stagger: .04, ease: "steps(7)" }, 5.5);
+    tl.fromTo("#rnd", { scaleX: 0 }, { scaleX: 1, duration: .35, ease: "steps(5)" }, 6.5);
+    tl.to("#tl .L", { y: -18, duration: .2, stagger: { each: .05, repeat: 1, yoyo: true }, ease: "steps(2)" }, 7.1);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .45, ease: "steps(4)" }, 8.5);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["arcade-mode"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"credits","type":"string","label":"Credits (Role = Name; one per line, separated by |)","default":"Hosted by = The AWYM Crew|Moderated by = The Ref|Tonight’s challengers = Our guests|Shot clock = The Tin Foil Department|Produced by = Argue with Yo Momma!|Special thanks = Everyone in the comments"},
+  {"id":"signoff","type":"string","label":"Sign-off","default":"See y’all next week"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Chalk Talk Credits</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #board { background:
+        radial-gradient(ellipse 60% 50% at 35% 45%, rgba(255,255,255,.06), transparent 70%),
+        radial-gradient(ellipse 40% 30% at 75% 70%, rgba(255,255,255,.04), transparent 70%),
+        linear-gradient(160deg, #1f2b26, #16201c 55%, #111915); }
+    #frame { inset: 0; border: 34px solid #6b4425; box-shadow: inset 0 0 0 6px #4a2d17, inset 0 0 60px rgba(0,0,0,.7); z-index: 3; pointer-events: none;
+      border-image: linear-gradient(135deg, #7c5030, #5a361b, #7c5030, #4f2f17) 1; }
+    #tray { left: 34px; right: 34px; bottom: 34px; height: 26px; background: linear-gradient(180deg, #5a361b, #3c2410); z-index: 4; }
+    .stick { bottom: 52px; height: 14px; border-radius: 4px; background: #f2efe4; z-index: 5; }
+    #dust { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .18 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); opacity: .45; }
+
+    #play { left: 110px; top: 120px; width: 960px; height: 820px; }
+    #play svg { width: 100%; height: 100%; overflow: visible; }
+    .chalk { fill: none; stroke: #f4f1e6; stroke-width: 6; stroke-linecap: round; stroke-linejoin: round; opacity: .9;
+      filter: url(#rough); }
+    .chalk.thin { stroke-width: 4; opacity: .55; }
+    .chalk.o { stroke: #ffd38a; }
+    .chalk.x { stroke: #ff9db9; }
+    .chalk.arrow { stroke: #f4f1e6; stroke-dasharray: none; }
+    .lbl { font-family: var(--font-heading); fill: #f4f1e6; font-size: 40px; letter-spacing: 3px; opacity: .85; }
+
+    #col { left: 1140px; top: 80px; width: 660px; height: 900px; overflow: hidden;
+      -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%);
+      mask-image: linear-gradient(180deg, transparent 0, #000 14%, #000 86%, transparent 100%); }
+    #roll { position: absolute; left: 0; right: 0; top: 0; text-align: center; }
+    .cr { margin-bottom: 76px; }
+    .role { font-family: var(--font-body); font-weight: 600; font-size: 34px; letter-spacing: 7px; text-transform: uppercase; color: #ffd38a; opacity: .9; }
+    .who { font-family: var(--font-heading); font-size: 76px; line-height: 1.05; letter-spacing: 2px; text-transform: uppercase; color: #f4f1e6;
+      text-shadow: 0 0 2px rgba(255,255,255,.5); }
+    .head { font-family: var(--font-display); font-size: 74px; line-height: 1; color: #f4f1e6; margin-bottom: 90px; }
+    .head em { font-style: normal; color: var(--primary); }
+
+    #eraser { width: 300px; height: 130px; border-radius: 14px; z-index: 6; left: -300px; top: 470px;
+      background: linear-gradient(180deg, #c98a4b 0 55%, #3a3a3a 55% 100%); box-shadow: 0 16px 30px rgba(0,0,0,.45); }
+    #wipe { z-index: 2; background: linear-gradient(90deg, #1a2420, #19231f); clip-path: inset(0 100% 0 0); }
+    #wipe::after { content: ""; position: absolute; inset: 0; opacity: .5;
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 26px, transparent 26px 60px); }
+
+    #sign { z-index: 7; flex-direction: column; }
+    #sign .big { font-family: var(--font-display); font-size: 132px; line-height: 1; color: #f4f1e6; text-transform: uppercase; text-align: center; filter: url(#rough2); }
+    #sign .big span { display: inline-block; }
+    #sign .small { margin-top: 36px; font-family: var(--font-heading); font-size: 58px; letter-spacing: 6px; color: var(--primary); text-transform: uppercase; }
+    #underline { width: 900px; height: 60px; margin-top: 10px; }
+    #black { background: #000; z-index: 60; }
+  </style>
+</head>
+<body>
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="3" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="5"/></filter>
+    <filter id="rough2"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="9" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="4"/></filter>
+  </svg>
+  <div id="root" data-composition-id="chalk-credits" data-start="0" data-duration="16" data-width="1920" data-height="1080" data-fps="30">
+    <div id="clip-1" class="clip" data-start="0" data-duration="16" data-track-index="0">
+      <div id="board" class="abs" style="inset:0"></div>
+      <div id="dust" class="abs" style="inset:0"></div>
+    </div>
+
+    <div id="playwrap" class="clip" data-start="0" data-duration="16" data-track-index="1">
+      <div id="play" class="abs">
+        <svg viewBox="0 0 960 820">
+          <!-- half court, baseline at the top -->
+          <path class="chalk court" d="M40,40 H920 V780 H40 Z"/>
+          <path class="chalk court" d="M330,40 V420 H630 V40"/>
+          <path class="chalk court" d="M330,420 A150,150 0 0 0 630,420"/>
+          <path class="chalk court thin" d="M330,420 A150,150 0 0 1 630,420"/>
+          <path class="chalk court" d="M100,40 V200 A390,390 0 0 0 860,200 V40"/>
+          <path class="chalk court" d="M420,90 H540"/>
+          <circle class="chalk court" cx="480" cy="118" r="18"/>
+          <path class="chalk court" d="M330,780 A150,150 0 0 1 630,780"/>
+          <!-- offense O's -->
+          <circle class="chalk o p" cx="480" cy="690" r="28"/>
+          <circle class="chalk o p" cx="160" cy="470" r="28"/>
+          <circle class="chalk o p" cx="800" cy="470" r="28"/>
+          <circle class="chalk o p" cx="260" cy="190" r="28"/>
+          <circle class="chalk o p" cx="700" cy="190" r="28"/>
+          <!-- defense X's -->
+          <path class="chalk x p" d="M455,585 l40,40 M495,585 l-40,40"/>
+          <path class="chalk x p" d="M200,400 l40,40 M240,400 l-40,40"/>
+          <path class="chalk x p" d="M720,400 l40,40 M760,400 l-40,40"/>
+          <path class="chalk x p" d="M300,240 l40,40 M340,240 l-40,40"/>
+          <path class="chalk x p" d="M620,240 l40,40 M660,240 l-40,40"/>
+          <!-- the play -->
+          <path class="chalk arrow a" d="M480,660 C470,560 560,520 690,500"/>
+          <path class="chalk arrow a" d="M680,480 l18,22 l-28,10"/>
+          <path class="chalk arrow a" d="M700,220 C690,300 600,330 520,360"/>
+          <path class="chalk arrow a" d="M535,345 l-20,18 l26,8"/>
+          <path class="chalk arrow a" d="M260,220 C300,330 380,300 450,240" stroke-dasharray="16 16"/>
+          <path class="chalk arrow a" d="M440,262 l14,-26 l-28,-2"/>
+          <text class="lbl" x="560" y="770">MOMMA'S PLAY</text>
+        </svg>
+      </div>
+    </div>
+
+    <div id="colwrap" class="clip" data-start="0" data-duration="16" data-track-index="2">
+      <div id="col" class="abs"><div id="roll"></div></div>
+    </div>
+
+    <div id="wipe" class="clip" data-start="0" data-duration="16" data-track-index="3"></div>
+    <div id="clip-2" class="clip" data-start="11" data-duration="2.2" data-track-index="4" style="z-index:6"><div id="eraser" class="abs"></div></div>
+
+    <div id="sign" class="clip center" data-start="12.3" data-duration="3.7" data-track-index="5">
+      <div class="big" id="signBig"></div>
+      <svg id="underline" viewBox="0 0 900 60"><path class="chalk" id="ul" d="M20,36 C220,18 520,52 880,24" style="stroke:#ff9db9;stroke-width:9"/></svg>
+      <div class="small">Argue with Yo Momma!</div>
+    </div>
+
+    <div id="clip-3" class="clip" data-start="0" data-duration="16" data-track-index="6" style="z-index:3;pointer-events:none">
+      <div id="frame" class="abs"></div>
+      <div id="tray" class="abs"></div>
+      <div class="abs stick" style="left:320px;width:90px"></div>
+      <div class="abs stick" style="left:430px;width:60px;background:#ffd38a"></div>
+      <div class="abs stick" style="left:1500px;width:80px;background:#ff9db9"></div>
+    </div>
+    <div id="grain-4" class="clip grain" data-layout-allow-occlusion data-start="0" data-duration="16" data-track-index="7"></div>
+    <div id="vignette-5" class="clip vignette" data-layout-allow-occlusion data-start="0" data-duration="16" data-track-index="7"></div>
+    <div id="black" class="clip" data-start="15.1" data-duration="0.9" data-track-index="8"></div>
+
+    <audio id="sfx-01-beat" data-start="0" data-duration="10.43" data-track-index="10" src="assets/sfx/beat.wav" data-volume="0.55" data-fade-in="1"></audio>
+    <audio id="sfx-02-beat" data-start="10.43" data-duration="5.57" data-track-index="11" src="assets/sfx/beat.wav" data-volume="0.55" data-fade-out="2.5"></audio>
+    <audio id="sfx-03-whoosh" data-start="11.0" data-duration="0.8" data-track-index="12" src="assets/sfx/whoosh.wav" data-volume="0.8"></audio>
+    <audio id="sfx-04-whoosh" data-start="11.7" data-duration="0.8" data-track-index="13" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-05-hit" data-start="12.35" data-duration="1.6" data-track-index="14" src="assets/sfx/hit.wav" data-volume="0.5"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const credits = (V.credits || "Hosted by = The AWYM Crew|Moderated by = The Ref|Tonight’s challengers = Our guests|Shot clock = The Tin Foil Department|Produced by = Argue with Yo Momma!|Special thanks = Everyone in the comments")
+      .split("|").map(s => s.split("=").map(x => x.trim())).filter(p => p[0]);
+    const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    document.getElementById("roll").innerHTML =
+      '<div class="head">Roll the<br><em>tape</em></div>' +
+      credits.map(([r, w]) => `<div class="cr"><div class="role">${esc(r)}</div><div class="who">${esc(w || "")}</div></div>`).join("");
+    const signoff = V.signoff || "See y’all next week";
+    document.getElementById("signBig").innerHTML = signoff.split(" ").map(w => `<span>${esc(w)}</span>`).join(" ").replace(/(<span>[^<]*<\/span> <span>[^<]*<\/span>) /, "$1<br>");
+
+    const tl = gsap.timeline({ paused: true });
+
+    // chalk drawing: stroke-dash reveal
+    const draw = (sel, at, each, dur) => {
+      document.querySelectorAll(sel).forEach((el, i) => {
+        const len = Math.ceil(el.getTotalLength ? el.getTotalLength() : 400) + 4;
+        const dashed = el.getAttribute("stroke-dasharray");
+        if (dashed) { tl.fromTo(el, { opacity: 0 }, { opacity: .9, duration: dur, ease: "none" }, at + i * each); return; }
+        el.style.strokeDasharray = len;
+        tl.fromTo(el, { strokeDashoffset: len }, { strokeDashoffset: 0, duration: dur, ease: "power1.inOut" }, at + i * each);
+      });
+    };
+    draw(".court", .4, .22, .7);
+    draw(".p", 2.3, .12, .35);
+    draw(".a", 3.8, .45, .55);
+    tl.fromTo(".lbl", { opacity: 0 }, { opacity: .85, duration: .5 }, 6.6);
+    tl.fromTo("#play", { rotation: -1.5, scale: .97 }, { rotation: 0, scale: 1, duration: 11, ease: "none" }, 0);
+
+    // credits roll
+    const roll = document.getElementById("roll");
+    const rollH = roll.scrollHeight;
+    tl.fromTo(roll, { y: 900 }, { y: -rollH + 120, duration: 10.6, ease: "none" }, .5);
+
+    // eraser wipe
+    tl.fromTo("#eraser", { x: 0, y: 0, rotation: -8 }, { x: 2220, y: -60, rotation: 6, duration: 1.3, ease: "power1.inOut" }, 11);
+    tl.fromTo("#wipe", { clipPath: "inset(0 100% 0 0)" }, { clipPath: "inset(0 0% 0 0)", duration: 1.3, ease: "power1.inOut" }, 11);
+    tl.to(["#play", "#col"], { opacity: 0, duration: .1 }, 12.3);
+    tl.set("#wipe", { opacity: 0 }, 12.3);
+
+    // sign-off
+    tl.fromTo("#signBig span", { y: 50, opacity: 0, rotation: -6 }, { y: 0, opacity: 1, rotation: 0, duration: .35, stagger: .12, ease: "back.out(2.5)" }, 12.35);
+    const ul = document.getElementById("ul"); const ulen = Math.ceil(ul.getTotalLength()) + 4; ul.style.strokeDasharray = ulen;
+    tl.fromTo(ul, { strokeDashoffset: ulen }, { strokeDashoffset: 0, duration: .5, ease: "power2.out" }, 13.0);
+    tl.fromTo("#sign .small", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .5, ease: "power3.out" }, 13.3);
+    tl.to("#sign", { scale: 1.04, duration: 3.7, ease: "none" }, 12.3);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .9 }, 15.1);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["chalk-credits"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

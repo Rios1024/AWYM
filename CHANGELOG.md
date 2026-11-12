@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.3.0 (2026-11-12)
+
+- Show outro: four outros made with HyperFrames (Final Buzzer, Final Score, Chalk Talk Credits, Mic Drop End Screen) that play live in a new **Outro** scene (before Thanks for Watching), with sound effects and a beat made in code.
+- Three new show intros made with HyperFrames: **Tip-Off** (jump ball into the title slam, episode, tonight's topic), **Tale of the Tape** (fight-night matchup with names, stats and VS lightning; the Guests page fills the two corners) and **Breaking Take** (sports-news BREAKING parody with a headline and ticker).
+- Intro Editor: a "Pick an intro" row (the current intro is **Classic**); the new intros get a Words card, a live preview with sound off by default, "switch to the next scene" and an MP4 render command.
+- Five more intros: **Starting Lineup** (spotlights and jerseys for up to four people, filled from the Guests page), **Draft Night**, **Arcade Mode** (pixel font and chiptune; P1/P2 from the Guests page), **Family Group Chat** and **Film Room** (VHS rewind and a telestrator).
+- Five more outros: **Postgame Presser**, **Highlight Reel** ("Fill from receipts" uses the Show Runner's last five takes), **Group Chat Wrap-Up**, **Power Rankings** and **Lights Out**.
+- New code-made sounds (camera shutter, message pop, typing, chiptune, coin, VHS static and rewind, light-bank clunk) and the Press Start 2P pixel font (SIL OFL).
+- Outro Editor dock (`outro-editor.html`): pick the outro, change its names, scores, take of the night, next episode and credits with a live preview, Play in OBS, and optionally switch to Thanks for Watching afterwards. "Copy command" gives the line that renders the same outro to MP4.
+
 ## 1.2.5 (2026-11-10)
 
 - Shot clock overtime: an **Overtime +1:00** button on the Control Panel (hotkey Ctrl+Alt+Shift+Page Down, stream-deck key, key O on the clock) adds a minute, starts the clock and turns its frame and numbers electric purple with a glow, an "OVERTIME" banner and a horn. Press again for 2OT, 3OT…; Reset ends it. `&otcolor=` and `&ot=` change the colour and length. 74 hotkeys now.

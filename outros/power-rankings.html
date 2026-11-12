@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"title","type":"string","label":"Heading","default":"Power Rankings"},
+  {"id":"sub","type":"string","label":"Subheading","default":"After tonight’s arguments"},
+  {"id":"rankings","type":"string","label":"Final order, #1 first (Name = note, separated by |; up to 5)","default":"Yo Momma = Undefeated. Again.|Cousin Tay = Receipts were receipting|The Hosts = Lost the Kobe debate, won the vibes|Unc = Still thinks it isn’t close|The Group Chat = Muted itself twice"}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Power Rankings</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #bg { background: linear-gradient(120deg, #170b29 0%, #2a1747 55%, #3a1a3f 100%); }
+    #rays { left: 50%; top: 50%; width: 2600px; height: 2600px; margin: -1300px 0 0 -1300px; opacity: .08;
+      background: repeating-conic-gradient(from 0deg, var(--light) 0 6deg, transparent 6deg 18deg); border-radius: 50%; }
+    #head { left: 140px; top: 70px; z-index: 4; }
+    #head .t { font-family: var(--font-display); font-size: 104px; line-height: 1; text-transform: uppercase; color: var(--light); text-shadow: 0 8px 0 rgba(0,0,0,.4); }
+    #head .s { margin-top: 10px; font-family: var(--font-body); font-weight: 700; font-size: 40px; letter-spacing: 8px; text-transform: uppercase; color: var(--gold); }
+    .row { z-index: 5; left: 140px; width: 1640px; height: 128px; display: flex; align-items: center; gap: 0; border-radius: 16px; overflow: visible;
+      background: rgba(18,10,31,.82); box-shadow: 0 10px 0 rgba(0,0,0,.35); }
+    .row .rk { flex: none; width: 150px; height: 100%; display: flex; align-items: center; justify-content: center; border-radius: 16px 0 0 16px; background: var(--primary);
+      font-family: var(--font-display); font-size: 76px; color: #fff; }
+    .row .nm { flex: none; width: 640px; padding-left: 40px; font-family: var(--font-heading); font-size: 66px; text-transform: uppercase; color: var(--light); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .nt { flex: 1; font-family: var(--font-body); font-weight: 600; font-size: 38px; color: rgba(255,244,224,.82); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row .mv { flex: none; width: 170px; display: flex; align-items: center; justify-content: center; gap: 10px; font-family: var(--font-heading); font-size: 48px; }
+    .mv .up { color: #4ee38a; } .mv .dn { color: #ff5a6a; } .mv .eq { color: rgba(255,244,224,.5); }
+    .tri { width: 0; height: 0; border-left: 18px solid transparent; border-right: 18px solid transparent; }
+    .tri.u { border-bottom: 28px solid #4ee38a; } .tri.d { border-top: 28px solid #ff5a6a; }
+    .row.one .rk { background: var(--gold); color: var(--dark); }
+    .row.one { box-shadow: 0 10px 0 rgba(0,0,0,.35), 0 0 0 5px var(--gold), 0 0 50px rgba(255,178,62,.5); }
+    #crown { z-index: 7; width: 140px; height: 100px; }
+    #crown svg { width: 100%; height: 100%; filter: drop-shadow(0 8px 10px rgba(0,0,0,.5)); }
+    #end { z-index: 20; flex-direction: column; background: var(--dark); }
+    #end .t { font-family: var(--font-display); font-size: 140px; line-height: .95; text-transform: uppercase; color: var(--light); text-align: center; text-shadow: 0 10px 0 var(--secondary), 0 0 60px rgba(242,107,29,.4); }
+    #end .t em { font-style: normal; color: var(--primary); }
+    #end .s { margin-top: 30px; font-family: var(--font-body); font-weight: 700; font-size: 46px; letter-spacing: 10px; text-transform: uppercase; color: var(--gold); }
+    #black { z-index: 60; background: #000; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="power-rankings" data-start="0" data-duration="13" data-width="1920" data-height="1080" data-fps="30">
+    <div id="board" class="clip" data-start="0" data-duration="10.4" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="rays" class="abs"></div>
+      <div id="head" class="abs"><div class="t" id="title"></div><div class="s" id="sub"></div></div>
+      <div id="rows"></div>
+      <div id="crown" class="abs"><svg viewBox="0 0 140 100"><path d="M10,90 L20,25 L48,55 L70,10 L92,55 L120,25 L130,90 Z" fill="#FFB23E" stroke="#120A1F" stroke-width="6" stroke-linejoin="round"/>
+        <circle cx="20" cy="22" r="8" fill="#FF3D7F"/><circle cx="70" cy="9" r="8" fill="#FF3D7F"/><circle cx="120" cy="22" r="8" fill="#FF3D7F"/></svg></div>
+    </div>
+    <div id="end" class="clip center" data-start="10.2" data-duration="2.8" data-track-index="1">
+      <div class="t">Argue with<br><em>Yo Momma!</em></div>
+      <div class="s">See y'all next week</div>
+    </div>
+    <div id="grain-1" class="clip grain" data-start="0" data-duration="13" data-track-index="2" data-layout-allow-occlusion></div>
+    <div id="vignette-1" class="clip vignette" data-start="0" data-duration="13" data-track-index="2" data-layout-allow-occlusion></div>
+    <div id="black" class="clip" data-start="12.3" data-duration="0.7" data-track-index="3"></div>
+
+    <audio id="sfx-01-beat" data-start="0" data-duration="10.43" data-track-index="10" src="assets/sfx/beat.wav" data-volume="0.5" data-fade-in="0.4"></audio>
+    <audio id="sfx-02-whoosh" data-start="0.9" data-duration="0.8" data-track-index="11" src="assets/sfx/whoosh.wav" data-volume="0.5"></audio>
+    <audio id="sfx-03-blip" data-start="3.4" data-duration="0.35" data-track-index="12" src="assets/sfx/blip.wav" data-volume="0.6"></audio>
+    <audio id="sfx-04-blip" data-start="3.7" data-duration="0.35" data-track-index="13" src="assets/sfx/blip.wav" data-volume="0.6"></audio>
+    <audio id="sfx-05-blip" data-start="4.0" data-duration="0.35" data-track-index="14" src="assets/sfx/blip.wav" data-volume="0.6"></audio>
+    <audio id="sfx-06-hit" data-start="6.0" data-duration="1.6" data-track-index="15" src="assets/sfx/hit.wav" data-volume="0.8"></audio>
+    <audio id="sfx-07-crowd" data-start="6.05" data-duration="4" data-track-index="16" src="assets/sfx/crowd.wav" data-volume="0.4" data-fade-out="1.5"></audio>
+    <audio id="sfx-08-beat" data-start="10.43" data-duration="2.57" data-track-index="17" src="assets/sfx/beat.wav" data-volume="0.5" data-fade-out="1.2"></audio>
+    <audio id="sfx-09-hit" data-start="10.25" data-duration="1.6" data-track-index="18" src="assets/sfx/hit.wav" data-volume="0.5"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const get = (k, d) => (V[k] === undefined || V[k] === "" ? d : String(V[k]));
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+    document.getElementById("title").textContent = get("title", "Power Rankings");
+    document.getElementById("sub").textContent = get("sub", "After tonight’s arguments");
+    const items = get("rankings", "Yo Momma = Undefeated. Again.|Cousin Tay = Receipts were receipting|The Hosts = Lost the Kobe debate, won the vibes|Unc = Still thinks it isn’t close|The Group Chat = Muted itself twice")
+      .split("|").map((s) => s.trim()).filter(Boolean).slice(0, 5).map((s) => { const i = s.indexOf("="); return i > 0 ? { n: s.slice(0, i).trim(), t: s.slice(i + 1).trim() } : { n: s, t: "" }; });
+    const n = items.length, ROW = 146, TOP = 290 + (5 - n) * ROW / 2;
+    // where each one was "last time": a fixed shuffle, so the board has something to climb
+    const was = items.map((_, k) => (k + Math.ceil(n / 2)) % n);
+    document.getElementById("rows").innerHTML = items.map((x, k) => {
+      const d = was[k] - k;
+      const mv = d > 0 ? `<span class="up">${d}</span><i class="tri u"></i>` : d < 0 ? `<span class="dn">${-d}</span><i class="tri d"></i>` : `<span class="eq">&ndash;</span>`;
+      return `<div class="abs row${k === 0 ? " one" : ""}" id="r${k}"><div class="rk" id="rk${k}">${was[k] + 1}</div><div class="nm">${esc(x.n)}</div><div class="nt">${esc(x.t)}</div><div class="mv" id="mv${k}">${mv}</div></div>`;
+    }).join("");
+    const crown = document.getElementById("crown");
+    crown.style.left = "100px"; crown.style.top = (TOP - 70) + "px";
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#rays", { rotation: 0 }, { rotation: 30, duration: 10.4, ease: "none" }, 0);
+    tl.fromTo("#head .t", { x: -900 }, { x: 0, duration: .5, ease: "power3.out" }, .2);
+    tl.fromTo("#head .s", { opacity: 0 }, { opacity: 1, duration: .4 }, .6);
+    // rows come in at last time's spots, then move to tonight's
+    items.forEach((x, k) => {
+      document.getElementById("r" + k).style.top = (TOP + was[k] * ROW) + "px";
+      tl.fromTo("#r" + k, { x: 1900 }, { x: 0, duration: .45, ease: "power3.out" }, .9 + was[k] * .15);
+      tl.set("#mv" + k, { opacity: 0 }, 0);
+    });
+    items.forEach((x, k) => {
+      const at = 3.4 + (k % 3) * .3;
+      tl.fromTo("#r" + k, { y: 0 }, { y: (k - was[k]) * ROW, duration: .55, ease: "power2.inOut" }, at);
+      tl.set("#rk" + k, { textContent: k + 1 }, at + .3);
+      tl.fromTo("#mv" + k, { opacity: 0, scale: .4 }, { opacity: 1, scale: 1, duration: .3, ease: "back.out(2.5)" }, 4.6 + k * .1);
+    });
+    tl.fromTo("#crown", { y: -500, rotation: -30, opacity: 0 }, { y: 0, rotation: -14, opacity: 1, duration: .45, ease: "bounce.out" }, 5.6);
+    tl.to("#r0", { scale: 1.03, duration: .3, yoyo: true, repeat: 3, ease: "sine.inOut" }, 6.0);
+    tl.fromTo("#end .t", { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: .35, ease: "power4.in" }, 10.25);
+    tl.fromTo("#end .s", { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: .45, ease: "power3.out" }, 10.8);
+    tl.to("#end", { scale: 1.04, duration: 2.8, ease: "none" }, 10.2);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .65 }, 12.3);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["power-rankings"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>

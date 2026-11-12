@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en" data-composition-variables='[
+  {"id":"line1","type":"string","label":"Big line","default":"Mic. Dropped."},
+  {"id":"slot1","type":"string","label":"Top video slot label","default":"Watch next"},
+  {"id":"slot2","type":"string","label":"Bottom video slot label","default":"Best arguments"},
+  {"id":"showGuides","type":"boolean","label":"Show the end-screen guide boxes","default":true}
+]'>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1920, height=1080" />
+  <title>Outro: Mic Drop End Screen</title>
+  <script src="player.js"></script>
+  <script src="assets/gsap.min.js"></script>
+  <link rel="stylesheet" href="assets/awym.css" />
+  <!-- the overlay kit's colours and fonts (Theme Panel); the outro's own look applies without it -->
+  <link rel="stylesheet" href="../theme.css" />
+  <style>
+    #bg { background: linear-gradient(135deg, #1a0d30 0%, #2a1747 45%, #180b2b 100%); }
+    #stripes { left: -400px; top: -400px; width: 2800px; height: 1900px; opacity: .14;
+      background: repeating-linear-gradient(-35deg, var(--primary) 0 40px, transparent 40px 120px, var(--accent) 120px 140px, transparent 140px 260px); }
+    #glow { background: radial-gradient(ellipse 45% 50% at 30% 55%, rgba(242,107,29,.28), transparent 70%); }
+    #floorline { left: 0; right: 0; top: 820px; height: 4px; background: linear-gradient(90deg, transparent, rgba(255,244,224,.35), transparent); }
+    #shadow { left: 50%; top: 806px; width: 360px; height: 34px; margin-left: -180px; border-radius: 50%; background: rgba(0,0,0,.55); filter: blur(10px); }
+
+    #mic { left: 50%; top: 0; width: 220px; height: 640px; margin-left: -110px; transform-origin: 50% 100%; z-index: 4; }
+    #mic svg { width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 20px 30px rgba(0,0,0,.5)); }
+
+    #boom { z-index: 5; flex-direction: column; top: -90px; }
+    #boom .w { font-family: var(--font-display); text-transform: uppercase; line-height: .95; -webkit-text-stroke: 6px var(--dark); paint-order: stroke fill;
+      text-shadow: 0 10px 0 var(--dark), 0 20px 50px rgba(0,0,0,.6); }
+    #b1 { font-size: 190px; color: var(--light); }
+    #b2 { font-size: 230px; color: var(--primary); }
+    #ring { left: 50%; top: 820px; width: 300px; height: 80px; margin: -40px 0 0 -150px; border-radius: 50%; border: 10px solid var(--gold); opacity: 0; z-index: 3; }
+
+    /* end screen */
+    #end { z-index: 6; }
+    #brand { left: 130px; top: 120px; width: 900px; }
+    #brand .t { font-family: var(--font-display); font-size: 112px; line-height: .95; text-transform: uppercase; color: var(--light);
+      text-shadow: 0 9px 0 var(--dark), 0 0 50px rgba(242,107,29,.35); }
+    #brand .t em { font-style: normal; color: var(--primary); }
+    #brand .t i { font-style: normal; color: var(--accent); }
+    #brand .s { margin-top: 26px; font-family: var(--font-body); font-weight: 700; font-size: 42px; letter-spacing: 8px; text-transform: uppercase; color: var(--gold); }
+    #sub { left: 330px; top: 560px; width: 340px; height: 340px; }
+    #sub .circle { position: absolute; inset: 0; border-radius: 50%; border: 6px dashed rgba(255,244,224,.55); background: rgba(18,10,31,.35); }
+    #sub .lbl { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 22px; white-space: nowrap;
+      font-family: var(--font-display); font-size: 40px; color: #fff; background: var(--warning); padding: 12px 34px; border-radius: 999px; box-shadow: 0 8px 0 #9a1219; }
+    #arrow { left: 700px; top: 640px; width: 190px; height: 140px; }
+    .slot { left: 1110px; width: 688px; height: 387px; border-radius: 22px; }
+    #s1 { top: 120px; } #s2 { top: 575px; }
+    .slot .box { position: absolute; inset: 0; border-radius: 22px; border: 6px dashed rgba(255,244,224,.55); background: rgba(18,10,31,.45);
+      display: flex; align-items: center; justify-content: center; }
+    .slot .play { width: 0; height: 0; border-left: 70px solid rgba(255,244,224,.35); border-top: 42px solid transparent; border-bottom: 42px solid transparent; margin-left: 16px; }
+    .slot .cap { position: absolute; left: 26px; top: -30px; font-family: var(--font-heading); font-size: 44px; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--dark); background: var(--gold); padding: 2px 22px 4px; border-radius: 10px; transform: rotate(-2deg); }
+    #s2 .cap { background: var(--accent); color: #fff; }
+    .noguides .slot .box, .noguides #sub .circle, .noguides .slot .play { border-color: transparent; background: transparent; }
+    .noguides .slot .play { border-left-color: transparent; }
+    #black { background: #000; z-index: 60; }
+  </style>
+</head>
+<body>
+  <div id="root" data-composition-id="mic-drop-endscreen" data-start="0" data-duration="20" data-width="1920" data-height="1080" data-fps="30">
+    <div id="clip-1" class="clip" data-start="0" data-duration="20" data-track-index="0">
+      <div id="bg" class="abs" style="inset:0"></div>
+      <div id="stripes" class="abs"></div>
+      <div id="glow" class="abs" style="inset:0"></div>
+    </div>
+
+    <div id="dropscene" class="clip" data-start="0" data-duration="4.6" data-track-index="1">
+      <div id="floorline" class="abs"></div>
+      <div id="shadow" class="abs"></div>
+      <div id="ring" class="abs"></div>
+      <div id="mic" class="abs">
+        <svg viewBox="0 0 220 640">
+          <defs>
+            <radialGradient id="ball" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#f4f4f6"/><stop offset=".55" stop-color="#9b9ba6"/><stop offset="1" stop-color="#4a4a55"/></radialGradient>
+            <linearGradient id="body" x1="0" x2="1"><stop offset="0" stop-color="#1c1c22"/><stop offset=".45" stop-color="#4d4d58"/><stop offset="1" stop-color="#15151a"/></linearGradient>
+            <pattern id="mesh" width="12" height="12" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0,0 V12 M0,0 H12" stroke="rgba(0,0,0,.35)" stroke-width="2"/></pattern>
+          </defs>
+          <path d="M70,250 L150,250 L132,630 Q110,642 88,630 Z" fill="url(#body)"/>
+          <rect x="62" y="238" width="96" height="26" rx="8" fill="#2b2b33"/>
+          <rect x="44" y="270" width="132" height="88" rx="12" fill="#F26B1D"/>
+          <rect x="44" y="270" width="132" height="88" rx="12" fill="none" stroke="#120A1F" stroke-width="5"/>
+          <text x="110" y="327" text-anchor="middle" font-family="Bungee" font-size="34" fill="#FFF4E0">AWYM</text>
+          <circle cx="110" cy="130" r="112" fill="url(#ball)"/>
+          <circle cx="110" cy="130" r="112" fill="url(#mesh)"/>
+          <ellipse cx="78" cy="88" rx="30" ry="18" fill="rgba(255,255,255,.55)"/>
+          <rect x="18" y="122" width="184" height="16" rx="8" fill="#5c5c68"/>
+        </svg>
+      </div>
+      <div id="boom" class="clip center">
+        <span class="w" id="b1"></span>
+        <span class="w" id="b2"></span>
+      </div>
+    </div>
+
+    <div id="end" class="clip" data-start="4.2" data-duration="15.8" data-track-index="2">
+      <div id="brand" class="abs">
+        <div class="t">Argue<br>with <em>Yo</em><br><em>Momma</em><i>!</i></div>
+        <div class="s">New takes every week</div>
+      </div>
+      <div id="sub" class="abs"><div class="circle"></div><div class="lbl">SUBSCRIBE</div></div>
+      <svg id="arrow" class="abs" viewBox="0 0 190 140"><path id="arr" d="M10,20 C90,10 150,40 165,115 M140,95 L166,120 L184,88" fill="none" stroke="#FFB23E" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div class="slot abs" id="s1"><div class="box"><div class="play"></div></div><div class="cap" id="c1"></div></div>
+      <div class="slot abs" id="s2"><div class="box"><div class="play"></div></div><div class="cap" id="c2"></div></div>
+    </div>
+
+    <div id="grain-2" class="clip grain" data-layout-allow-occlusion data-start="0" data-duration="20" data-track-index="5"></div>
+    <div id="vignette-3" class="clip vignette" data-layout-allow-occlusion data-start="0" data-duration="20" data-track-index="5"></div>
+    <div id="black" class="clip" data-start="19.2" data-duration="0.8" data-track-index="6"></div>
+
+    <audio id="sfx-01-whoosh" data-start="0.15" data-duration="0.8" data-track-index="10" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-02-micdrop" data-start="0.95" data-duration="2.4" data-track-index="11" src="assets/sfx/micdrop.wav" data-volume="0.85"></audio>
+    <audio id="sfx-03-hit" data-start="1.5" data-duration="1.6" data-track-index="12" src="assets/sfx/hit.wav" data-volume="0.45"></audio>
+    <audio id="sfx-04-hit" data-start="2.0" data-duration="1.6" data-track-index="13" src="assets/sfx/hit.wav" data-volume="0.7"></audio>
+    <audio id="sfx-05-crowd" data-start="2.1" data-duration="4" data-track-index="14" src="assets/sfx/crowd.wav" data-volume="0.4" data-fade-out="1.5"></audio>
+    <audio id="sfx-06-whoosh" data-start="4.0" data-duration="0.8" data-track-index="15" src="assets/sfx/whoosh.wav" data-volume="0.6"></audio>
+    <audio id="sfx-07-beat" data-start="4.2" data-duration="10.43" data-track-index="16" src="assets/sfx/beat.wav" data-volume="0.55" data-fade-in="0.4"></audio>
+    <audio id="sfx-08-beat" data-start="14.63" data-duration="5.37" data-track-index="17" src="assets/sfx/beat.wav" data-volume="0.55" data-fade-out="2.5"></audio>
+  </div>
+
+  <script>
+    const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+    const line = (V.line1 || "Mic. Dropped.").split(/\s+/);
+    document.getElementById("b1").textContent = line[0] || "";
+    document.getElementById("b2").textContent = line.slice(1).join(" ");
+    document.getElementById("c1").textContent = V.slot1 || "Watch next";
+    document.getElementById("c2").textContent = V.slot2 || "Best arguments";
+    if (V.showGuides === false || V.showGuides === "false") document.getElementById("root").classList.add("noguides");
+
+    const tl = gsap.timeline({ paused: true });
+    tl.fromTo("#stripes", { x: 0, y: 0 }, { x: 260, y: 180, duration: 20, ease: "none" }, 0);
+
+    // the drop: falls in, lands at 0.95, bounces, tips over
+    tl.fromTo("#mic", { y: -800, rotation: -8 }, { y: 180, rotation: 0, duration: .8, ease: "power2.in" }, .15);
+    tl.fromTo("#shadow", { scale: .2, opacity: 0 }, { scale: 1, opacity: 1, duration: .8, ease: "power2.in" }, .15);
+    tl.to("#mic", { y: 110, rotation: 6, duration: .2, ease: "power2.out" }, .95).to("#mic", { y: 180, rotation: 0, duration: .2, ease: "power2.in" }, 1.15);
+    tl.to("#mic", { rotation: 78, x: 250, y: 200, duration: .45, ease: "power2.in" }, 1.35);
+    tl.to("#mic", { rotation: 72, duration: .12, yoyo: true, repeat: 1, ease: "sine.inOut" }, 1.8);
+    tl.fromTo("#ring", { scale: .3, opacity: 1 }, { scale: 3.2, opacity: 0, duration: .7, ease: "power2.out" }, .95);
+    tl.to("#dropscene", { x: 18, y: -10, duration: .05, yoyo: true, repeat: 5, ease: "none" }, .95).set("#dropscene", { x: 0, y: 0 }, 1.25);
+
+    tl.fromTo("#b1", { scale: 3, opacity: 0, rotation: -10 }, { scale: 1, opacity: 1, rotation: -4, duration: .26, ease: "power4.in" }, 1.25);
+    tl.fromTo("#b2", { scale: 3.5, opacity: 0, rotation: 8 }, { scale: 1, opacity: 1, rotation: 3, duration: .28, ease: "power4.in" }, 1.75);
+    tl.to("#boom", { x: -16, y: 10, duration: .05, yoyo: true, repeat: 5, ease: "none" }, 2.03).set("#boom", { x: 0, y: 0 }, 2.33);
+    tl.to("#boom", { scale: 1.05, duration: 1.6, ease: "sine.inOut" }, 2.1);
+    tl.to("#boom", { y: -900, opacity: 0, duration: .45, ease: "power3.in" }, 3.8);
+    tl.to("#mic", { x: -1300, duration: .55, ease: "power3.in" }, 3.85);
+    tl.to(["#shadow", "#floorline"], { opacity: 0, duration: .3 }, 3.9);
+
+    // end screen
+    tl.fromTo("#brand .t", { x: -700, opacity: 0 }, { x: 0, opacity: 1, duration: .6, ease: "power3.out" }, 4.25);
+    tl.fromTo("#brand .s", { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: .5, ease: "power3.out" }, 4.75);
+    tl.fromTo("#s1", { x: 900, rotation: 4 }, { x: 0, rotation: 0, duration: .6, ease: "back.out(1.2)" }, 4.4);
+    tl.fromTo("#s2", { x: 900, rotation: -4 }, { x: 0, rotation: 0, duration: .6, ease: "back.out(1.2)" }, 4.6);
+    tl.fromTo("#sub", { scale: 0, rotation: -90 }, { scale: 1, rotation: 0, duration: .6, ease: "back.out(1.8)" }, 4.9);
+    const arr = document.getElementById("arr"); const alen = Math.ceil(arr.getTotalLength()) + 4; arr.style.strokeDasharray = alen;
+    tl.fromTo(arr, { strokeDashoffset: alen }, { strokeDashoffset: 0, duration: .6, ease: "power2.out" }, 5.5);
+    for (let k = 0; k < 6; k++) tl.to("#sub .lbl", { scale: 1.08, duration: .3, yoyo: true, repeat: 1, ease: "sine.inOut" }, 6.5 + k * 2.2);
+    tl.to("#brand", { y: -10, duration: 2, yoyo: true, repeat: 6, ease: "sine.inOut" }, 5.2);
+    tl.fromTo("#black", { opacity: 0 }, { opacity: 1, duration: .8 }, 19.2);
+
+    window.__timelines = window.__timelines || {};
+    window.__timelines["mic-drop-endscreen"] = tl;
+    tl.seek(0);
+  </script>
+</body>
+</html>
